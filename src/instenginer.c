@@ -350,6 +350,119 @@ SEXP OU_GenerateSyntheticAdasynC(SEXP minorityMatrix, SEXP minorityNeighborIndex
   return out;
 }
 
+
+/**
+ * @brief Seleciona indices majoritarios NearMiss com menores medias de distancia.
+ *
+ * Mantem um heap maximo de tamanho retainedMajorityCount para evitar ordenar
+ * todos os exemplos majoritarios quando apenas uma fracao pequena sera retida.
+ * Empates sao resolvidos pelo menor indice original para espelhar a ordem
+ * deterministica usual de R em bases pequenas.
+ */
+SEXP OU_SelectNearMissMajorityC(SEXP nnDist, SEXP majorityIndex, SEXP retainedMajorityCount){
+  require_real_matrix(nnDist, "nnDist");
+
+  if(!isInteger(majorityIndex)){
+    error("'majorityIndex' deve ser integer");
+  }
+  if(!isInteger(retainedMajorityCount) || LENGTH(retainedMajorityCount) != 1){
+    error("'retainedMajorityCount' deve ser integer escalar");
+  }
+
+  SEXP dims = getAttrib(nnDist, R_DimSymbol);
+  const int n = INTEGER(dims)[0];
+  const int k = INTEGER(dims)[1];
+  const int retain = INTEGER(retainedMajorityCount)[0];
+
+  if(LENGTH(majorityIndex) != n){
+    error("'majorityIndex' deve ter comprimento igual a nrow(nnDist)");
+  }
+  if(retain < 1 || retain > n){
+    error("'retainedMajorityCount' deve estar entre 1 e nrow(nnDist)");
+  }
+  if(k < 1){
+    error("'nnDist' deve conter ao menos uma coluna");
+  }
+
+  SEXP heapMeanS = PROTECT(allocVector(REALSXP, retain));
+  SEXP heapIndexS = PROTECT(allocVector(INTSXP, retain));
+  double *heapMean = REAL(heapMeanS);
+  int *heapIndex = INTEGER(heapIndexS);
+  const double *dist = REAL(nnDist);
+  const int *majority = INTEGER(majorityIndex);
+
+  int heapSize = 0;
+
+  #define WORSE(meanA, indexA, meanB, indexB) ((meanA) > (meanB) || ((meanA) == (meanB) && (indexA) > (indexB)))
+  #define BETTER(meanA, indexA, meanB, indexB) ((meanA) < (meanB) || ((meanA) == (meanB) && (indexA) < (indexB)))
+
+  for(int i = 0; i < n; ++i){
+    if((i & 8191) == 0){
+      R_CheckUserInterrupt();
+    }
+
+    long double sum = 0.0L;
+    for(int j = 0; j < k; ++j){
+      const double value = dist[i + ((R_xlen_t) j * n)];
+      if(!R_FINITE(value)){
+        error("'nnDist' contem distancia ausente ou infinita");
+      }
+      sum += (long double) value;
+    }
+    const double mean = (double) (sum / (long double) k);
+    const int originalIndex = majority[i];
+
+    if(heapSize < retain){
+      int pos = heapSize++;
+      heapMean[pos] = mean;
+      heapIndex[pos] = originalIndex;
+      while(pos > 0){
+        int parent = (pos - 1) / 2;
+        if(!WORSE(heapMean[pos], heapIndex[pos], heapMean[parent], heapIndex[parent])){
+          break;
+        }
+        double tm = heapMean[parent]; int ti = heapIndex[parent];
+        heapMean[parent] = heapMean[pos]; heapIndex[parent] = heapIndex[pos];
+        heapMean[pos] = tm; heapIndex[pos] = ti;
+        pos = parent;
+      }
+    }else if(BETTER(mean, originalIndex, heapMean[0], heapIndex[0])){
+      heapMean[0] = mean;
+      heapIndex[0] = originalIndex;
+      int pos = 0;
+      while(1){
+        int left = 2 * pos + 1;
+        int right = left + 1;
+        int worst = pos;
+        if(left < heapSize && WORSE(heapMean[left], heapIndex[left], heapMean[worst], heapIndex[worst])){
+          worst = left;
+        }
+        if(right < heapSize && WORSE(heapMean[right], heapIndex[right], heapMean[worst], heapIndex[worst])){
+          worst = right;
+        }
+        if(worst == pos){
+          break;
+        }
+        double tm = heapMean[worst]; int ti = heapIndex[worst];
+        heapMean[worst] = heapMean[pos]; heapIndex[worst] = heapIndex[pos];
+        heapMean[pos] = tm; heapIndex[pos] = ti;
+        pos = worst;
+      }
+    }
+  }
+
+  SEXP out = PROTECT(allocVector(INTSXP, retain));
+  for(int i = 0; i < retain; ++i){
+    INTEGER(out)[i] = heapIndex[i];
+  }
+
+  #undef WORSE
+  #undef BETTER
+
+  UNPROTECT(3);
+  return out;
+}
+
 /**
  * @brief Mapeia as rotinas internas em C para as chamadas .Call dinamicas provenientes do R.
  */
@@ -358,6 +471,7 @@ static const R_CallMethodDef CallEntries[] = {
   {"OU_ComputeZScoreParamsC", (DL_FUNC) &OU_ComputeZScoreParamsC, 1},
   {"OU_ApplyZScoreC", (DL_FUNC) &OU_ApplyZScoreC, 4},
   {"OU_GenerateSyntheticAdasynC", (DL_FUNC) &OU_GenerateSyntheticAdasynC, 3},
+  {"OU_SelectNearMissMajorityC", (DL_FUNC) &OU_SelectNearMissMajorityC, 3},
   {NULL, NULL, 0}
 };
 

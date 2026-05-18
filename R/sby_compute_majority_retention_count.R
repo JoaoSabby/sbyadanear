@@ -28,13 +28,21 @@ sby_compute_majority_retention_count <- function(
   }
 
   # Identifica papeis de classe para calcular os tamanhos atuais
-  sby_class_roles <- sby_get_binary_class_roles(
-    sby_target_factor    = sby_target_factor,
-    sby_minority_label   = sby_minority_label,
-    sby_majority_label   = sby_majority_label
-  )
-  sby_minority_count <- as.integer(sby_class_roles$sby_class_counts[sby_class_roles$sby_minority_label])
-  sby_majority_count <- as.integer(sby_class_roles$sby_class_counts[sby_class_roles$sby_majority_label])
+  if(is.null(sby_minority_label) && is.null(sby_majority_label)){
+    sby_class_roles <- sby_binary_class_counts_fast(
+      sby_y_vector = sby_target_factor
+    )
+  }else{
+    sby_class_roles <- sby_get_binary_class_roles(
+      sby_target_factor    = sby_target_factor,
+      sby_minority_label   = sby_minority_label,
+      sby_majority_label   = sby_majority_label
+    )
+    sby_class_roles$sby_minority_count <- as.integer(sby_class_roles$sby_class_counts[sby_class_roles$sby_minority_label])
+    sby_class_roles$sby_majority_count <- as.integer(sby_class_roles$sby_class_counts[sby_class_roles$sby_majority_label])
+  }
+  sby_minority_count <- sby_class_roles$sby_minority_count
+  sby_majority_count <- sby_class_roles$sby_majority_count
 
   # Interpreta sby_under_ratio como razao minoria/maioria desejada apos NearMiss
   # Exemplo: 1.0 iguala maioria a minoria; 0.5 permite ate duas vezes a minoria

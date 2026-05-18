@@ -158,230 +158,60 @@ sby_adasyn <- function(
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L
 ){
-  
-  # Verifica se ha solicitacao de interrupcao pelo usuario
   sby_adanear_check_user_interrupt()
 
-  # Resolve formula e dados em matriz de preditores e vetor alvo
-  sby_formula_data <- sby_extract_formula_data(
-    sby_formula = sby_formula,
-    sby_data    = sby_data
-  )
+  sby_formula_data <- sby_extract_formula_data(sby_formula = sby_formula, sby_data = sby_data)
   sby_predictor_data <- sby_formula_data$sby_predictor_data
-  sby_target_vector  <- sby_formula_data$sby_target_vector
+  sby_target_vector <- sby_formula_data$sby_target_vector
 
-  # Valida parametros logicos escalares de controle operacional
-  sby_audit <- sby_validate_logical_scalar(
-    sby_value = sby_audit,
-    sby_name  = "sby_audit"
-  )
-  sby_return_scaled <- sby_validate_logical_scalar(
-    sby_value = sby_return_scaled,
-    sby_name  = "sby_return_scaled"
-  )
-  sby_restore_types <- sby_validate_logical_scalar(
-    sby_value = sby_restore_types,
-    sby_name  = "sby_restore_types"
-  )
+  sby_audit <- sby_validate_logical_scalar(sby_audit, "sby_audit")
+  sby_return_scaled <- sby_validate_logical_scalar(sby_return_scaled, "sby_return_scaled")
+  sby_restore_types <- sby_validate_logical_scalar(sby_restore_types, "sby_restore_types")
 
-  # Resolve opcoes declaradas de algoritmo e engine KNN
-  sby_knn_algorithm <- match.arg(
-    arg = sby_knn_algorithm
-  )
-  sby_knn_engine <- match.arg(
-    arg = sby_knn_engine
-  )
-  sby_knn_distance_metric <- match.arg(
-    arg = sby_knn_distance_metric
-  )
+  sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed)
+  sby_x_matrix <- sby_adanear_as_numeric_matrix(sby_predictor_data)
+  colnames(sby_x_matrix) <- sby_adanear_get_column_names(sby_predictor_data)
+  sby_target_factor <- as.factor(sby_target_vector)
+  sby_type_info <- sby_infer_numeric_column_types(sby_predictor_data)
 
-  # Valida recursos paralelos e parametros HNSW
-  sby_knn_workers <- sby_validate_knn_workers(
-    sby_knn_workers = sby_knn_workers
-  )
-  sby_hnsw_params <- sby_validate_hnsw_params(
-    sby_knn_hnsw_m  = sby_knn_hnsw_m,
+  sby_matrix_result <- sby_adasyn_matrix(
+    sby_x_matrix = sby_x_matrix,
+    sby_y_vector = sby_target_factor,
+    sby_over_ratio = sby_over_ratio,
+    sby_knn_over_k = sby_knn_over_k,
+    sby_seed = sby_seed,
+    sby_audit = sby_audit,
+    sby_return_scaled = sby_return_scaled,
+    sby_return_original_scale = TRUE,
+    sby_knn_algorithm = sby_knn_algorithm,
+    sby_knn_engine = sby_knn_engine,
+    sby_knn_distance_metric = sby_knn_distance_metric,
+    sby_knn_workers = sby_knn_workers,
+    sby_knn_hnsw_m = sby_knn_hnsw_m,
     sby_knn_hnsw_ef = sby_knn_hnsw_ef
   )
 
-  # Extrai parametros HNSW normalizados para uso posterior
-  sby_knn_hnsw_m  <- sby_hnsw_params$sby_knn_hnsw_m
-  sby_knn_hnsw_ef <- sby_hnsw_params$sby_knn_hnsw_ef
-
-  # Valida consistencia basica entre preditores, alvo e semente
-  sby_validate_sampling_inputs(
-    sby_predictor_data = sby_predictor_data,
-    sby_target_vector  = sby_target_vector,
-    sby_seed           = sby_seed
-  )
-
-  # Verifica se o numero de vizinhos de sobreamostragem e inteiro positivo
-  sby_knn_over_k <- sby_validate_positive_integer_scalar(
-    sby_value = sby_knn_over_k,
-    sby_name  = "sby_knn_over_k"
-  )
-
-  # Converte preditores e preserva nomes de colunas para o processamento matricial
-  sby_x_matrix <- sby_adanear_as_numeric_matrix(
-    sby_predictor_data = sby_predictor_data
-  )
-  colnames(sby_x_matrix) <- sby_adanear_get_column_names(
-    sby_predictor_data = sby_predictor_data
-  )
-
-  # Resolve engine e algoritmo KNN automaticos conforme dados e workers
-  sby_knn_engine <- sby_resolve_knn_engine(
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_workers = sby_knn_workers
-  )
-  sby_knn_algorithm <- sby_resolve_knn_algorithm(
-    sby_knn_algorithm          = sby_knn_algorithm,
-    sby_predictor_column_count = NCOL(sby_x_matrix),
-    sby_knn_engine             = sby_knn_engine
-  )
-
-  # Prepara alvo, metadados de tipos e matriz padronizada para ADASYN
-  sby_target_factor <- as.factor(
-    x = sby_target_vector
-  )
-  sby_type_info <- sby_infer_numeric_column_types(
-    sby_data_frame = sby_predictor_data
-  )
-  sby_scaling_info <- sby_compute_z_score_params(
-    sby_x_matrix = sby_x_matrix
-  )
-  sby_x_scaled <- sby_apply_z_score_scaling_matrix(
-    sby_x_matrix      = sby_x_matrix,
-    sby_scaling_info = sby_scaling_info
-  )
-
-  # Verifica se ha solicitacao de interrupcao antes da geracao sintetica
-  sby_adanear_check_user_interrupt()
-
-  # Calcula quantidade de amostras sinteticas a gerar
-  sby_synthetic_count <- sby_compute_minority_expansion_count(
-    sby_target_factor = sby_target_factor,
-    sby_over_ratio    = sby_over_ratio
-  )
-
-  # Define semente para manter reprodutibilidade da geracao ADASYN
-  set.seed(
-    seed = sby_seed
-  )
-
-  # Gera amostras sinteticas em escala padronizada
-  sby_adasyn_result <- sby_generate_adasyn_samples(
-    sby_x_scaled                 = sby_x_scaled,
-    sby_target_factor            = sby_target_factor,
-    sby_synthetic_count          = sby_synthetic_count,
-    sby_knn_over_k                   = sby_knn_over_k,
-    sby_knn_algorithm            = sby_knn_algorithm,
-    sby_knn_engine              = sby_knn_engine,
-    sby_knn_distance_metric          = sby_knn_distance_metric,
-    sby_knn_workers              = sby_knn_workers,
-    sby_knn_hnsw_m                   = sby_knn_hnsw_m,
-    sby_knn_hnsw_ef                  = sby_knn_hnsw_ef
-  )
-
-  # Verifica se ha solicitacao de interrupcao apos a geracao sintetica
-  sby_adanear_check_user_interrupt()
-
-  # Restaura nomes de colunas e escala original dos preditores expandidos
-  colnames(sby_adasyn_result$x) <- colnames(sby_x_matrix)
-  sby_x_restored <- sby_revert_z_score_scaling_matrix(
-    sby_x_matrix      = sby_adasyn_result$x,
-    sby_scaling_info = sby_scaling_info
-  )
-
-  # Verifica se ha solicitacao de interrupcao apos reversao de escala
-  sby_adanear_check_user_interrupt()
-
-  # Define preditores finais com ou sem restauracao dos tipos originais
-  sby_final_predictors <- if(sby_restore_types){
-
-    # Restaura classes numericas originais e retorna estrutura tabular
-    sby_restore_numeric_column_types(
-      sby_x_matrix       = sby_x_restored,
-      sby_type_info     = sby_type_info,
-      sby_as_data_frame = TRUE
-    )
+  sby_final_predictors <- if(isTRUE(sby_restore_types)){
+    sby_restore_numeric_column_types(sby_matrix_result$sby_x_matrix, sby_type_info, TRUE)
   }else{
-
-    # Converte matriz restaurada em data frame mantendo nomes originais
-    sby_out <- as.data.frame(
-      x = sby_x_restored,
-      stringsAsFactors = FALSE
-    )
+    sby_out <- as.data.frame(sby_matrix_result$sby_x_matrix, stringsAsFactors = FALSE)
     names(sby_out) <- sby_type_info$sby_column_name
     sby_out
   }
+  sby_balanced_data <- sby_build_balanced_tibble(sby_final_predictors, sby_matrix_result$sby_y_vector)
 
-  # Combina preditores finais e alvo expandido em tibble balanceado
-  sby_balanced_data <- sby_build_balanced_tibble(
-    sby_predictor_data = sby_final_predictors,
-    sby_target_vector  = sby_adasyn_result$y
-  )
-
-  # Define metadado de conectividade HNSW usado no diagnostico
-  sby_diagnostic_hnsw_m <- ifelse(
-    test = identical(
-      x = sby_knn_engine,
-      y = "RcppHNSW"
-    ),
-    yes = sby_knn_hnsw_m,
-    no  = NA_integer_
-  )
-
-  # Define metadado de busca HNSW usado no diagnostico
-  sby_diagnostic_hnsw_ef <- ifelse(
-    test = identical(
-      x = sby_knn_engine,
-      y = "RcppHNSW"
-    ),
-    yes = sby_knn_hnsw_ef,
-    no  = NA_integer_
-  )
-
-  # Consolida diagnosticos de entrada, saida e configuracao KNN
-  sby_diagnostics <- list(
-    sby_input_rows                = NROW(sby_x_matrix),
-    sby_output_rows               = nrow(sby_balanced_data),
-    sby_generated_rows            = nrow(sby_balanced_data) - nrow(sby_x_matrix),
-    sby_knn_engine               = sby_knn_engine,
-    sby_knn_distance_metric           = sby_knn_distance_metric,
-    sby_knn_workers               = sby_knn_workers,
-    sby_knn_hnsw_m                    = sby_diagnostic_hnsw_m,
-    sby_knn_hnsw_ef                   = sby_diagnostic_hnsw_ef,
-    sby_input_class_distribution  = table(sby_target_factor),
-    sby_output_class_distribution = table(as.factor(sby_adasyn_result$y))
-  )
-
-  # Consolida resultado completo para retorno auditavel
-  sby_result <- list(
-    sby_balanced_data = sby_balanced_data,
-    sby_type_info     = sby_type_info,
-    sby_scaling_info  = sby_scaling_info,
-    sby_diagnostics   = sby_diagnostics
-  )
-
-  # Inclui matriz escalada quando solicitada para encadeamento interno
-  if(isTRUE(sby_return_scaled)){
-
-    # Anexa representacao escalada ao resultado de auditoria
-    sby_result$sby_balanced_scaled <- list(
-      x = sby_adasyn_result$x,
-      y = as.factor(sby_adasyn_result$y)
-    )
-  }
-
-  # Retorna estrutura completa quando auditoria foi solicitada
   if(isTRUE(sby_audit)){
-
-    # Entrega dados balanceados, metadados e diagnosticos ao chamador
+    sby_result <- list(
+      sby_balanced_data = sby_balanced_data,
+      sby_type_info = sby_type_info,
+      sby_scaling_info = sby_matrix_result$sby_scaling_info,
+      sby_diagnostics = sby_matrix_result$sby_diagnostics
+    )
+    if(isTRUE(sby_return_scaled)){
+      sby_result$sby_balanced_scaled <- sby_matrix_result$sby_balanced_scaled
+    }
     return(sby_result)
   }
-
-  # Retorna apenas os dados balanceados no fluxo operacional padrao
   return(sby_balanced_data)
 }
 ####

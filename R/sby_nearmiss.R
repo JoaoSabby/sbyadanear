@@ -167,361 +167,65 @@ sby_nearmiss <- function(
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L
 ){
-  
-  # Verifica se ha solicitacao de interrupcao pelo usuario
   sby_adanear_check_user_interrupt()
 
-  # Resolve formula e dados em matriz de preditores e vetor alvo
-  sby_formula_data <- sby_extract_formula_data(
-    sby_formula = sby_formula,
-    sby_data    = sby_data
-  )
+  sby_formula_data <- sby_extract_formula_data(sby_formula = sby_formula, sby_data = sby_data)
   sby_predictor_data <- sby_formula_data$sby_predictor_data
-  sby_target_vector  <- sby_formula_data$sby_target_vector
+  sby_target_vector <- sby_formula_data$sby_target_vector
 
-  # Valida parametros logicos escalares de controle operacional
-  sby_audit <- sby_validate_logical_scalar(
-    sby_value = sby_audit,
-    sby_name  = "sby_audit"
-  )
+  sby_audit <- sby_validate_logical_scalar(sby_audit, "sby_audit")
+  sby_input_already_scaled <- sby_validate_logical_scalar(sby_input_already_scaled, "sby_input_already_scaled")
+  sby_restore_types <- sby_validate_logical_scalar(sby_restore_types, "sby_restore_types")
 
-  # Valida indicador de entrada previamente escalada
-  sby_input_already_scaled <- sby_validate_logical_scalar(
-    sby_value = sby_input_already_scaled,
-    sby_name  = "sby_input_already_scaled"
-  )
+  sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed)
+  sby_x_matrix <- sby_adanear_as_numeric_matrix(sby_predictor_data)
+  colnames(sby_x_matrix) <- sby_adanear_get_column_names(sby_predictor_data)
+  sby_target_factor <- as.factor(sby_target_vector)
+  if(is.null(sby_type_info)){
+    sby_type_info <- sby_infer_numeric_column_types(sby_predictor_data)
+  }
 
-  # Valida indicador de restauracao de tipos numericos
-  sby_restore_types <- sby_validate_logical_scalar(
-    sby_value = sby_restore_types,
-    sby_name  = "sby_restore_types"
-  )
-
-  # Resolve o algoritmo KNN declarado para uma opcao suportada
-  sby_knn_algorithm <- match.arg(
-    arg = sby_knn_algorithm
-  )
-
-  # Resolve o engine KNN declarado para uma opcao suportada
-  sby_knn_engine <- match.arg(
-    arg = sby_knn_engine
-  )
-  sby_knn_distance_metric <- match.arg(
-    arg = sby_knn_distance_metric
-  )
-
-  # Valida a quantidade de workers para calculo KNN
-  sby_knn_workers <- sby_validate_knn_workers(
-    sby_knn_workers = sby_knn_workers
-  )
-
-  # Valida parametros HNSW usados por engine aproximado
-  sby_hnsw_params <- sby_validate_hnsw_params(
-    sby_knn_hnsw_m  = sby_knn_hnsw_m,
+  sby_matrix_result <- sby_nearmiss_matrix(
+    sby_x_matrix = sby_x_matrix,
+    sby_y_vector = sby_target_factor,
+    sby_under_ratio = sby_under_ratio,
+    sby_knn_under_k = sby_knn_under_k,
+    sby_seed = sby_seed,
+    sby_audit = sby_audit,
+    sby_return_index = sby_audit,
+    sby_return_scaled = sby_audit,
+    sby_return_original_scale = TRUE,
+    sby_scaling_info = sby_precomputed_scaling,
+    sby_input_already_scaled = sby_input_already_scaled,
+    sby_fixed_minority_label = sby_fixed_minority_label,
+    sby_fixed_majority_label = sby_fixed_majority_label,
+    sby_knn_algorithm = sby_knn_algorithm,
+    sby_knn_engine = sby_knn_engine,
+    sby_knn_distance_metric = sby_knn_distance_metric,
+    sby_knn_workers = sby_knn_workers,
+    sby_knn_hnsw_m = sby_knn_hnsw_m,
     sby_knn_hnsw_ef = sby_knn_hnsw_ef
   )
 
-  # Extrai parametros HNSW normalizados para uso posterior
-  sby_knn_hnsw_m  <- sby_hnsw_params$sby_knn_hnsw_m
-  sby_knn_hnsw_ef <- sby_hnsw_params$sby_knn_hnsw_ef
-
-  # Valida consistencia basica entre preditores, alvo e semente
-  sby_validate_sampling_inputs(
-    sby_predictor_data = sby_predictor_data,
-    sby_target_vector  = sby_target_vector,
-    sby_seed           = sby_seed
-  )
-
-  # Verifica se o numero de vizinhos de subamostragem e inteiro positivo
-  sby_knn_under_k <- sby_validate_positive_integer_scalar(
-    sby_value = sby_knn_under_k,
-    sby_name  = "sby_knn_under_k"
-  )
-
-  # Converte os preditores para matriz numerica com nomes preservados
-  sby_x_matrix <- sby_adanear_as_numeric_matrix(
-    sby_predictor_data = sby_predictor_data
-  )
-  
-  colnames(sby_x_matrix) <- sby_adanear_get_column_names(
-    sby_predictor_data = sby_predictor_data
-  )
-
-  # Resolve o engine KNN automatico conforme a configuracao de workers
-  sby_knn_engine <- sby_resolve_knn_engine(
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_workers = sby_knn_workers
-  )
-
-  # Resolve o algoritmo KNN automatico conforme a dimensionalidade dos dados
-  sby_knn_algorithm <- sby_resolve_knn_algorithm(
-    sby_knn_algorithm          = sby_knn_algorithm,
-    sby_predictor_column_count = NCOL(sby_x_matrix),
-    sby_knn_engine             = sby_knn_engine
-  )
-
-  # Normaliza o vetor alvo para fator binario
-  sby_target_factor <- as.factor(
-    x = sby_target_vector
-  )
-
-  # Infere informacoes de tipo quando nao foram precomputadas
-  if(is.null(sby_type_info)){
-
-    # Calcula metadados de tipos numericos a partir dos preditores originais
-    sby_type_info <- sby_infer_numeric_column_types(
-      sby_data_frame = sby_predictor_data
-    )
-  }
-
-  # Verifica compatibilidade entre metadados de tipos e colunas preditoras
-  if(NCOL(sby_x_matrix) != nrow(sby_type_info)){
-
-    # Aborta quando os metadados nao cobrem todas as colunas preditoras
-    sby_adanear_abort(
-      sby_message = "'sby_type_info' deve ter uma linha por coluna de 'sby_predictor_data'"
-    )
-  }
-
-  # Define parametros de escala a partir do estado informado da entrada
-  sby_scaling_info <- if(isTRUE(sby_input_already_scaled)){
-
-    # Verifica se parametros de escala foram fornecidos para entrada ja escalada
-    if(is.null(sby_precomputed_scaling)){
-
-      # Aborta quando nao ha referencia para restauracao da escala original
-      sby_adanear_abort(
-        sby_message = "'sby_precomputed_scaling' e obrigatorio quando 'sby_input_already_scaled = TRUE'"
-      )
-    }
-
-    # Reutiliza parametros de escala ja informados pelo chamador
-    sby_precomputed_scaling
-  }else if(is.null(sby_precomputed_scaling)){
-
-    # Calcula parametros de escala a partir dos preditores convertidos
-    sby_compute_z_score_params(
-      sby_x_matrix = sby_x_matrix
-    )
+  sby_final_predictors <- if(isTRUE(sby_restore_types)){
+    sby_restore_numeric_column_types(sby_matrix_result$sby_x_matrix, sby_type_info, TRUE)
   }else{
-
-    # Valida parametros de escala precomputados contra a largura dos preditores
-    sby_validate_scaling_info(
-      sby_scaling_info = sby_precomputed_scaling,
-      sby_predictor_column_count = NCOL(sby_x_matrix)
-    )
-
-    # Reutiliza parametros de escala validados pelo fluxo atual
-    sby_precomputed_scaling
-  }
-
-  # Define matriz de trabalho conforme o estado de escalonamento da entrada
-  if(isTRUE(sby_input_already_scaled)){
-
-    # Reutiliza matriz numerica porque a entrada ja esta padronizada
-    sby_x_scaled <- sby_x_matrix
-  }else{
-
-    # Aplica padronizacao z-score usando parametros validados
-    sby_x_scaled <- sby_apply_z_score_scaling_matrix(
-      sby_x_matrix      = sby_x_matrix,
-      sby_scaling_info = sby_scaling_info
-    )
-  }
-
-  # Verifica se ha solicitacao de interrupcao antes do calculo principal
-  sby_adanear_check_user_interrupt()
-
-  # Calcula distribuicao de classes para decidir se ha desbalanceamento
-  sby_class_counts <- table(
-    sby_target_factor
-  )
-
-  # Mantem todos os registros quando as classes ja estao balanceadas
-  if(sby_class_counts[[1L]] == sby_class_counts[[2L]]){
-
-    # Define indices e objetos reduzidos sem remocao de linhas
-    sby_retained_index <- seq_len(
-      length.out = nrow(sby_x_scaled)
-    )
-    
-    sby_reduced_scaled <- sby_x_scaled
-    sby_reduced_target <- sby_target_factor
-    
-  }else{
-
-    # Identifica rotulos e indices das classes minoritaria e majoritaria
-    sby_class_roles <- sby_get_binary_class_roles(
-      sby_target_factor  = sby_target_factor,
-      sby_minority_label = sby_fixed_minority_label,
-      sby_majority_label = sby_fixed_majority_label
-    )
-    
-    sby_minority_index <- which(
-      x = sby_target_factor == sby_class_roles$sby_minority_label
-    )
-    sby_majority_index <- which(
-      x = sby_target_factor == sby_class_roles$sby_majority_label
-    )
-
-    # Separa matrizes escaladas por papel de classe
-    sby_minority_matrix <- sby_x_scaled[sby_minority_index, , drop = FALSE]
-    sby_majority_matrix <- sby_x_scaled[sby_majority_index, , drop = FALSE]
-
-    # Calcula quantidade de exemplos majoritarios e vizinhos efetivos a reter
-    sby_retained_majority_count <- sby_compute_majority_retention_count(
-      sby_target_factor  = sby_target_factor,
-      sby_under_ratio    = sby_under_ratio,
-      sby_minority_label = sby_class_roles$sby_minority_label,
-      sby_majority_label = sby_class_roles$sby_majority_label
-    )
-    sby_effective_k <- min(
-      as.integer(sby_knn_under_k),
-      nrow(sby_minority_matrix)
-    )
-
-    # Verifica se existem vizinhos minoritarios suficientes para o criterio
-    if(sby_effective_k < 1L){
-
-      # Aborta quando o conjunto minoritario nao possui linhas elegiveis
-      sby_adanear_abort(
-        sby_message = "Sem linhas minoritarias suficientes para NearMiss"
-      )
-    }
-
-    # Define semente para manter reprodutibilidade dos engines KNN
-    set.seed(
-      seed = sby_seed
-    )
-
-    # Calcula vizinhos minoritarios mais proximos para cada linha majoritaria
-    sby_knn_result <- sby_get_knnx(
-      sby_data                    = sby_minority_matrix,
-      sby_query                   = sby_majority_matrix,
-      sby_k                       = sby_effective_k,
-      sby_knn_algorithm           = sby_knn_algorithm,
-      sby_knn_engine             = sby_knn_engine,
-      sby_knn_distance_metric         = sby_knn_distance_metric,
-      sby_knn_workers             = sby_knn_workers,
-      sby_knn_hnsw_m                  = sby_knn_hnsw_m,
-      sby_knn_hnsw_ef                 = sby_knn_hnsw_ef
-    )
-
-    # Verifica se ha solicitacao de interrupcao apos calculo KNN
-    sby_adanear_check_user_interrupt()
-
-    # Ordena exemplos majoritarios pelo criterio NearMiss de distancia media
-    sby_mean_distances <- rowMeans(
-      x = sby_knn_result$nn.dist
-    )
-
-    # Verifica se ha solicitacao de interrupcao antes da selecao final
-    sby_adanear_check_user_interrupt()
-
-    # Seleciona indices majoritarios mais proximos e compoe conjunto retido
-    sby_selected_order <- order(
-      sby_mean_distances,
-      decreasing = FALSE
-    )
-    sby_selected_majority_index <- sby_majority_index[sby_selected_order[seq_len(sby_retained_majority_count)]]
-    sby_retained_index          <- sort(
-      x = c(
-        sby_minority_index,
-        sby_selected_majority_index
-      )
-    )
-
-    # Reduz matriz escalada e alvo aos indices retidos pelo criterio NearMiss
-    sby_reduced_scaled <- sby_x_scaled[sby_retained_index, , drop = FALSE]
-    sby_reduced_target <- sby_target_factor[sby_retained_index]
-  }
-
-  # Reverte padronizacao z-score para a escala original dos preditores
-  sby_x_restored <- sby_revert_z_score_scaling_matrix(
-    sby_x_matrix      = sby_reduced_scaled,
-    sby_scaling_info = sby_scaling_info
-  )
-
-  # Define preditores finais com ou sem restauracao dos tipos originais
-  sby_final_predictors <- if(sby_restore_types){
-
-    # Restaura classes numericas originais e retorna estrutura tabular
-    sby_restore_numeric_column_types(
-      sby_x_matrix       = sby_x_restored,
-      sby_type_info     = sby_type_info,
-      sby_as_data_frame = TRUE
-    )
-  }else{
-
-    # Converte matriz restaurada em data frame mantendo nomes originais
-    sby_out <- as.data.frame(
-      x = sby_x_restored,
-      stringsAsFactors = FALSE
-    )
+    sby_out <- as.data.frame(sby_matrix_result$sby_x_matrix, stringsAsFactors = FALSE)
     names(sby_out) <- sby_type_info$sby_column_name
     sby_out
   }
+  sby_balanced_data <- sby_build_balanced_tibble(sby_final_predictors, sby_matrix_result$sby_y_vector)
 
-  # Combina preditores finais e alvo reduzido em tibble balanceado
-  sby_balanced_data <- sby_build_balanced_tibble(
-    sby_predictor_data = sby_final_predictors,
-    sby_target_vector  = sby_reduced_target
-  )
-
-  # Define metadado de conectividade HNSW usado no diagnostico
-  sby_diagnostic_hnsw_m <- ifelse(
-    test = identical(
-      x = sby_knn_engine,
-      y = "RcppHNSW"
-    ),
-    yes = sby_knn_hnsw_m,
-    no  = NA_integer_
-  )
-
-  # Define metadado de busca HNSW usado no diagnostico
-  sby_diagnostic_hnsw_ef <- ifelse(
-    test = identical(
-      x = sby_knn_engine,
-      y = "RcppHNSW"
-    ),
-    yes = sby_knn_hnsw_ef,
-    no  = NA_integer_
-  )
-
-  # Consolida diagnosticos de entrada, saida e configuracao KNN
-  sby_diagnostics <- list(
-    sby_input_rows                  = nrow(sby_x_matrix),
-    sby_output_rows                 = nrow(sby_balanced_data),
-    sby_removed_rows                = nrow(sby_x_matrix) - nrow(sby_balanced_data),
-    sby_knn_engine                 = sby_knn_engine,
-    sby_knn_distance_metric             = sby_knn_distance_metric,
-    sby_knn_workers                 = sby_knn_workers,
-    sby_knn_hnsw_m                      = sby_diagnostic_hnsw_m,
-    sby_knn_hnsw_ef                     = sby_diagnostic_hnsw_ef,
-    sby_input_class_distribution    = table(sby_target_factor),
-    sby_output_class_distribution   = table(as.factor(sby_reduced_target))
-  )
-
-  # Consolida resultado completo para retorno auditavel
-  sby_result <- list(
-    sby_balanced_data   = sby_balanced_data,
-    sby_type_info       = sby_type_info,
-    sby_scaling_info    = sby_scaling_info,
-    sby_diagnostics     = sby_diagnostics,
-    sby_balanced_scaled = list(
-      x = sby_reduced_scaled,
-      y = as.factor(sby_reduced_target)
-    )
-  )
-
-  # Retorna estrutura completa quando auditoria foi solicitada
   if(isTRUE(sby_audit)){
-
-    # Entrega dados balanceados, metadados e diagnosticos ao chamador
-    return(sby_result)
+    return(list(
+      sby_balanced_data = sby_balanced_data,
+      sby_type_info = sby_type_info,
+      sby_scaling_info = sby_matrix_result$sby_scaling_info,
+      sby_diagnostics = sby_matrix_result$sby_diagnostics,
+      sby_balanced_scaled = sby_matrix_result$sby_balanced_scaled,
+      sby_retained_index = sby_matrix_result$sby_retained_index
+    ))
   }
-
-  # Retorna apenas os dados balanceados no fluxo operacional padrao
   return(sby_balanced_data)
 }
 ####

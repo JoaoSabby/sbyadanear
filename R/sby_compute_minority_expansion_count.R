@@ -20,11 +20,11 @@ sby_compute_minority_expansion_count <- function(sby_target_factor, sby_over_rat
     )
   }
 
-  # Identifica papeis de classe para calcular o tamanho minoritario
-  sby_class_roles     <- sby_get_binary_class_roles(
-    sby_target_factor = sby_target_factor
+  # Identifica papeis de classe por contagem leve baseada em tabulate
+  sby_class_roles <- sby_binary_class_counts_fast(
+    sby_y_vector = sby_target_factor
   )
-  sby_minority_count  <- as.integer(sby_class_roles$sby_class_counts[sby_class_roles$sby_minority_label])
+  sby_minority_count <- sby_class_roles$sby_minority_count
   sby_synthetic_count <- max(
     1L,
     as.integer(floor(sby_minority_count * sby_over_ratio))

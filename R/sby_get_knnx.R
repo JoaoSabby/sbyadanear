@@ -28,11 +28,15 @@ sby_get_knnx <- function(
   sby_knn_hnsw_m,
   sby_knn_hnsw_ef,
   sby_knn_query_chunk_size = getOption("instenginer.sby_knn_query_chunk_size", 1000L),
-  sby_query_is_data = FALSE
+  sby_query_is_data = FALSE,
+  sby_knn_return = c("both", "index", "dist")
 ){
   
   # Verifica se ha solicitacao de interrupcao antes da consulta KNN
   sby_adanear_check_user_interrupt()
+
+  # Resolve quais componentes KNN devem permanecer no objeto retornado
+  sby_knn_return <- match.arg(sby_knn_return)
 
   # Valida tamanho de bloco para consultas KNN interrompiveis
   sby_knn_query_chunk_size <- sby_validate_knn_query_chunk_size(
@@ -121,7 +125,7 @@ sby_get_knnx <- function(
     sby_adanear_check_user_interrupt()
 
     # Retorna resultado KNN produzido pelo engine FNN
-    return(sby_knn_result)
+    return(sby_trim_knn_result(sby_knn_result, sby_knn_return))
   }
 
   # Executa consulta pelo engine RcppHNSW quando selecionado
@@ -213,7 +217,7 @@ sby_get_knnx <- function(
       sby_adanear_check_user_interrupt()
 
       # Retorna resultado KNN produzido pelo engine HNSW
-      return(sby_knn_result)
+      return(sby_trim_knn_result(sby_knn_result, sby_knn_return))
     }
 
     # Executa HNSW em fork somente quando solicitado explicitamente. Em bases
@@ -393,3 +397,20 @@ sby_query_knn_in_chunks <- function(sby_query, sby_k, sby_knn_query_chunk_size, 
 ####
 ## Fim
 #
+
+
+#' Descartar componentes KNN nao solicitados
+#'
+#' @param sby_knn_result Resultado KNN com `nn.index` e/ou `nn.dist`
+#' @param sby_knn_return Componentes a manter
+#'
+#' @return Lista KNN reduzida
+#' @noRd
+sby_trim_knn_result <- function(sby_knn_result, sby_knn_return){
+  if(identical(sby_knn_return, "index")){
+    sby_knn_result$nn.dist <- NULL
+  }else if(identical(sby_knn_return, "dist")){
+    sby_knn_result$nn.index <- NULL
+  }
+  return(sby_knn_result)
+}
