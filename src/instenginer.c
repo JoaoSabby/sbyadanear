@@ -31,6 +31,9 @@
 #include <R_ext/Rdynload.h>
 #include <R_ext/Utils.h>
 #include <R_ext/Visibility.h>
+#include <math.h>
+#include <limits.h>
+#include <float.h>
 
 /**
  * @brief Invoca verificacao de interrupcao do usuario no ambiente R.
@@ -77,11 +80,14 @@ SEXP OU_ComputeZScoreParamsC(SEXP xMatrix){
   /* Valida coerencia da estrutura de dados de entrada */
   require_real_matrix(xMatrix, "xMatrix");
   
-  /* Extrai metadados do objeto para capturar quantidades de linhas e colunas */
+  /* Extrai metadados do objeto para capturar quantidades de linhas e colunas.
+   * Mantemos a captura como int porque R_DimSymbol entrega INTSXP, mas
+   * promovemos para R_xlen_t antes de qualquer multiplicacao de offset para
+   * evitar overflow em matrizes maiores que INT_MAX em uma das dimensoes. */
   SEXP dims = getAttrib(xMatrix, R_DimSymbol);
-  const int n = INTEGER(dims)[0]; 
-  const int p = INTEGER(dims)[1]; 
-  
+  const R_xlen_t n = (R_xlen_t) INTEGER(dims)[0];
+  const R_xlen_t p = (R_xlen_t) INTEGER(dims)[1];
+
   /* Impede divisao por zero no calculo da variancia amostral n menos 1 */
   if(n < 2){
     error("'xMatrix' deve conter ao menos duas linhas");
@@ -97,33 +103,33 @@ SEXP OU_ComputeZScoreParamsC(SEXP xMatrix){
   double *sd = REAL(scales);
   
   /* Itera pelas colunas mapeando indices contiguos de memoria column-major */
-  for(int j = 0; j < p; ++j){
+  for(R_xlen_t j = 0; j < p; ++j){
     /* Previne sobrecarga no processador verificando interrupcoes apenas a cada 16 ciclos */
     if((j & 15) == 0){
       R_CheckUserInterrupt();
     }
-    
+
     /* Posiciona o ponteiro de leitura no byte zero da coluna atual */
-    const double *col = x + ((R_xlen_t) j * n);
+    const double *col = x + j * n;
     long double sum = 0.0L;
-    
+
     /* Executa primeira passagem agregando valores para derivar o momento inicial absoluto */
-    for(int i = 0; i < n; ++i){
+    for(R_xlen_t i = 0; i < n; ++i){
       sum += (long double) col[i];
     }
-    
+
     /* Define o parametro de centralizacao e grava no vetor protegido */
     const long double mean = sum / (long double) n;
     mu[j] = (double) mean;
-    
+
     long double ss = 0.0L;
-    
+
     /* Executa segunda passagem acumulando quadrados residuais estritamente sobre residuos centrados */
-    for (int i = 0; i < n; ++i) {
+    for (R_xlen_t i = 0; i < n; ++i) {
       const long double centered = (long double) col[i] - mean;
       ss += centered * centered;
     }
-    
+
     /* Conclui calculo da raiz do espalhamento da amostra e grava no vetor de escalas */
     sd[j] = sqrt((double) (ss / (long double) (n - 1)));
   }
@@ -169,16 +175,19 @@ SEXP OU_ApplyZScoreC(SEXP xMatrix, SEXP centers, SEXP scales, SEXP reverse){
   
   /* Carrega metrica dimensional da base para validacao cruzada */
   SEXP dims = getAttrib(xMatrix, R_DimSymbol);
-  const int n = INTEGER(dims)[0];
-  const int p = INTEGER(dims)[1];
-  
+  const R_xlen_t n = (R_xlen_t) INTEGER(dims)[0];
+  const R_xlen_t p = (R_xlen_t) INTEGER(dims)[1];
+
   /* Assegura conformidade de espaco vetorial de colunas x vetores de distribuicao */
   if(XLENGTH(centers) != p || XLENGTH(scales) != p){
     error("'centers' e 'scales' devem ter comprimento igual ao numero de colunas");
   }
   
-  /* Cria espelho da matriz alvo alocando novo bloco de memoria homogeneo */
-  SEXP out = PROTECT(allocMatrix(REALSXP, n, p));
+  /* Cria espelho da matriz alvo alocando novo bloco de memoria homogeneo. */
+  if(n > INT_MAX || p > INT_MAX){
+    error("'xMatrix' excede o limite de dimensoes suportado por allocMatrix");
+  }
+  SEXP out = PROTECT(allocMatrix(REALSXP, (int) n, (int) p));
   
   /* Estabelece vinculacoes de enderecos para varredura C padrao */
   const double *x = REAL(xMatrix);
@@ -189,25 +198,35 @@ SEXP OU_ApplyZScoreC(SEXP xMatrix, SEXP centers, SEXP scales, SEXP reverse){
   /* Traduz sinalizador booleano logico do R em inteiro avaliavel em C */
   const int do_reverse = asLogical(reverse);
   
-  for(int j = 0; j < p; ++j){
+  for(R_xlen_t j = 0; j < p; ++j){
     /* Restringe consultas de hook de sistema operacional */
     if((j & 15) == 0){
       R_CheckUserInterrupt();
     }
-    
+
     /* Pre calcula salto contiguo de bytes para a base do eixo y */
-    const R_xlen_t offset = (R_xlen_t) j * n;
+    const R_xlen_t offset = j * n;
     const double center = mu[j];
     const double scale = sd[j];
-    
+
+    /* Defesa em profundidade: sby_validate_scaling_info ja garante scale > 0,
+     * mas duplicamos a checagem aqui porque OU_ApplyZScoreC pode ser invocado
+     * com scaling_info fornecido externamente (sby_input_already_scaled). */
+    if(!do_reverse && (!R_FINITE(scale) || scale <= 0.0)){
+      error("'scales[%lld]' deve ser positivo e finito", (long long) (j + 1));
+    }
+    if(!R_FINITE(center)){
+      error("'centers[%lld]' deve ser finito", (long long) (j + 1));
+    }
+
     if(do_reverse){
       /* Restaura posicao real baseando se em distribuicao escalada pre formatada */
-      for(int i = 0; i < n; ++i){
+      for(R_xlen_t i = 0; i < n; ++i){
         y[offset + i] = x[offset + i] * scale + center;
       }
     } else {
       /* Normaliza vetor realocando ao redor de zero em desvios unificados unitarios */
-      for(int i = 0; i < n; ++i){
+      for(R_xlen_t i = 0; i < n; ++i){
         y[offset + i] = (x[offset + i] - center) / scale;
       }
     }
