@@ -27,7 +27,8 @@ sby_adasyn_matrix <- function(
   sby_adanear_check_user_interrupt()
 
   sby_audit_level <- sby_resolve_audit_level(sby_audit, sby_audit_level)
-  sby_audit <- identical(sby_audit_level, "full")
+  sby_audit_full <- identical(sby_audit_level, "full")
+  sby_audit_light <- sby_audit_level %in% c("light", "full")
   sby_return_scaled <- sby_validate_logical_scalar(sby_return_scaled, "sby_return_scaled")
   sby_return_original_scale <- sby_validate_logical_scalar(sby_return_original_scale, "sby_return_original_scale")
   sby_input_already_scaled <- sby_validate_logical_scalar(sby_input_already_scaled, "sby_input_already_scaled")
@@ -124,7 +125,10 @@ sby_adasyn_matrix <- function(
     sby_diagnostics = sby_diagnostics
   )
 
-  if(isTRUE(sby_audit) || isTRUE(sby_return_scaled)){
+  if(isTRUE(sby_audit_light)){
+    sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
+  }
+  if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
     sby_result$sby_scaling_info <- sby_scaling_info
   }
   if(isTRUE(sby_return_scaled)){

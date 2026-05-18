@@ -19,13 +19,18 @@ sby_nearmiss_index <- function(
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L,
   sby_audit = FALSE,
-  sby_audit_level = c("none", "light", "full")
+  sby_audit_level = c("none", "light", "full"),
+  sby_return_scaling_info = FALSE,
+  sby_return_reduced_scaled = FALSE
 ){
   sby_adanear_check_user_interrupt()
 
   sby_audit_level <- sby_resolve_audit_level(sby_audit, sby_audit_level)
-  sby_audit <- identical(sby_audit_level, "full")
+  sby_audit_full <- identical(sby_audit_level, "full")
+  sby_audit_light <- sby_audit_level %in% c("light", "full")
   sby_input_already_scaled <- sby_validate_logical_scalar(sby_input_already_scaled, "sby_input_already_scaled")
+  sby_return_scaling_info <- sby_validate_logical_scalar(sby_return_scaling_info, "sby_return_scaling_info")
+  sby_return_reduced_scaled <- sby_validate_logical_scalar(sby_return_reduced_scaled, "sby_return_reduced_scaled")
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
   if(length(sby_y_vector) != nrow(sby_x_matrix)){
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
@@ -132,9 +137,18 @@ sby_nearmiss_index <- function(
     sby_output_class_distribution = sby_class_info_output$sby_class_counts,
     sby_diagnostics = sby_diagnostics
   )
-  if(isTRUE(sby_audit)){
+  if(isTRUE(sby_audit_light)){
+    sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
+    sby_result$sby_diagnostics$sby_retained_majority_rows <- length(sby_selected_majority_index)
+  }
+  if(isTRUE(sby_audit_full)){
     sby_result$sby_selected_majority_index <- as.integer(sby_selected_majority_index)
+  }
+  if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaling_info)){
     sby_result$sby_scaling_info <- sby_scaling_info
+  }
+  if(isTRUE(sby_return_reduced_scaled)){
+    sby_result$sby_reduced_scaled <- sby_x_scaled[sby_retained_index, , drop = FALSE]
   }
   return(sby_result)
 }

@@ -121,3 +121,115 @@ test_that("ADASYN and ADANEAR reject sparse matrices explicitly", {
   expect_error(sby_adasyn_matrix(x_sparse, y), "esparsas")
   expect_error(sby_adanear_matrix(x_sparse, y), "esparsas")
 })
+
+test_that("sby_nearmiss_index exposes operational scale without full audit", {
+  set.seed(1001)
+  x <- cbind(rnorm(30), rnorm(30))
+  storage.mode(x) <- "double"
+  y <- factor(c(rep("minor", 6), rep("major", 24)), levels = c("minor", "major"))
+
+  idx <- sby_nearmiss_index(
+    x, y,
+    sby_under_ratio = 0.5,
+    sby_seed = 19,
+    sby_knn_engine = "FNN",
+    sby_return_scaling_info = TRUE,
+    sby_return_reduced_scaled = TRUE
+  )
+
+  expect_true(is.integer(idx$sby_retained_index))
+  expect_true(is.list(idx$sby_scaling_info))
+  expect_equal(nrow(idx$sby_reduced_scaled), length(idx$sby_retained_index))
+  expect_null(idx$sby_selected_majority_index)
+})
+
+test_that("sby_get_knnx honors requested return components", {
+  set.seed(1002)
+  x <- cbind(rnorm(20), rnorm(20))
+  storage.mode(x) <- "double"
+
+  both <- instenginer:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "both")
+  index <- instenginer:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "index")
+  dist <- instenginer:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "dist")
+
+  expect_true(all(c("nn.index", "nn.dist") %in% names(both)))
+  expect_true("nn.index" %in% names(index))
+  expect_false("nn.dist" %in% names(index))
+  expect_true("nn.dist" %in% names(dist))
+  expect_false("nn.index" %in% names(dist))
+})
+
+test_that("sby_balance_matrix none and weight do not densify sparse matrices", {
+  skip_if_not_installed("Matrix")
+  x <- Matrix::rsparsematrix(20, 3, density = 0.2)
+  y <- factor(c(rep("minor", 5), rep("major", 15)), levels = c("minor", "major"))
+
+  none <- sby_balance_matrix(x, y, sby_strategy = "none")
+  weight <- sby_balance_matrix(x, y, sby_strategy = "weight")
+
+  expect_s4_class(none$sby_x_matrix, "dgCMatrix")
+  expect_s4_class(weight$sby_x_matrix, "dgCMatrix")
+  expect_identical(none$sby_x_matrix, x)
+  expect_identical(weight$sby_x_matrix, x)
+  expect_false(none$sby_diagnostics$sby_data_changed)
+  expect_false(weight$sby_diagnostics$sby_data_changed)
+  expect_error(sby_balance_matrix(x, y, sby_strategy = "adasyn"), "densa")
+  expect_error(sby_balance_matrix(x, y, sby_strategy = "adanear"), "densa")
+})
+
+test_that("matrix audit levels avoid heavy ADANEAR intermediates unless full", {
+  set.seed(1003)
+  x <- cbind(rnorm(36), rnorm(36))
+  storage.mode(x) <- "double"
+  y <- factor(c(rep("minor", 9), rep("major", 27)), levels = c("minor", "major"))
+
+  none <- sby_adanear_matrix(x, y, sby_seed = 21, sby_knn_engine = "FNN", sby_audit_level = "none")
+  light <- sby_adanear_matrix(x, y, sby_seed = 21, sby_knn_engine = "FNN", sby_audit_level = "light")
+  full <- sby_adanear_matrix(x, y, sby_seed = 21, sby_knn_engine = "FNN", sby_audit_level = "full")
+
+  expect_null(none$sby_oversampling_result)
+  expect_null(light$sby_oversampling_result)
+  expect_equal(light$sby_diagnostics$sby_audit_level, "light")
+  expect_true(is.list(full$sby_oversampling_result))
+  expect_true(is.list(full$sby_undersampling_result))
+})
+
+test_that("tabular wrappers preserve original rows and restore only synthetic rows", {
+  set.seed(1004)
+  dat <- data.frame(
+    int_col = as.integer(c(1:8, 101:124)),
+    dbl_col = c(seq(0.1, 0.8, length.out = 8), seq(10.01, 12.4, length.out = 24)),
+    bin_col = as.integer(c(rep(0, 4), rep(1, 4), rep(0, 12), rep(1, 12)))
+  )
+  dat$TARGET <- factor(c(rep("minor", 8), rep("major", 24)), levels = c("minor", "major"))
+
+  ada <- sby_adasyn(TARGET ~ ., dat, sby_over_ratio = 0.5, sby_seed = 31, sby_knn_engine = "FNN")
+  expect_identical(as.data.frame(ada[seq_len(nrow(dat)), names(dat)[1:3]]), dat[, 1:3])
+  expect_type(ada$int_col, "integer")
+  expect_type(ada$bin_col, "integer")
+
+  near_audit <- sby_nearmiss(TARGET ~ ., dat, sby_under_ratio = 0.5, sby_seed = 32, sby_knn_engine = "FNN", sby_audit = TRUE)
+  expect_identical(
+    as.data.frame(near_audit$sby_balanced_data[, names(dat)[1:3]]),
+    dat[near_audit$sby_retained_index, 1:3, drop = FALSE]
+  )
+})
+
+test_that("native NearMiss selector matches R fallback without ties", {
+  nn_dist <- matrix(
+    c(0.10, 0.20,
+      0.30, 0.40,
+      0.05, 0.15,
+      0.60, 0.70),
+    nrow = 4,
+    byrow = TRUE
+  )
+  storage.mode(nn_dist) <- "double"
+  majority_index <- as.integer(c(10L, 20L, 30L, 40L))
+  retained <- 2L
+
+  c_idx <- .Call("OU_SelectNearMissMajorityC", nn_dist, majority_index, as.integer(retained), PACKAGE = "instenginer")
+  r_idx <- majority_index[order(rowMeans(nn_dist), majority_index)[seq_len(retained)]]
+
+  expect_equal(sort(c_idx), sort(r_idx))
+})

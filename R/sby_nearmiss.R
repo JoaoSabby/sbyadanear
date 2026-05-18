@@ -171,6 +171,7 @@ sby_nearmiss <- function(
 
   sby_formula_data <- sby_extract_formula_data(sby_formula = sby_formula, sby_data = sby_data)
   sby_predictor_data <- sby_formula_data$sby_predictor_data
+  sby_original_predictor_data <- sby_predictor_data
   sby_target_vector <- sby_formula_data$sby_target_vector
 
   sby_audit <- sby_validate_logical_scalar(sby_audit, "sby_audit")
@@ -192,9 +193,9 @@ sby_nearmiss <- function(
     sby_knn_under_k = sby_knn_under_k,
     sby_seed = sby_seed,
     sby_audit = sby_audit,
-    sby_return_index = sby_audit,
+    sby_return_index = TRUE,
     sby_return_scaled = sby_audit,
-    sby_return_original_scale = TRUE,
+    sby_return_original_scale = FALSE,
     sby_scaling_info = sby_precomputed_scaling,
     sby_input_already_scaled = sby_input_already_scaled,
     sby_fixed_minority_label = sby_fixed_minority_label,
@@ -207,13 +208,7 @@ sby_nearmiss <- function(
     sby_knn_hnsw_ef = sby_knn_hnsw_ef
   )
 
-  sby_final_predictors <- if(isTRUE(sby_restore_types)){
-    sby_restore_numeric_column_types(sby_matrix_result$sby_x_matrix, sby_type_info, TRUE)
-  }else{
-    sby_out <- as.data.frame(sby_matrix_result$sby_x_matrix, stringsAsFactors = FALSE)
-    names(sby_out) <- sby_type_info$sby_column_name
-    sby_out
-  }
+  sby_final_predictors <- sby_original_predictor_data[sby_matrix_result$sby_retained_index, , drop = FALSE]
   sby_balanced_data <- sby_build_balanced_tibble(sby_final_predictors, sby_matrix_result$sby_y_vector)
 
   if(isTRUE(sby_audit)){

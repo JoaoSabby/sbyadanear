@@ -25,7 +25,8 @@ sby_adanear_matrix <- function(
   sby_max_dense_gb = Inf
 ){
   sby_audit_level <- sby_resolve_audit_level(sby_audit, sby_audit_level)
-  sby_audit <- identical(sby_audit_level, "full")
+  sby_audit_full <- identical(sby_audit_level, "full")
+  sby_audit_light <- sby_audit_level %in% c("light", "full")
   sby_return_scaled <- sby_validate_logical_scalar(sby_return_scaled, "sby_return_scaled")
   sby_return_original_scale <- sby_validate_logical_scalar(sby_return_original_scale, "sby_return_original_scale")
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
@@ -41,7 +42,8 @@ sby_adanear_matrix <- function(
     sby_over_ratio = sby_over_ratio,
     sby_knn_over_k = sby_knn_over_k,
     sby_seed = sby_seed,
-    sby_audit = TRUE,
+    sby_audit = sby_audit_full,
+    sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
     sby_return_scaled = TRUE,
     sby_return_original_scale = FALSE,
     sby_knn_algorithm = sby_knn_algorithm,
@@ -61,9 +63,10 @@ sby_adanear_matrix <- function(
     sby_under_ratio = sby_under_ratio,
     sby_knn_under_k = sby_knn_under_k,
     sby_seed = sby_seed,
-    sby_audit = TRUE,
+    sby_audit = sby_audit_full,
+    sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
     sby_return_index = TRUE,
-    sby_return_scaled = TRUE,
+    sby_return_scaled = isTRUE(sby_return_scaled) || isTRUE(sby_audit_full),
     sby_return_original_scale = sby_return_original_scale,
     sby_scaling_info = sby_over_result$sby_scaling_info,
     sby_input_already_scaled = TRUE,
@@ -101,15 +104,21 @@ sby_adanear_matrix <- function(
     sby_diagnostics = sby_diagnostics
   )
 
-  if(isTRUE(sby_audit)){
+  if(isTRUE(sby_audit_light)){
+    sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
+    sby_result$sby_diagnostics$sby_generated_rows <- sby_over_result$sby_diagnostics$sby_generated_rows
+    sby_result$sby_diagnostics$sby_removed_rows <- nrow(sby_over_result$sby_balanced_scaled$x) - nrow(sby_under_result$sby_x_matrix)
+  }
+  if(isTRUE(sby_audit_full)){
     sby_result$sby_oversampling_result <- sby_over_result
     sby_result$sby_undersampling_result <- sby_under_result
+  }
+  if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
     sby_result$sby_scaling_info <- sby_over_result$sby_scaling_info
     sby_result$sby_retained_index <- sby_under_result$sby_retained_index
   }
   if(isTRUE(sby_return_scaled)){
     sby_result$sby_balanced_scaled <- sby_under_result$sby_balanced_scaled
-    sby_result$sby_scaling_info <- sby_over_result$sby_scaling_info
   }
 
   return(sby_result)

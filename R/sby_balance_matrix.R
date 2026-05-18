@@ -27,15 +27,12 @@ sby_balance_matrix <- function(
   sby_max_dense_gb = Inf
 ){
   sby_audit_level <- sby_resolve_audit_level(sby_audit, sby_audit_level)
-  sby_audit <- identical(sby_audit_level, "full")
+  sby_audit_full <- identical(sby_audit_level, "full")
   sby_strategy <- match.arg(sby_strategy)
-  sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != nrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
-  }
-  sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
 
   if(sby_strategy %in% c("none", "weight")){
+    sby_validate_matrix_like_row_count(sby_x_matrix, sby_y_vector)
+    sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
     return(list(
       sby_x_matrix = sby_x_matrix,
       sby_y_vector = sby_y_vector,
@@ -52,6 +49,12 @@ sby_balance_matrix <- function(
     ))
   }
 
+  sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
+  if(length(sby_y_vector) != nrow(sby_x_matrix)){
+    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
+  }
+  sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
+
   if(identical(sby_strategy, "adasyn")){
     return(sby_adasyn_matrix(
       sby_x_matrix = sby_x_matrix,
@@ -59,7 +62,7 @@ sby_balance_matrix <- function(
       sby_over_ratio = sby_over_ratio,
       sby_knn_over_k = sby_knn_over_k,
       sby_seed = sby_seed,
-      sby_audit = sby_audit,
+      sby_audit = sby_audit_full,
       sby_audit_level = sby_audit_level,
       sby_return_scaled = sby_return_scaled,
       sby_return_original_scale = sby_return_original_scale,
@@ -82,7 +85,7 @@ sby_balance_matrix <- function(
       sby_under_ratio = sby_under_ratio,
       sby_knn_under_k = sby_knn_under_k,
       sby_seed = sby_seed,
-      sby_audit = sby_audit,
+      sby_audit = sby_audit_full,
       sby_audit_level = sby_audit_level,
       sby_return_index = sby_return_index,
       sby_return_scaled = sby_return_scaled,
@@ -105,7 +108,7 @@ sby_balance_matrix <- function(
     sby_knn_over_k = sby_knn_over_k,
     sby_knn_under_k = sby_knn_under_k,
     sby_seed = sby_seed,
-    sby_audit = sby_audit,
+    sby_audit = sby_audit_full,
     sby_audit_level = sby_audit_level,
     sby_return_scaled = sby_return_scaled,
     sby_return_original_scale = sby_return_original_scale,
