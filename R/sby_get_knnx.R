@@ -104,23 +104,52 @@ sby_get_knnx <- function(
       )
     }
 
-    # Consulta vizinhos FNN em blocos interrompiveis, sequenciais ou paralelos
-    sby_knn_result <- sby_query_knn_in_chunks(
-      sby_query = sby_query,
-      sby_k = sby_k,
-      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
-      sby_knn_workers = sby_knn_workers,
-      sby_knn_return = sby_knn_return,
-      sby_query_fun = function(sby_query_chunk){
-        # Executa consulta FNN para o bloco corrente
-        return(FNN::get.knnx(
-          data = sby_data,
-          query = sby_query_chunk,
-          k = sby_k,
-          algorithm = sby_knn_algorithm
-        ))
-      }
-    )
+    # Caminho rapido nativo (BLAS): quando o algoritmo selecionado e brute
+    # force exato e o kernel C nativo esta disponivel, usa OU_BruteForceKnnC
+    # que computa o produto cruzado via dgemm (BLAS) e seleciona top-k por
+    # heap. Em alta dimensionalidade isso costuma ser mais rapido que
+    # FNN::get.knnx(algorithm="brute"), especialmente com OpenBLAS/MKL.
+    sby_use_native_brute <- identical(sby_knn_algorithm, "brute") &&
+      sby_adanear_native_available() &&
+      !isFALSE(getOption("instenginer.sby_use_native_brute", default = TRUE))
+
+    if(sby_use_native_brute){
+      sby_knn_result <- sby_query_knn_in_chunks(
+        sby_query = sby_query,
+        sby_k = sby_k,
+        sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+        sby_knn_workers = sby_knn_workers,
+        sby_knn_return = sby_knn_return,
+        sby_query_fun = function(sby_query_chunk){
+          storage.mode(sby_data) <- "double"
+          storage.mode(sby_query_chunk) <- "double"
+          return(.Call(
+            OU_BruteForceKnnC,
+            sby_data,
+            sby_query_chunk,
+            as.integer(sby_k)
+          ))
+        }
+      )
+    }else{
+      # Consulta vizinhos FNN em blocos interrompiveis, sequenciais ou paralelos
+      sby_knn_result <- sby_query_knn_in_chunks(
+        sby_query = sby_query,
+        sby_k = sby_k,
+        sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+        sby_knn_workers = sby_knn_workers,
+        sby_knn_return = sby_knn_return,
+        sby_query_fun = function(sby_query_chunk){
+          # Executa consulta FNN para o bloco corrente
+          return(FNN::get.knnx(
+            data = sby_data,
+            query = sby_query_chunk,
+            k = sby_k,
+            algorithm = sby_knn_algorithm
+          ))
+        }
+      )
+    }
 
     # Verifica se ha solicitacao de interrupcao apos consulta FNN
     sby_adanear_check_user_interrupt()

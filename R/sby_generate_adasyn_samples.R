@@ -176,13 +176,40 @@ sby_generate_adasyn_samples <- function(
     storage.mode(sby_minority_matrix)         <- "double"
     storage.mode(sby_minority_neighbor_index) <- "integer"
 
-    # Executa geracao sintetica ADASYN em codigo nativo
-    sby_synthetic_matrix <- .Call(
-      OU_GenerateSyntheticAdasynC,
-      sby_minority_matrix,
-      sby_minority_neighbor_index,
-      as.integer(sby_synthetic_per_row)
+    # Escolha de kernel ADASYN nativo.
+    #
+    # Default = "row": kernel original linha-a-linha (OU_GenerateSyntheticAdasynC).
+    # Vence em testes empiricos com p moderado (p <= 200) e n_synthetic moderado
+    # porque tem overhead minimo: nao pre-aloca vetores temporarios e gera +
+    # escreve cada sintetico em uma unica passada.
+    #
+    # Opcao "col": kernel column-friendly (OU_GenerateSyntheticAdasynColC), que
+    # pre-resolve (baseRow, nbrRow, weight) em vetores contiguos e percorre as
+    # colunas no laco externo. Em teoria favorece locality em dimensionalidade
+    # muito alta (p >> 200) e n_synthetic alto (> 10^5). Em casos pequenos a
+    # pre-alocacao adicional anula o ganho.
+    #
+    # Usuario pode forcar com:
+    #   options(instenginer.sby_adasyn_kernel = "col")
+    sby_adasyn_kernel <- getOption(
+      x = "instenginer.sby_adasyn_kernel",
+      default = "row"
     )
+    if(identical(sby_adasyn_kernel, "col")){
+      sby_synthetic_matrix <- .Call(
+        OU_GenerateSyntheticAdasynColC,
+        sby_minority_matrix,
+        sby_minority_neighbor_index,
+        as.integer(sby_synthetic_per_row)
+      )
+    }else{
+      sby_synthetic_matrix <- .Call(
+        OU_GenerateSyntheticAdasynC,
+        sby_minority_matrix,
+        sby_minority_neighbor_index,
+        as.integer(sby_synthetic_per_row)
+      )
+    }
 
     # Verifica se ha solicitacao de interrupcao apos geracao nativa
     sby_adanear_check_user_interrupt()

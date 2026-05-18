@@ -31,9 +31,18 @@
 #include <R_ext/Rdynload.h>
 #include <R_ext/Utils.h>
 #include <R_ext/Visibility.h>
+#include <R_ext/RS.h>
+#include <R_ext/BLAS.h>
 #include <math.h>
 #include <limits.h>
 #include <float.h>
+
+/* FCONE: macro de R-API para passar comprimentos de strings Fortran nas
+ * chamadas a BLAS. Definida em Rconfig.h em R >= 3.6; fornece um fallback
+ * vazio em versoes mais antigas para manter portabilidade. */
+#ifndef FCONE
+# define FCONE
+#endif
 
 /**
  * @brief Invoca verificacao de interrupcao do usuario no ambiente R.
@@ -483,6 +492,397 @@ SEXP OU_SelectNearMissMajorityC(SEXP nnDist, SEXP majorityIndex, SEXP retainedMa
 }
 
 /**
+ * @brief Gera sinteticos ADASYN com layout column-friendly e RNG plano.
+ *
+ * Variante de OU_GenerateSyntheticAdasynC que pre-computa todos os indices
+ * de vizinho e pesos de interpolacao em vetores contiguos, e em seguida
+ * percorre as colunas no laco externo. Em matrizes column-major isso
+ * substitui escritas com stride totalSynthetic por escritas contiguas,
+ * melhorando locality de cache em dados de alta dimensionalidade.
+ *
+ * Resultado numericamente equivalente a OU_GenerateSyntheticAdasynC para
+ * o mesmo estado de RNG no momento da chamada.
+ */
+SEXP OU_GenerateSyntheticAdasynColC(SEXP minorityMatrix, SEXP minorityNeighborIndex, SEXP syntheticPerRow){
+  require_real_matrix(minorityMatrix, "minorityMatrix");
+
+  if(!isInteger(minorityNeighborIndex) || !isMatrix(minorityNeighborIndex)){
+    error("'minorityNeighborIndex' deve ser uma matrix integer");
+  }
+  if(!isInteger(syntheticPerRow)){
+    error("'syntheticPerRow' deve ser um vetor integer");
+  }
+
+  SEXP minorityDims = getAttrib(minorityMatrix, R_DimSymbol);
+  SEXP neighborDims = getAttrib(minorityNeighborIndex, R_DimSymbol);
+  const R_xlen_t minorityRows = (R_xlen_t) INTEGER(minorityDims)[0];
+  const R_xlen_t colCount = (R_xlen_t) INTEGER(minorityDims)[1];
+  const R_xlen_t neighborRows = (R_xlen_t) INTEGER(neighborDims)[0];
+  const R_xlen_t neighborCount = (R_xlen_t) INTEGER(neighborDims)[1];
+
+  if(neighborRows != minorityRows || XLENGTH(syntheticPerRow) != minorityRows){
+    error("Dimensoes inconsistentes para geracao ADASYN");
+  }
+  if(neighborCount < 1){
+    error("'minorityNeighborIndex' deve conter ao menos uma coluna");
+  }
+
+  const double *minority = REAL(minorityMatrix);
+  const int *neighbor = INTEGER(minorityNeighborIndex);
+  const int *perRow = INTEGER(syntheticPerRow);
+
+  /* Calcula total de sinteticos para alocar a matriz final em um unico bloco. */
+  R_xlen_t totalSynthetic = 0;
+  for(R_xlen_t i = 0; i < minorityRows; ++i){
+    if(perRow[i] < 0){
+      error("'syntheticPerRow' nao pode conter valores negativos");
+    }
+    totalSynthetic += (R_xlen_t) perRow[i];
+  }
+  if(totalSynthetic > INT_MAX){
+    error("Numero de linhas sinteticas excede o limite suportado por matrix R");
+  }
+  if(colCount > INT_MAX){
+    error("Numero de colunas excede o limite suportado por matrix R");
+  }
+
+  SEXP out = PROTECT(allocMatrix(REALSXP, (int) totalSynthetic, (int) colCount));
+  double *synthetic = REAL(out);
+
+  if(totalSynthetic == 0){
+    UNPROTECT(1);
+    return out;
+  }
+
+  /* Pre-aloca vetores temporarios em scratch nao-protegido (R_alloc): para
+   * cada sintetico s armazenamos a linha base, a linha vizinha e o peso de
+   * interpolacao. Pre-resolver isso permite o laco externo iterar por
+   * coluna sem precisar do estado de RNG. */
+  int *baseRow = (int *) R_alloc((size_t) totalSynthetic, sizeof(int));
+  int *nbrRow  = (int *) R_alloc((size_t) totalSynthetic, sizeof(int));
+  double *wgt  = (double *) R_alloc((size_t) totalSynthetic, sizeof(double));
+
+  GetRNGstate();
+  R_xlen_t s = 0;
+  for(R_xlen_t i = 0; i < minorityRows; ++i){
+    if((i & 8191) == 0){
+      R_CheckUserInterrupt();
+    }
+    const int rowCount = perRow[i];
+    for(int r = 0; r < rowCount; ++r){
+      int sampledCol = (int) floor(unif_rand() * (double) neighborCount);
+      if(sampledCol >= (int) neighborCount){
+        sampledCol = (int) neighborCount - 1;
+      }
+      const int selectedNeighborRow = neighbor[i + (R_xlen_t) sampledCol * minorityRows] - 1;
+      if(selectedNeighborRow < 0 || selectedNeighborRow >= (int) minorityRows){
+        PutRNGstate();
+        error("'minorityNeighborIndex' contem indice fora do intervalo");
+      }
+      baseRow[s] = (int) i;
+      nbrRow[s] = selectedNeighborRow;
+      wgt[s] = unif_rand();
+      ++s;
+    }
+  }
+  PutRNGstate();
+
+  /* Laco externo por coluna: para cada coluna j, percorre todos os sinteticos
+   * escrevendo contiguamente na matriz de saida (column-major). Leituras de
+   * minority[base + j*minorityRows] tambem sao contiguas para j fixo. */
+  for(R_xlen_t j = 0; j < colCount; ++j){
+    if((j & 15) == 0){
+      R_CheckUserInterrupt();
+    }
+    const R_xlen_t colOffsetMin = j * minorityRows;
+    const R_xlen_t colOffsetSyn = j * totalSynthetic;
+    for(R_xlen_t t = 0; t < totalSynthetic; ++t){
+      const double bv = minority[baseRow[t] + colOffsetMin];
+      const double nv = minority[nbrRow[t] + colOffsetMin];
+      synthetic[t + colOffsetSyn] = bv + wgt[t] * (nv - bv);
+    }
+  }
+
+  UNPROTECT(1);
+  return out;
+}
+
+/**
+ * @brief Remove o proprio ponto de uma matriz de indices KNN em C.
+ *
+ * Recebe a matriz nbr (n x k_plus) de indices retornada por uma consulta KNN
+ * em que query == data, o vetor selfIndex de n indices (a propria linha de
+ * cada query) e o numero desejado k de vizinhos validos. Devolve uma matriz
+ * n x k onde a coluna que contem self foi removida. Quando self nao aparece
+ * em uma linha, mantem os primeiros k vizinhos retornados. Erra com mensagem
+ * explicita se sobrar menos do que k candidatos validos.
+ */
+SEXP OU_DropSelfNeighborC(SEXP nbr, SEXP selfIndex, SEXP desiredK){
+  if(!isInteger(nbr) || !isMatrix(nbr)){
+    error("'nbr' deve ser uma matrix integer");
+  }
+  if(!isInteger(selfIndex)){
+    error("'selfIndex' deve ser integer");
+  }
+  if(!isInteger(desiredK) || LENGTH(desiredK) != 1){
+    error("'desiredK' deve ser integer escalar");
+  }
+
+  SEXP dims = getAttrib(nbr, R_DimSymbol);
+  const R_xlen_t n = (R_xlen_t) INTEGER(dims)[0];
+  const R_xlen_t kPlus = (R_xlen_t) INTEGER(dims)[1];
+  const int k = INTEGER(desiredK)[0];
+
+  if(XLENGTH(selfIndex) != n){
+    error("'selfIndex' deve ter comprimento igual a nrow(nbr)");
+  }
+  if(k < 1){
+    error("'desiredK' deve ser >= 1");
+  }
+  if((R_xlen_t) k > kPlus){
+    error("Nao foi possivel remover o proprio ponto mantendo vizinhos suficientes");
+  }
+  if(n > INT_MAX){
+    error("'nbr' excede o limite suportado por allocMatrix");
+  }
+
+  SEXP out = PROTECT(allocMatrix(INTSXP, (int) n, k));
+  int *outp = INTEGER(out);
+  const int *src = INTEGER(nbr);
+
+  for(R_xlen_t i = 0; i < n; ++i){
+    if((i & 8191) == 0){
+      R_CheckUserInterrupt();
+    }
+    const int self = INTEGER(selfIndex)[i];
+    R_xlen_t written = 0;
+    R_xlen_t j = 0;
+    /* Percorre as kPlus colunas em ordem; copia ate completar k, pulando
+     * a coluna que contem self e NA_INTEGER. */
+    while(written < k && j < kPlus){
+      const int v = src[i + j * n];
+      if(v != NA_INTEGER && v != self){
+        outp[i + written * n] = v;
+        ++written;
+      }
+      ++j;
+    }
+    if(written < k){
+      UNPROTECT(1);
+      error("Nao foi possivel remover o proprio ponto mantendo vizinhos suficientes");
+    }
+  }
+
+  UNPROTECT(1);
+  return out;
+}
+
+/**
+ * @brief Top-k brute force KNN para distancia euclidiana usando BLAS.
+ *
+ * O prototipo de dgemm vem de R_ext/BLAS.h.
+ *
+ * Calcula D^2[i,j] = ||q_i||^2 + ||r_j||^2 - 2 q_i . r_j em blocos de
+ * consulta, via dgemm para o termo cruzado, e usa um max-heap de tamanho
+ * k para extrair os k vizinhos com menor distancia para cada query.
+ *
+ * Entradas:
+ *   data:  matriz double n_ref x p (referencia)
+ *   query: matriz double n_query x p (consultas)
+ *   k:     escalar integer (numero de vizinhos solicitados)
+ *
+ * Saidas: list(nn.index = integer matrix n_query x k (1-based),
+ *              nn.dist  = double matrix n_query x k (distancia euclidiana))
+ */
+SEXP OU_BruteForceKnnC(SEXP data, SEXP query, SEXP kSEXP){
+  require_real_matrix(data, "data");
+  require_real_matrix(query, "query");
+  if(!isInteger(kSEXP) || LENGTH(kSEXP) != 1){
+    error("'k' deve ser integer escalar");
+  }
+
+  SEXP dDims = getAttrib(data, R_DimSymbol);
+  SEXP qDims = getAttrib(query, R_DimSymbol);
+  const R_xlen_t nRef = (R_xlen_t) INTEGER(dDims)[0];
+  const R_xlen_t p1 = (R_xlen_t) INTEGER(dDims)[1];
+  const R_xlen_t nQuery = (R_xlen_t) INTEGER(qDims)[0];
+  const R_xlen_t p2 = (R_xlen_t) INTEGER(qDims)[1];
+  const int k = INTEGER(kSEXP)[0];
+
+  if(p1 != p2){
+    error("'data' e 'query' devem ter o mesmo numero de colunas");
+  }
+  if(k < 1){
+    error("'k' deve ser >= 1");
+  }
+  if((R_xlen_t) k > nRef){
+    error("'k' nao pode exceder o numero de linhas de 'data'");
+  }
+  if(nQuery > INT_MAX){
+    error("'query' excede o limite suportado por allocMatrix");
+  }
+
+  const double *Rref = REAL(data);
+  const double *Qref = REAL(query);
+
+  /* Normas ao quadrado por linha, pre-calculadas. */
+  double *qNorm2 = (double *) R_alloc((size_t) nQuery, sizeof(double));
+  double *rNorm2 = (double *) R_alloc((size_t) nRef, sizeof(double));
+
+  for(R_xlen_t i = 0; i < nQuery; ++i){
+    long double s = 0.0L;
+    for(R_xlen_t c = 0; c < p1; ++c){
+      const double v = Qref[i + c * nQuery];
+      s += (long double) v * (long double) v;
+    }
+    qNorm2[i] = (double) s;
+  }
+  for(R_xlen_t i = 0; i < nRef; ++i){
+    long double s = 0.0L;
+    for(R_xlen_t c = 0; c < p1; ++c){
+      const double v = Rref[i + c * nRef];
+      s += (long double) v * (long double) v;
+    }
+    rNorm2[i] = (double) s;
+  }
+
+  /* Aloca buffers de saida. */
+  SEXP outIdx = PROTECT(allocMatrix(INTSXP, (int) nQuery, k));
+  SEXP outDst = PROTECT(allocMatrix(REALSXP, (int) nQuery, k));
+  int *idxOut = INTEGER(outIdx);
+  double *dstOut = REAL(outDst);
+
+  /* Estrategia em blocos para limitar a memoria do produto cruzado a ~64MB. */
+  const R_xlen_t maxCells = 8 * 1024 * 1024; /* 8M doubles = 64MB */
+  R_xlen_t blockQ = maxCells / (nRef > 0 ? nRef : 1);
+  if(blockQ < 1) blockQ = 1;
+  if(blockQ > nQuery) blockQ = nQuery;
+  if(blockQ > INT_MAX) blockQ = INT_MAX;
+
+  double *cross = (double *) R_alloc((size_t) (blockQ * nRef), sizeof(double));
+  /* Buffers para heap: par (dist, idx). */
+  double *heapD = (double *) R_alloc((size_t) k, sizeof(double));
+  int *heapI = (int *) R_alloc((size_t) k, sizeof(int));
+
+  /* Itera blocos de queries. */
+  for(R_xlen_t qStart = 0; qStart < nQuery; qStart += blockQ){
+    R_xlen_t qEnd = qStart + blockQ;
+    if(qEnd > nQuery) qEnd = nQuery;
+    const R_xlen_t curB = qEnd - qStart;
+    R_CheckUserInterrupt();
+
+    /* C = Q[qStart:qEnd, ] %*% t(R) : curB x nRef, em column-major. */
+    const double alpha = 1.0;
+    const double beta = 0.0;
+    const int mInt = (int) curB;
+    const int nInt = (int) nRef;
+    const int kkInt = (int) p1;
+    const int ldaInt = (int) nQuery;       /* leading dim de Q (toda matrix) */
+    const int ldbInt = (int) nRef;         /* leading dim de R (toda matrix) */
+    const int ldcInt = (int) curB;
+    /* dgemm calcula C[i,j] = sum_c Q[qStart+i, c] * R[j, c]. Como ambas as
+     * matrizes estao em column-major e queremos Q_block @ t(R), usamos
+     * transa='N', transb='T' com Q_block apontando para Qref + qStart. */
+    F77_CALL(dgemm)(
+      "N", "T",
+      &mInt, &nInt, &kkInt,
+      &alpha,
+      Qref + qStart, &ldaInt,
+      Rref, &ldbInt,
+      &beta,
+      cross, &ldcInt FCONE FCONE
+    );
+
+    /* Para cada query do bloco, monta heap-top-k de menor distancia. */
+    for(R_xlen_t bi = 0; bi < curB; ++bi){
+      const R_xlen_t qIdx = qStart + bi;
+      const double qn2 = qNorm2[qIdx];
+      int heapSize = 0;
+
+      for(R_xlen_t j = 0; j < nRef; ++j){
+        /* D^2 = ||q||^2 + ||r||^2 - 2 q.r */
+        double d2 = qn2 + rNorm2[j] - 2.0 * cross[bi + j * curB];
+        if(d2 < 0.0) d2 = 0.0;  /* clamp para evitar sqrt de negativo por arredondamento */
+
+        if(heapSize < k){
+          /* Push: insere no fim e sobe (max-heap por d2). */
+          int pos = heapSize++;
+          heapD[pos] = d2;
+          heapI[pos] = (int) (j + 1);  /* 1-based */
+          while(pos > 0){
+            int par = (pos - 1) / 2;
+            if(heapD[par] >= heapD[pos]) break;
+            double td = heapD[par]; int ti = heapI[par];
+            heapD[par] = heapD[pos]; heapI[par] = heapI[pos];
+            heapD[pos] = td; heapI[pos] = ti;
+            pos = par;
+          }
+        }else if(d2 < heapD[0]){
+          /* Substitui raiz e desce. */
+          heapD[0] = d2;
+          heapI[0] = (int) (j + 1);
+          int pos = 0;
+          while(1){
+            int left = 2 * pos + 1, right = left + 1, worst = pos;
+            if(left < heapSize && heapD[left] > heapD[worst]) worst = left;
+            if(right < heapSize && heapD[right] > heapD[worst]) worst = right;
+            if(worst == pos) break;
+            double td = heapD[worst]; int ti = heapI[worst];
+            heapD[worst] = heapD[pos]; heapI[worst] = heapI[pos];
+            heapD[pos] = td; heapI[pos] = ti;
+            pos = worst;
+          }
+        }
+      }
+
+      /* Ordena o heap por distancia crescente (heap sort por seletor). */
+      /* Estrategia: extrai-min repetidamente trocando com o final. */
+      /* Como o heap atual e max-heap, podemos ordenar in-place produzindo
+       * um array em ordem crescente. */
+      int sz = heapSize;
+      while(sz > 1){
+        /* Move raiz (maior) para o final. */
+        double td = heapD[0]; int ti = heapI[0];
+        heapD[0] = heapD[sz - 1]; heapI[0] = heapI[sz - 1];
+        heapD[sz - 1] = td; heapI[sz - 1] = ti;
+        --sz;
+        /* Restaura heap no prefixo de tamanho sz. */
+        int pos = 0;
+        while(1){
+          int left = 2 * pos + 1, right = left + 1, worst = pos;
+          if(left < sz && heapD[left] > heapD[worst]) worst = left;
+          if(right < sz && heapD[right] > heapD[worst]) worst = right;
+          if(worst == pos) break;
+          double td2 = heapD[worst]; int ti2 = heapI[worst];
+          heapD[worst] = heapD[pos]; heapI[worst] = heapI[pos];
+          heapD[pos] = td2; heapI[pos] = ti2;
+          pos = worst;
+        }
+      }
+
+      /* Escreve resultados na linha qIdx das matrizes de saida (column-major,
+       * leading dim = nQuery). Converte distancia^2 para distancia. */
+      for(int kk = 0; kk < heapSize; ++kk){
+        idxOut[qIdx + (R_xlen_t) kk * nQuery] = heapI[kk];
+        dstOut[qIdx + (R_xlen_t) kk * nQuery] = sqrt(heapD[kk]);
+      }
+    }
+  }
+
+  /* Empacota resultado como list(nn.index=..., nn.dist=...) compativel com FNN. */
+  SEXP names = PROTECT(allocVector(STRSXP, 2));
+  SET_STRING_ELT(names, 0, mkChar("nn.index"));
+  SET_STRING_ELT(names, 1, mkChar("nn.dist"));
+  SEXP out = PROTECT(allocVector(VECSXP, 2));
+  SET_VECTOR_ELT(out, 0, outIdx);
+  SET_VECTOR_ELT(out, 1, outDst);
+  setAttrib(out, R_NamesSymbol, names);
+
+  UNPROTECT(4);
+  return out;
+}
+
+/**
  * @brief Mapeia as rotinas internas em C para as chamadas .Call dinamicas provenientes do R.
  */
 static const R_CallMethodDef CallEntries[] = {
@@ -490,7 +890,10 @@ static const R_CallMethodDef CallEntries[] = {
   {"OU_ComputeZScoreParamsC", (DL_FUNC) &OU_ComputeZScoreParamsC, 1},
   {"OU_ApplyZScoreC", (DL_FUNC) &OU_ApplyZScoreC, 4},
   {"OU_GenerateSyntheticAdasynC", (DL_FUNC) &OU_GenerateSyntheticAdasynC, 3},
+  {"OU_GenerateSyntheticAdasynColC", (DL_FUNC) &OU_GenerateSyntheticAdasynColC, 3},
   {"OU_SelectNearMissMajorityC", (DL_FUNC) &OU_SelectNearMissMajorityC, 3},
+  {"OU_DropSelfNeighborC", (DL_FUNC) &OU_DropSelfNeighborC, 3},
+  {"OU_BruteForceKnnC", (DL_FUNC) &OU_BruteForceKnnC, 3},
   {NULL, NULL, 0}
 };
 

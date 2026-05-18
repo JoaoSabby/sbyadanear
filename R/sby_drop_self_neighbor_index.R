@@ -34,6 +34,19 @@ sby_drop_self_neighbor_index <- function(sby_neighbor_index, sby_self_index, sby
     )
   }
 
+  # Caminho nativo (rapido): kernel C com varredura linear por linha em vez
+  # do baseline R + repair loop. Em bases grandes (n_minority >> 10^4) reduz
+  # o overhead R consideravelmente.
+  if(sby_adanear_native_available()){
+    storage.mode(sby_neighbor_index) <- "integer"
+    return(.Call(
+      OU_DropSelfNeighborC,
+      sby_neighbor_index,
+      sby_self_index,
+      sby_desired_k
+    ))
+  }
+
   # Caminho rapido vetorizado: assume que a coluna 1 do KNN, quando query=data,
   # contem o proprio ponto na maioria das linhas (caso tipico de FNN exato).
   # Estrategia em duas fases:
