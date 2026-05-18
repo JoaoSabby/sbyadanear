@@ -49,9 +49,6 @@ sby_step_adasyn(
 \details{
 A função utiliza uma arquitetura KNN configurável sobre preditores numéricos padronizados por Z-score. Três escolhas trabalham em conjunto: \code{sby_knn_algorithm} define a estrutura/estratégia de busca, \code{sby_knn_engine} define a implementação computacional e \code{sby_knn_distance_metric} define a noção de proximidade.
 
-\subsection{Preciso informar \code{sby_knn_engine}?}{
-}
-
 \subsection{Engines disponíveis}{
 \describe{
 \item{\code{"FNN"}}{Melhor para bases pequenas a médias, distância euclidiana, execução sequencial ou paralela por blocos e busca exata. É simples, rápido para baixa/média dimensionalidade, determinístico e sem aproximação. Limitações: aceita apenas \code{"euclidean"} neste pacote e só combina com \code{"auto"}, \code{"kd_tree"}, \code{"cover_tree"} ou \code{"brute"}.}
