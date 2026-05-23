@@ -1,4 +1,4 @@
-useDynLib(instenginer, .registration = TRUE)
+useDynLib(sbyadanear, .registration = TRUE)
 export(sby_adasyn)
 export(sby_nearmiss)
 export(sby_adanear)

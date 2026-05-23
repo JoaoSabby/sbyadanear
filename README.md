@@ -1,6 +1,6 @@
-# instenginer — balanceamento binário ADASYN + NearMiss-1
+# sbyadanear — balanceamento binário ADASYN + NearMiss-1
 
-`instenginer` é um pacote R para **engenharia de instâncias em problemas de
+`sbyadanear` é um pacote R para **engenharia de instâncias em problemas de
 classificação binária desbalanceados**. O pacote oferece rotinas de
 sobreamostragem **ADASYN**, subamostragem **NearMiss-1** e um pipeline híbrido
 **ADASYN + NearMiss-1** chamado `sby_adanear()`.
@@ -70,8 +70,8 @@ Consultas KNN longas são executadas em blocos para permitir interrupção por
 `Ctrl + C`. Ajuste os blocos com:
 
 ```r
-options(instenginer.sby_knn_query_chunk_size = 1000L)
-options(instenginer.sby_hnsw_query_chunk_size = 100L)
+options(sbyadanear.sby_knn_query_chunk_size = 1000L)
+options(sbyadanear.sby_hnsw_query_chunk_size = 100L)
 ```
 
 No Unix, chamadas nativas longas do `RcppHNSW` rodam por padrão em um processo
@@ -80,7 +80,7 @@ bloqueantes como a construção do índice HNSW. Para voltar ao caminho direto,
 use:
 
 ```r
-options(instenginer.sby_hnsw_interruptible_fork = FALSE)
+options(sbyadanear.sby_hnsw_interruptible_fork = FALSE)
 ```
 
 ## Funções principais
@@ -164,7 +164,7 @@ conjunto processado e normalmente devem ser aplicadas apenas no treinamento
 ## Exemplo rápido com `sby_adanear()`
 
 ```r
-library(instenginer)
+library(sbyadanear)
 
 # A semente aqui controla apenas a criação do exemplo reproduzível
 set.seed(42)
@@ -294,15 +294,15 @@ O repositório inclui um `Dockerfile` com R, toolchain de compilação e as
 dependências de sistema necessárias para desenvolvimento e validação do pacote
 
 ```sh
-docker build -t instenginer-r .
-docker run --rm -it -v "$PWD":/workspace/instenginer instenginer-r
+docker build -t sbyadanear-r .
+docker run --rm -it -v "$PWD":/workspace/sbyadanear sbyadanear-r
 ```
 
 Dentro do container, valide o pacote com:
 
 ```sh
 R CMD build .
-R CMD check instenginer_0.3.0.tar.gz
+R CMD check sbyadanear_0.3.0.tar.gz
 ```
 
 ## Arquivos principais
@@ -311,16 +311,79 @@ R CMD check instenginer_0.3.0.tar.gz
 - `NAMESPACE`: funções exportadas, métodos S3 e carregamento da biblioteca
   nativa.
 - `R/`: funções R, helpers internos e métodos S3 das etapas `recipes`.
-- `src/instenginer.c`: kernels nativos em C compilados na instalação do pacote.
+- `src/sbyadanear.c`: kernels nativos em C compilados na instalação do pacote.
 - `man/`: documentação gerada a partir dos blocos roxygen2.
 
 ## Validação recomendada
 
 ```sh
 R CMD build .
-R CMD check instenginer_0.3.0.tar.gz
+R CMD check sbyadanear_0.3.0.tar.gz
 R CMD INSTALL .
 ```
 
 Quando o binário do R não estiver disponível no ambiente, valide ao menos a
 estrutura textual com `git diff --check` e buscas com `rg`.
+
+
+## Ambiente R para validacao operacional completa
+
+Para executar validacao completa localmente e no GitHub, o pacote requer um
+ambiente com R, toolchain de compilacao C e dependencias opcionais para testes
+especificos. O caminho recomendado e usar o Docker do proprio repositorio.
+
+### Opcao 1: validacao local com Docker
+
+```bash
+docker build -f docker/oraclelinux97-r453/Dockerfile -t sbyadanear:oraclelinux97-r453 .
+docker run --rm -it sbyadanear:oraclelinux97-r453 R --version
+docker run --rm -it -v "$PWD":/workspace/r-package-validation sbyadanear:oraclelinux97-r453 Rscript tools/docker/run_many_tests.R
+```
+
+### Opcao 2: validacao automatizada no GitHub Actions
+
+O workflow `.github/workflows/main.yml` ja executa:
+
+- build da imagem Oracle Linux com R 4.5.3
+- execucao repetida de `tools/docker/run_many_tests.R`
+- upload dos artefatos CSV em `test-results`
+
+### Sobre MKL no Docker
+
+Sim, o Docker pode executar testes com MKL quando a imagem estiver configurada
+com oneAPI/MKL e variaveis de ambiente adequadas. No pacote `sbyadanear`, MKL
+nao e dependencia obrigatoria do pacote em si. O beneficio vem do ambiente R e
+do backend BLAS/LAPACK configurado na imagem.
+
+Para diagnostico dentro do container:
+
+```r
+Sys.getenv("OMP_NUM_THREADS")
+Sys.getenv("MKL_NUM_THREADS")
+Sys.getenv("OPENBLAS_NUM_THREADS")
+Sys.getenv("BLIS_NUM_THREADS")
+```
+
+Se `RhpcBLASctl` estiver instalado no ambiente:
+
+```r
+RhpcBLASctl::blas_get_num_procs()
+RhpcBLASctl::omp_get_num_procs()
+```
+
+### Recomendacao de threads
+
+Quando houver paralelismo externo no pipeline, limitar threads de BLAS/OpenMP
+normalmente reduz oversubscription:
+
+```r
+Sys.setenv(
+  OMP_NUM_THREADS = "1",
+  MKL_NUM_THREADS = "1",
+  OPENBLAS_NUM_THREADS = "1",
+  BLIS_NUM_THREADS = "1"
+)
+```
+
+Quando o processo for unico e computacionalmente intenso, aumentar threads pode
+ser util, dependendo do hardware e do backend numerico.

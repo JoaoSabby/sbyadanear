@@ -900,12 +900,12 @@ static const R_CallMethodDef CallEntries[] = {
 /**
  * @brief Rotina de inicializacao requerida pelo R ao carregar a biblioteca dinamica.
  *
- * Registra o modulo 'instenginer' no interpretador e bloqueia a analise dinamica
+ * Registra o modulo 'sbyadanear' no interpretador e bloqueia a analise dinamica
  * de simbolos externos para mitigar falhas de resolucao em tempo de execucao.
  *
  * @param dll Referencia referencial de ligacao gerada pela maquina virtual do R.
  */
-void attribute_visible R_init_instenginer(DllInfo *dll){
+void attribute_visible R_init_sbyadanear(DllInfo *dll){
   /* Registra lista de acesso conectando strings R com ponteiros reais no binario */
   R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
   /* Tranca verificacoes dinâmicas reduzindo sobrecarga na busca do kernel */

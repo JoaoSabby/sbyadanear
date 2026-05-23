@@ -1,4 +1,4 @@
-# Regression benchmark for the instenginer matrix and tabular APIs.
+# Regression benchmark for the sbyadanear matrix and tabular APIs.
 #
 # Run with:
 #   Rscript tools/benchmarks/regression-bench.R
@@ -18,7 +18,7 @@
 # single warmup run.
 
 suppressPackageStartupMessages({
-  library(instenginer)
+  library(sbyadanear)
 })
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ run_scenarios <- function(){
     )
 
     # ADASYN with native BLAS brute KNN
-    options(instenginer.sby_use_native_brute = TRUE)
+    options(sbyadanear.sby_use_native_brute = TRUE)
     rows[[length(rows) + 1L]] <- bench_row(
       paste0(sc$label, "_native_brute"), "sby_adasyn_matrix",
       list(d$x, d$y, sby_over_ratio = 0.5, sby_seed = 1L,
@@ -123,13 +123,13 @@ run_scenarios <- function(){
     )
 
     # ADASYN with FNN brute (no native BLAS) for comparison
-    options(instenginer.sby_use_native_brute = FALSE)
+    options(sbyadanear.sby_use_native_brute = FALSE)
     rows[[length(rows) + 1L]] <- bench_row(
       paste0(sc$label, "_fnn_brute"), "sby_adasyn_matrix",
       list(d$x, d$y, sby_over_ratio = 0.5, sby_seed = 1L,
            sby_knn_engine = "FNN", sby_knn_algorithm = "brute")
     )
-    options(instenginer.sby_use_native_brute = TRUE)
+    options(sbyadanear.sby_use_native_brute = TRUE)
   }
 
   # HNSW cosine: separate scenario because it needs n large enough to matter.

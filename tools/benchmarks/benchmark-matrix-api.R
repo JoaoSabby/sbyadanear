@@ -1,8 +1,8 @@
-# Benchmarks manuais da API matricial industrial do instenginer.
+# Benchmarks manuais da API matricial industrial do sbyadanear.
 # Execute com: Rscript tools/benchmarks/benchmark-matrix-api.R
 
 suppressPackageStartupMessages({
-  library(instenginer)
+  library(sbyadanear)
 })
 
 make_data <- function(n = 2000L, p = 20L, minority = 0.15){
@@ -32,6 +32,6 @@ time_call("nearmiss_matrix", sby_nearmiss_matrix(d$x, d$y, sby_seed = 1, sby_knn
 time_call("adanear_matrix", sby_adanear_matrix(d$x, d$y, sby_seed = 1, sby_knn_engine = "FNN"))
 
 gc()
-print(system.time(instenginer:::sby_get_knnx(d$x, d$x[1:500, , drop = FALSE], 5L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "both")))
-print(system.time(instenginer:::sby_get_knnx(d$x, d$x[1:500, , drop = FALSE], 5L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "index")))
-print(system.time(instenginer:::sby_get_knnx(d$x, d$x[1:500, , drop = FALSE], 5L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "dist")))
+print(system.time(sbyadanear:::sby_get_knnx(d$x, d$x[1:500, , drop = FALSE], 5L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "both")))
+print(system.time(sbyadanear:::sby_get_knnx(d$x, d$x[1:500, , drop = FALSE], 5L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "index")))
+print(system.time(sbyadanear:::sby_get_knnx(d$x, d$x[1:500, , drop = FALSE], 5L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "dist")))

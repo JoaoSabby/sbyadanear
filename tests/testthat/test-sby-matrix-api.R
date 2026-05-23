@@ -148,9 +148,9 @@ test_that("sby_get_knnx honors requested return components", {
   x <- cbind(rnorm(20), rnorm(20))
   storage.mode(x) <- "double"
 
-  both <- instenginer:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "both")
-  index <- instenginer:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "index")
-  dist <- instenginer:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "dist")
+  both <- sbyadanear:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "both")
+  index <- sbyadanear:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "index")
+  dist <- sbyadanear:::sby_get_knnx(x, x[1:5, , drop = FALSE], 3L, "kd_tree", "FNN", "euclidean", 1L, 16L, 200L, sby_knn_return = "dist")
 
   expect_true(all(c("nn.index", "nn.dist") %in% names(both)))
   expect_true("nn.index" %in% names(index))
@@ -228,10 +228,10 @@ test_that("native NearMiss selector matches R fallback without ties", {
   majority_index <- as.integer(c(10L, 20L, 30L, 40L))
   retained <- 2L
 
-  # O pacote chama R_useDynamicSymbols(dll, FALSE) em R_init_instenginer, entao
+  # O pacote chama R_useDynamicSymbols(dll, FALSE) em R_init_sbyadanear, entao
   # .Call por string + PACKAGE= e proibido. A forma correta usa o objeto de
   # simbolo nativo gerado por useDynLib(.registration = TRUE) no namespace.
-  c_idx <- .Call(instenginer:::OU_SelectNearMissMajorityC, nn_dist, majority_index, as.integer(retained))
+  c_idx <- .Call(sbyadanear:::OU_SelectNearMissMajorityC, nn_dist, majority_index, as.integer(retained))
   r_idx <- majority_index[order(rowMeans(nn_dist), majority_index)[seq_len(retained)]]
 
   expect_equal(sort(c_idx), sort(r_idx))

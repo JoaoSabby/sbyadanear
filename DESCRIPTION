@@ -1,13 +1,13 @@
-Package: instenginer
+Package: sbyadanear
 Type: Package
-Title: High-Performance to Instance Engineering  
+Title: Balanceamento Binario com ADASYN e NearMiss-1
 Version: 0.3.0
 Authors@R: 
     person(given = "João Batista", family = "Gonçalves de Brito", role = c("aut", "cre"), comment = "https://orcid.org/0000-0002-4645-5217", email = "joao@sabby.com.br")
-Description: Provides high-performance binary over- and under-sampling routines
-    using ADASYN and NearMiss-1. The implementation uses numeric matrices,
-    optional native C kernels, Rfast fallbacks, and configurable nearest-neighbor
-    backends for exact or approximate searches.
+Description: Implementa rotinas de balanceamento para classificacao binaria
+    desbalanceada com ADASYN, NearMiss-1 e fluxo combinado ADASYN +
+    NearMiss-1. As funcoes operam sobre preditores numericos, usam busca
+    KNN configuravel e podem utilizar kernels nativos em C quando disponiveis.
 License: MIT + file LICENSE
 URL: https://github.com/JoaoSabby/sbyadanear
 BugReports: https://github.com/JoaoSabby/sbyadanear/issues

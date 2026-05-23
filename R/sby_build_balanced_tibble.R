@@ -22,7 +22,7 @@ sby_build_balanced_tibble <- function(sby_predictor_data, sby_target_vector){
       sby_message = paste0(
         "A coluna 'TARGET' e reservada pelo pacote para o alvo no tibble ",
         "retornado. Renomeie a coluna preditora chamada 'TARGET' antes de ",
-        "chamar as funcoes de balanceamento do instenginer."
+        "chamar as funcoes de balanceamento do sbyadanear."
       )
     )
   }

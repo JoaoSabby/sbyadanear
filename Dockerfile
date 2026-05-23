@@ -21,6 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN Rscript -e 'install.packages(c("RcppHNSW", "cli", "FNN", "generics", "recipes", "rlang", "Rfast", "tibble"), repos = "https://cloud.r-project.org")'
 
-WORKDIR /workspace/instenginer
+WORKDIR /workspace/sbyadanear
 
 CMD ["bash"]
