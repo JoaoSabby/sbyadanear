@@ -1,4 +1,4 @@
-# instenginer 0.4.0 (em desenvolvimento)
+# sbyadanear 0.4.0 (em desenvolvimento)
 
 ## Mudancas de comportamento (breaking)
 
@@ -9,7 +9,7 @@
   - Bases grandes em alta dimensionalidade
     (`n * p >= 5e6` AND `p >= 50` por padrao): seleciona `RcppHNSW` por
     custo de busca exata. Limite configuravel via
-    `options(instenginer.sby_auto_engine_hnsw_min_cells = ...)`.
+    `options(sbyadanear.sby_auto_engine_hnsw_min_cells = ...)`.
   - Demais casos: continua selecionando `FNN` exato.
   Para preservar exatamente o comportamento anterior em qualquer caso,
   passe `sby_knn_engine = "FNN"` explicitamente.
@@ -22,7 +22,7 @@
   de matriz aceitava `n_minority = 1` e gerava amostras sinteticas
   invalidas (interpolacao do ponto consigo mesmo).
 * Teste `native NearMiss selector matches R fallback without ties` deixou
-  de usar `.Call("OU_SelectNearMissMajorityC", ..., PACKAGE = "instenginer")`
+  de usar `.Call("OU_SelectNearMissMajorityC", ..., PACKAGE = "sbyadanear")`
   (forma proibida quando `R_useDynamicSymbols(FALSE)`); agora chama o
   simbolo nativo registrado pelo namespace.
 * Mensagem mais clara quando uma coluna preditora se chama literalmente
@@ -43,10 +43,10 @@
 * Nova rota brute force exata via BLAS: `OU_BruteForceKnnC` (`dgemm` +
   max-heap top-k) e usada por padrao quando `sby_knn_algorithm = "brute"`
   e a lib nativa esta carregada. Pode ser desativada com
-  `options(instenginer.sby_use_native_brute = FALSE)`.
+  `options(sbyadanear.sby_use_native_brute = FALSE)`.
 * Variante experimental do kernel ADASYN com escrita column-friendly:
   `OU_GenerateSyntheticAdasynColC`, disponivel via
-  `options(instenginer.sby_adasyn_kernel = "col")`. Em testes empiricos
+  `options(sbyadanear.sby_adasyn_kernel = "col")`. Em testes empiricos
   vence em `p` muito alto (> 200) e `n_synthetic` muito alto (> 10^5);
   o default (`"row"`) continua sendo a variante anterior.
 
@@ -60,7 +60,7 @@
   duas subsecoes vazias em `man/*.Rd`.
 * README: versao documentada atualizada para 0.3.0.
 
-# instenginer 0.3.0
+# sbyadanear 0.3.0
 
 ## Novidades
 

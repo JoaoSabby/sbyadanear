@@ -1,5 +1,5 @@
 {
-  "name": "instenginer-r",
+  "name": "sbyadanear-r",
   "build": {
     "dockerfile": "../Dockerfile",
     "context": ".."

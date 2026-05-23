@@ -12,7 +12,7 @@
 sby_required_sampling_pkgs <- function(){
   # Retorna dependencias necessarias para construir e executar as etapas padrao
   return(c(
-    "instenginer",
+    "sbyadanear",
     "recipes",
     "generics",
     "rlang",

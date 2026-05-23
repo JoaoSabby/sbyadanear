@@ -60,7 +60,8 @@ jobs:
           docker build \
             --no-cache \
             -f docker/oraclelinux97-r453/Dockerfile \
-            -t instenginer:oraclelinux97-r453 \
+            --build-arg SBY_USE_ONEAPI_MKL=1 \
+            -t sbyadanear:oraclelinux97-r453 \
             .
 
       - name: Create output directory
@@ -74,8 +75,12 @@ jobs:
             -e TEST_REPETITIONS=2 \
             -e TEST_KNN_WORKERS=2 \
             -e TEST_OUTPUT_DIR=/workspace/r-package-validation/results \
+            -e OMP_NUM_THREADS=2 \
+            -e MKL_NUM_THREADS=2 \
+            -e OPENBLAS_NUM_THREADS=1 \
+            -e BLIS_NUM_THREADS=1 \
             -v "$PWD/test-results:/workspace/r-package-validation/results" \
-            instenginer:oraclelinux97-r453 \
+            sbyadanear:oraclelinux97-r453 \
             Rscript tools/docker/run_many_tests.R
 
       - name: Run second container
@@ -85,8 +90,12 @@ jobs:
             -e TEST_REPETITIONS=2 \
             -e TEST_KNN_WORKERS=2 \
             -e TEST_OUTPUT_DIR=/workspace/r-package-validation/results \
+            -e OMP_NUM_THREADS=2 \
+            -e MKL_NUM_THREADS=2 \
+            -e OPENBLAS_NUM_THREADS=1 \
+            -e BLIS_NUM_THREADS=1 \
             -v "$PWD/test-results:/workspace/r-package-validation/results" \
-            instenginer:oraclelinux97-r453 \
+            sbyadanear:oraclelinux97-r453 \
             Rscript tools/docker/run_many_tests.R
 
       - name: Show generated files

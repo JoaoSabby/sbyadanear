@@ -1,4 +1,4 @@
 library(testthat)
-library(instenginer)
+library(sbyadanear)
 
-test_check("instenginer")
+test_check("sbyadanear")

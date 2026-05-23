@@ -1,7 +1,7 @@
 # Native C symbols must be reachable via the namespace object created by
 # useDynLib(.registration = TRUE) and not by string + PACKAGE (which is
 # unreachable because R_useDynamicSymbols(dll, FALSE) is set in
-# R_init_instenginer). These tests also exercise the kernels directly to
+# R_init_sbyadanear). These tests also exercise the kernels directly to
 # guard against regressions independent of the R glue layer.
 
 test_that("C symbols are reachable via the namespace object", {
@@ -9,7 +9,7 @@ test_that("C symbols are reachable via the namespace object", {
 
   z <- matrix(c(0, 1, 2, 3, 4, 5, 6, 7), 4, 2)
   storage.mode(z) <- "double"
-  params <- .Call(instenginer:::OU_ComputeZScoreParamsC, z)
+  params <- .Call(sbyadanear:::OU_ComputeZScoreParamsC, z)
   expect_named(params, c("centers", "scales"))
   expect_length(params$centers, 2)
   expect_length(params$scales, 2)
@@ -19,7 +19,7 @@ test_that("C symbols are reachable via the namespace object", {
 
 test_that("C symbol string form is intentionally unreachable", {
   expect_error(
-    .Call("OU_ComputeZScoreParamsC", matrix(0, 2, 2), PACKAGE = "instenginer"),
+    .Call("OU_ComputeZScoreParamsC", matrix(0, 2, 2), PACKAGE = "sbyadanear"),
     regexp = "not available"
   )
 })
@@ -37,7 +37,7 @@ test_that("OU_SelectNearMissMajorityC matches R fallback with ties", {
   storage.mode(nn) <- "double"
   maj <- as.integer(c(10L, 20L, 30L, 40L))
 
-  c_idx <- .Call(instenginer:::OU_SelectNearMissMajorityC, nn, maj, 3L)
+  c_idx <- .Call(sbyadanear:::OU_SelectNearMissMajorityC, nn, maj, 3L)
   r_idx <- maj[order(rowMeans(nn), maj)[1:3]]
   expect_equal(sort(c_idx), sort(r_idx))
 })
@@ -51,7 +51,7 @@ test_that("OU_DropSelfNeighborC removes self and preserves order", {
   )), 4, 4, byrow = TRUE)
   self <- as.integer(c(1, 2, 3, 4))
 
-  out <- .Call(instenginer:::OU_DropSelfNeighborC, nbr, self, 3L)
+  out <- .Call(sbyadanear:::OU_DropSelfNeighborC, nbr, self, 3L)
   expect_equal(dim(out), c(4L, 3L))
   # Each row must keep the first 3 valid neighbors that are not 'self'.
   expect_equal(out[1, ], c(2L, 3L, 4L))  # 1 -> dropped, keep 2 3 4
@@ -64,7 +64,7 @@ test_that("OU_DropSelfNeighborC errors when not enough valid candidates", {
   nbr <- matrix(as.integer(c(1L, NA_integer_, NA_integer_)), 1, 3)
   self <- 1L
   expect_error(
-    .Call(instenginer:::OU_DropSelfNeighborC, nbr, self, 2L),
+    .Call(sbyadanear:::OU_DropSelfNeighborC, nbr, self, 2L),
     regexp = "vizinhos suficientes"
   )
 })
@@ -76,7 +76,7 @@ test_that("OU_BruteForceKnnC matches FNN::get.knnx(algorithm='brute')", {
   storage.mode(X) <- "double"
   Q <- X[1:50, , drop = FALSE]
 
-  r_c <- .Call(instenginer:::OU_BruteForceKnnC, X, Q, 5L)
+  r_c <- .Call(sbyadanear:::OU_BruteForceKnnC, X, Q, 5L)
   r_fnn <- FNN::get.knnx(data = X, query = Q, k = 5L, algorithm = "brute")
 
   expect_equal(r_c$nn.index, r_fnn$nn.index)
@@ -102,10 +102,10 @@ test_that("OU_GenerateSyntheticAdasynColC matches OU_GenerateSyntheticAdasynC", 
   per_row <- as.integer(c(2, 1, 1, 1, 1, 0, 0, 0, 0, 0))
 
   set.seed(123)
-  r_row <- .Call(instenginer:::OU_GenerateSyntheticAdasynC,
+  r_row <- .Call(sbyadanear:::OU_GenerateSyntheticAdasynC,
                  minority, nbr, per_row)
   set.seed(123)
-  r_col <- .Call(instenginer:::OU_GenerateSyntheticAdasynColC,
+  r_col <- .Call(sbyadanear:::OU_GenerateSyntheticAdasynColC,
                  minority, nbr, per_row)
 
   expect_equal(r_row, r_col)
@@ -119,15 +119,15 @@ test_that("OU_BruteForceKnnC native path is used by sby_get_knnx by default", {
   Q <- X[1:10, , drop = FALSE]
 
   # Both options reach the same numeric result; just exercise both code paths.
-  options(instenginer.sby_use_native_brute = TRUE)
-  on.exit(options(instenginer.sby_use_native_brute = NULL), add = TRUE)
-  r_native <- instenginer:::sby_get_knnx(
+  options(sbyadanear.sby_use_native_brute = TRUE)
+  on.exit(options(sbyadanear.sby_use_native_brute = NULL), add = TRUE)
+  r_native <- sbyadanear:::sby_get_knnx(
     X, Q, 5L, "brute", "FNN", "euclidean", 1L, 16L, 200L,
     sby_knn_return = "both"
   )
 
-  options(instenginer.sby_use_native_brute = FALSE)
-  r_fnn <- instenginer:::sby_get_knnx(
+  options(sbyadanear.sby_use_native_brute = FALSE)
+  r_fnn <- sbyadanear:::sby_get_knnx(
     X, Q, 5L, "brute", "FNN", "euclidean", 1L, 16L, 200L,
     sby_knn_return = "both"
   )

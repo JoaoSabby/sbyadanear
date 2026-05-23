@@ -1,15 +1,21 @@
 services:
-  instenginer-test:
+  sbyadanear-test:
     build:
       context: .
       dockerfile: docker/oraclelinux97-r453/Dockerfile
-    image: instenginer:oraclelinux97-r453
+      args:
+        SBY_USE_ONEAPI_MKL: "1"
+    image: sbyadanear:oraclelinux97-r453
     command: ["Rscript", "tools/docker/run_many_tests.R"]
     environment:
       TEST_REPETITIONS: "2"
       TEST_KNN_WORKERS: "2"
-      TEST_OUTPUT_DIR: "/workspace/instenginer/test-results"
+      TEST_OUTPUT_DIR: "/workspace/sbyadanear/test-results"
       ALLOW_TEST_FAILURES: "false"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "1"
+      BLIS_NUM_THREADS: "1"
     volumes:
-      - ./test-results:/workspace/instenginer/test-results
+      - ./test-results:/workspace/sbyadanear/test-results
     cpus: "2.0"

@@ -121,7 +121,7 @@ sby_extract_formula_data <- function(sby_formula, sby_data){
       sby_message = paste0(
         "'sby_formula' deve referenciar apenas colunas existentes em 'sby_data'. ",
         "Transformacoes, interacoes e offsets devem ser materializados em colunas ",
-        "antes de chamar instenginer. Preditores solicitados: ",
+        "antes de chamar sbyadanear. Preditores solicitados: ",
         paste(sby_predictor_names, collapse = ", "),
         "; colunas disponiveis: ",
         paste(predictors_data_frame, collapse = ", ")

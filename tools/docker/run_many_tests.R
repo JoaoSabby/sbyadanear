@@ -1,5 +1,5 @@
 suppressPackageStartupMessages({
-  library(instenginer)
+  library(sbyadanear)
   library(tibble)
 })
 
@@ -185,6 +185,28 @@ RunCase <- function(methodName, testData, workerCount, repetitionIndex){
   ))
 }
 
+
+
+CollectMklDiagnostics <- function(){
+  cfg <- sbyadanear:::sby_resolve_oneapi_mkl()
+  data.frame(
+    methodName = "mkl_diagnostics",
+    repetitionIndex = 0L,
+    rowsOutput = NA_integer_,
+    majorityCount = NA_integer_,
+    minorityCount = NA_integer_,
+    status = if(isTRUE(cfg$enabled)) "ok" else "ok",
+    elapsedSeconds = 0,
+    message = paste0(
+      "enabled=", as.character(cfg$enabled),
+      "; threads=", as.character(cfg$threads),
+      "; OMP_NUM_THREADS=", Sys.getenv("OMP_NUM_THREADS", unset = ""),
+      "; MKL_NUM_THREADS=", Sys.getenv("MKL_NUM_THREADS", unset = "")
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
 Main <- function(){
   instanceId <- GetInstanceId()
   repetitionCount <- ReadIntegerEnv("TEST_REPETITIONS", 2L)
@@ -236,13 +258,14 @@ Main <- function(){
     }
   }
   
+  resultList[[resultIndex]] <- CollectMklDiagnostics()
   resultData <- do.call(rbind, resultList)
   resultData$instanceId <- instanceId
   resultData$workerCount <- workerCount
   
   outputPath <- file.path(
     outputDir,
-    paste0("instenginer_tests_", gsub("[^A-Za-z0-9_]+", "_", instanceId), ".csv")
+    paste0("sbyadanear_tests_", gsub("[^A-Za-z0-9_]+", "_", instanceId), ".csv")
   )
   
   write.csv(

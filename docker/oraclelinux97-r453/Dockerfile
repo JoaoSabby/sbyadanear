@@ -2,6 +2,7 @@ FROM container-registry.oracle.com/os/oraclelinux:9
 
 ARG R_VERSION=4.5.3
 ARG CRAN=https://cloud.r-project.org
+ARG SBY_USE_ONEAPI_MKL=0
 
 ENV LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8 \
@@ -10,7 +11,12 @@ ENV LANG=en_US.UTF-8 \
     R_VERSION=${R_VERSION} \
     R_REMOTES_NO_ERRORS_FROM_WARNINGS=true \
     R_KEEP_PKG_SOURCE=yes \
-    MAKEFLAGS=-j2
+    MAKEFLAGS=-j2 \
+    SBY_USE_ONEAPI_MKL=${SBY_USE_ONEAPI_MKL} \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    BLIS_NUM_THREADS=1
 
 RUN cat /etc/oracle-release
 
@@ -82,10 +88,10 @@ RUN Rscript -e 'BiocManager::install(c("BiocNeighbors", "BiocParallel"), ask = F
 
 RUN R --version
 
-WORKDIR /workspace/instenginer
+WORKDIR /workspace/sbyadanear
 
-COPY . /workspace/instenginer
+COPY . /workspace/sbyadanear
 
-RUN R CMD INSTALL --preclean .
+RUN SBY_USE_ONEAPI_MKL=${SBY_USE_ONEAPI_MKL} R CMD INSTALL --preclean .
 
 CMD ["bash"]
