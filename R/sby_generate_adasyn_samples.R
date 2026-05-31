@@ -281,11 +281,28 @@ sby_generate_adasyn_samples <- function(
     class = "factor"
   )
 
-  return(list(
-    x = rbind(
+  # Consolida a matriz expandida por kernel nativo quando possivel.
+  # base::rbind() e generico e faz validacoes/despacho desnecessarios aqui;
+  # neste ponto ambas as entradas ja sao matrizes double com o mesmo numero
+  # de colunas. O caminho nativo aloca a saida uma unica vez e copia cada
+  # coluna em blocos contiguos.
+  if(sby_adanear_native_available()){
+    storage.mode(sby_x_scaled) <- "double"
+    storage.mode(sby_synthetic_matrix) <- "double"
+    sby_expanded_x <- .Call(
+      OU_RbindDoubleMatrixC,
       sby_x_scaled,
       sby_synthetic_matrix
-    ),
+    )
+  }else{
+    sby_expanded_x <- rbind(
+      sby_x_scaled,
+      sby_synthetic_matrix
+    )
+  }
+
+  return(list(
+    x = sby_expanded_x,
     y = sby_y_factor
   ))
 }

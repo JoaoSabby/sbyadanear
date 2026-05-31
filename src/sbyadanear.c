@@ -36,6 +36,7 @@
 #include <math.h>
 #include <limits.h>
 #include <float.h>
+#include <string.h>
 
 /* FCONE: macro de R-API para passar comprimentos de strings Fortran nas
  * chamadas a BLAS. Definida em Rconfig.h em R >= 3.6; fornece um fallback
@@ -43,6 +44,39 @@
 #ifndef FCONE
 # define FCONE
 #endif
+
+
+/* Distancias ao quadrado calculadas por ||q||^2 + ||r||^2 - 2 q.r sao
+ * extremamente rapidas via BLAS, mas sofrem cancelamento catastrofico quando
+ * os vetores sao quase identicos ou muito colineares em escala alta. Nesses
+ * pares raros, recalculamos a distancia diretamente sobre as diferencas para
+ * preservar a micro-ordenacao dos vizinhos em ADASYN/NearMiss. */
+#define SBY_D2_RESCUE_EPS 1e-11
+
+static double euclidean_d2_with_rescue(
+  double d2,
+  const double *Qref,
+  const double *Rref,
+  R_xlen_t qIdx,
+  R_xlen_t rIdx,
+  R_xlen_t nQuery,
+  R_xlen_t nRef,
+  R_xlen_t colCount
+){
+  if(d2 < SBY_D2_RESCUE_EPS){
+    long double exactDist = 0.0L;
+    for(R_xlen_t c = 0; c < colCount; ++c){
+      const long double diff = (long double) Qref[qIdx + c * nQuery] -
+        (long double) Rref[rIdx + c * nRef];
+      exactDist += diff * diff;
+    }
+    d2 = (double) exactDist;
+  }
+  if(d2 < 0.0){
+    d2 = 0.0;
+  }
+  return d2;
+}
 
 /**
  * @brief Invoca verificacao de interrupcao do usuario no ambiente R.
@@ -803,7 +837,7 @@ static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP kSEXP, int returnIn
 
       for(R_xlen_t j = 0; j < nRef; ++j){
         double d2 = qn2 + rNorm2[j] - 2.0 * cross[bi + j * curB];
-        if(d2 < 0.0) d2 = 0.0;
+        d2 = euclidean_d2_with_rescue(d2, Qref, Rref, qIdx, j, nQuery, nRef, p1);
 
         if(heapSize < k){
           int pos = heapSize++;
@@ -1019,7 +1053,7 @@ SEXP OU_NearMissBruteSelectC(SEXP minorityData, SEXP majorityQuery, SEXP majorit
 
       for(R_xlen_t j = 0; j < nRef; ++j){
         double d2 = qn2 + rNorm2[j] - 2.0 * cross[bi + j * curB];
-        if(d2 < 0.0) d2 = 0.0;
+        d2 = euclidean_d2_with_rescue(d2, Qref, Rref, qIdx, j, nQuery, nRef, p1);
         if(heapSize < k){
           int pos = heapSize++;
           heapD[pos] = d2;
@@ -1102,6 +1136,63 @@ SEXP OU_NearMissBruteSelectC(SEXP minorityData, SEXP majorityQuery, SEXP majorit
   return out;
 }
 
+
+/**
+ * @brief Concatena duas matrizes double por linhas com uma unica alocacao.
+ *
+ * Evita o overhead de dispatch e verificacoes genericas de base::rbind no
+ * caminho quente do ADASYN. Como matrizes R sao column-major, cada coluna da
+ * saida recebe os blocos original e sintetico em copias contiguas.
+ */
+SEXP OU_RbindDoubleMatrixC(SEXP firstMatrix, SEXP secondMatrix){
+  require_real_matrix(firstMatrix, "firstMatrix");
+  require_real_matrix(secondMatrix, "secondMatrix");
+
+  SEXP firstDims = getAttrib(firstMatrix, R_DimSymbol);
+  SEXP secondDims = getAttrib(secondMatrix, R_DimSymbol);
+  const R_xlen_t firstRows = (R_xlen_t) INTEGER(firstDims)[0];
+  const R_xlen_t secondRows = (R_xlen_t) INTEGER(secondDims)[0];
+  const R_xlen_t firstCols = (R_xlen_t) INTEGER(firstDims)[1];
+  const R_xlen_t secondCols = (R_xlen_t) INTEGER(secondDims)[1];
+  const R_xlen_t outRows = firstRows + secondRows;
+
+  if(firstCols != secondCols){
+    error("'firstMatrix' e 'secondMatrix' devem ter o mesmo numero de colunas");
+  }
+  if(outRows > INT_MAX || firstCols > INT_MAX){
+    error("Dimensoes excedem o limite suportado por matrix R");
+  }
+
+  SEXP out = PROTECT(allocMatrix(REALSXP, (int) outRows, (int) firstCols));
+  const double *first = REAL(firstMatrix);
+  const double *second = REAL(secondMatrix);
+  double *expanded = REAL(out);
+
+  for(R_xlen_t j = 0; j < firstCols; ++j){
+    if((j & 31) == 0){
+      R_CheckUserInterrupt();
+    }
+    double *outCol = expanded + j * outRows;
+    memcpy(outCol, first + j * firstRows, (size_t) firstRows * sizeof(double));
+    memcpy(outCol + firstRows, second + j * secondRows, (size_t) secondRows * sizeof(double));
+  }
+
+  SEXP firstDimnames = getAttrib(firstMatrix, R_DimNamesSymbol);
+  if(!isNull(firstDimnames) && XLENGTH(firstDimnames) >= 2){
+    SEXP firstColnames = VECTOR_ELT(firstDimnames, 1);
+    if(!isNull(firstColnames)){
+      SEXP outDimnames = PROTECT(allocVector(VECSXP, 2));
+      SET_VECTOR_ELT(outDimnames, 0, R_NilValue);
+      SET_VECTOR_ELT(outDimnames, 1, firstColnames);
+      setAttrib(out, R_DimNamesSymbol, outDimnames);
+      UNPROTECT(1);
+    }
+  }
+
+  UNPROTECT(1);
+  return out;
+}
+
 /**
  * @brief Mapeia as rotinas internas em C para as chamadas .Call dinamicas provenientes do R.
  */
@@ -1117,6 +1208,7 @@ static const R_CallMethodDef CallEntries[] = {
   {"OU_BruteForceKnnIndexC", (DL_FUNC) &OU_BruteForceKnnIndexC, 3},
   {"OU_BruteForceKnnDistC", (DL_FUNC) &OU_BruteForceKnnDistC, 3},
   {"OU_NearMissBruteSelectC", (DL_FUNC) &OU_NearMissBruteSelectC, 5},
+  {"OU_RbindDoubleMatrixC", (DL_FUNC) &OU_RbindDoubleMatrixC, 2},
   {NULL, NULL, 0}
 };
 

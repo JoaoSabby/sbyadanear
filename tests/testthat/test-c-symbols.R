@@ -170,3 +170,31 @@ test_that("OU_NearMissBruteSelectC matches exact NearMiss distance route", {
 
   expect_equal(sort(selected_fused), sort(selected_reference))
 })
+
+test_that("OU_BruteForceKnnC rescues near-zero BLAS cancellation", {
+  data <- matrix(c(
+    1e8 + 1e-3, 1e8,
+    1e8 + 1e-4, 1e8
+  ), nrow = 2, byrow = TRUE)
+  query <- matrix(c(1e8, 1e8), nrow = 1)
+  storage.mode(data) <- "double"
+  storage.mode(query) <- "double"
+
+  out <- .Call(sbyadanear:::OU_BruteForceKnnC, data, query, 1L)
+  exact_dist <- sqrt(sum((data[2, ] - query[1, ])^2))
+
+  expect_equal(out$nn.index, matrix(2L, nrow = 1))
+  expect_equal(out$nn.dist[1, 1], exact_dist, tolerance = 1e-12)
+})
+
+test_that("OU_RbindDoubleMatrixC matches base rbind and preserves column names", {
+  first <- matrix(as.double(1:6), nrow = 3)
+  second <- matrix(as.double(7:10), nrow = 2)
+  colnames(first) <- c("a", "b")
+  colnames(second) <- c("a", "b")
+
+  out <- .Call(sbyadanear:::OU_RbindDoubleMatrixC, first, second)
+
+  expect_equal(out, rbind(first, second))
+  expect_equal(colnames(out), c("a", "b"))
+})
