@@ -13,7 +13,7 @@ sby_adanear_check_user_interrupt <- function(){
 
     # Aciona ponto de interrupcao implementado em codigo nativo
     .Call(
-      OU_CheckUserInterruptC
+      check_user_interrupt_c
     )
   }else{
 

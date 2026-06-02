@@ -1,6 +1,7 @@
 #include <RcppParallel.h>
 #include <Rinternals.h>
 #include <R_ext/Error.h>
+#include <algorithm>
 #include <cmath>
 #include <cfloat>
 #include <climits>
@@ -8,62 +9,16 @@
 
 namespace {
 
-struct SbyNeighbor {
+struct sby_neighbor {
   double dist2;
   int index;
 };
 
-inline bool sby_worse_neighbor(const SbyNeighbor& lhs, const SbyNeighbor& rhs){
-  return lhs.dist2 > rhs.dist2 || (lhs.dist2 == rhs.dist2 && lhs.index > rhs.index);
+inline bool sby_neighbor_less(const sby_neighbor& lhs, const sby_neighbor& rhs){
+  return lhs.dist2 < rhs.dist2 || (lhs.dist2 == rhs.dist2 && lhs.index < rhs.index);
 }
 
-inline bool sby_better_neighbor(const double dist2, const int index, const SbyNeighbor& rhs){
-  return dist2 < rhs.dist2 || (dist2 == rhs.dist2 && index < rhs.index);
-}
-
-inline void sby_heap_sift_up(std::vector<SbyNeighbor>& heap, int pos){
-  while(pos > 0){
-    const int parent = (pos - 1) / 2;
-    if(!sby_worse_neighbor(heap[pos], heap[parent])){
-      break;
-    }
-    std::swap(heap[pos], heap[parent]);
-    pos = parent;
-  }
-}
-
-inline void sby_heap_sift_down(std::vector<SbyNeighbor>& heap, int heap_size, int pos){
-  while(true){
-    const int left = 2 * pos + 1;
-    const int right = left + 1;
-    int worst = pos;
-    if(left < heap_size && sby_worse_neighbor(heap[left], heap[worst])){
-      worst = left;
-    }
-    if(right < heap_size && sby_worse_neighbor(heap[right], heap[worst])){
-      worst = right;
-    }
-    if(worst == pos){
-      break;
-    }
-    std::swap(heap[pos], heap[worst]);
-    pos = worst;
-  }
-}
-
-inline void sby_sort_neighbors(std::vector<SbyNeighbor>& heap, int heap_size){
-  for(int i = 1; i < heap_size; ++i){
-    SbyNeighbor key = heap[i];
-    int j = i - 1;
-    while(j >= 0 && sby_worse_neighbor(heap[j], key)){
-      heap[j + 1] = heap[j];
-      --j;
-    }
-    heap[j + 1] = key;
-  }
-}
-
-struct SbyBruteForceKnnWorker : public RcppParallel::Worker {
+struct sby_brute_force_knn_worker : public RcppParallel::Worker {
   RcppParallel::RMatrix<double> data;
   RcppParallel::RMatrix<double> query;
   RcppParallel::RMatrix<int> index_out;
@@ -72,7 +27,7 @@ struct SbyBruteForceKnnWorker : public RcppParallel::Worker {
   const bool need_index;
   const bool need_dist;
 
-  SbyBruteForceKnnWorker(
+  sby_brute_force_knn_worker(
     SEXP data_,
     SEXP query_,
     SEXP index_out_,
@@ -90,15 +45,13 @@ struct SbyBruteForceKnnWorker : public RcppParallel::Worker {
 
   void operator()(std::size_t begin, std::size_t end){
     const std::size_t n_ref = data.nrow();
-    const std::size_t n_query = query.nrow();
     const std::size_t n_cols = data.ncol();
 
-    std::vector<SbyNeighbor> heap(static_cast<std::size_t>(k));
-
     for(std::size_t q = begin; q < end; ++q){
-      int heap_size = 0;
+      std::vector<sby_neighbor> neighbors(n_ref);
       for(std::size_t r = 0; r < n_ref; ++r){
         long double dist2_ld = 0.0L;
+#pragma omp simd reduction(+:dist2_ld)
         for(std::size_t c = 0; c < n_cols; ++c){
           const long double diff = static_cast<long double>(query(q, c)) -
             static_cast<long double>(data(r, c));
@@ -108,25 +61,22 @@ struct SbyBruteForceKnnWorker : public RcppParallel::Worker {
         if(dist2 < 0.0){
           dist2 = 0.0;
         }
-        const int one_based_index = static_cast<int>(r + 1);
-
-        if(heap_size < k){
-          heap[static_cast<std::size_t>(heap_size)] = {dist2, one_based_index};
-          sby_heap_sift_up(heap, heap_size);
-          ++heap_size;
-        }else if(sby_better_neighbor(dist2, one_based_index, heap[0])){
-          heap[0] = {dist2, one_based_index};
-          sby_heap_sift_down(heap, heap_size, 0);
-        }
+        neighbors[r] = {dist2, static_cast<int>(r + 1)};
       }
 
-      sby_sort_neighbors(heap, heap_size);
+      std::partial_sort(
+        neighbors.begin(),
+        neighbors.begin() + k,
+        neighbors.end(),
+        sby_neighbor_less
+      );
       for(int j = 0; j < k; ++j){
+        const sby_neighbor& neighbor = neighbors[static_cast<std::size_t>(j)];
         if(need_index){
-          index_out(q, static_cast<std::size_t>(j)) = heap[static_cast<std::size_t>(j)].index;
+          index_out(q, static_cast<std::size_t>(j)) = neighbor.index;
         }
         if(need_dist){
-          dist_out(q, static_cast<std::size_t>(j)) = std::sqrt(heap[static_cast<std::size_t>(j)].dist2);
+          dist_out(q, static_cast<std::size_t>(j)) = std::sqrt(neighbor.dist2);
         }
       }
     }
@@ -141,7 +91,10 @@ void sby_require_real_matrix(SEXP x, const char *name){
 
 } // namespace
 
-extern "C" SEXP OU_RcppParallelUsesTbbC(){
+//' @title Detecção de backend TBB em RcppParallel
+//' @description Informa se o RcppParallel foi compilado com suporte TBB.
+//' @return Valor lógico indicado pelo backend nativo.
+extern "C" SEXP rcpp_parallel_uses_tbb_c(){
 #if RCPP_PARALLEL_USE_TBB
   return Rf_ScalarLogical(1);
 #else
@@ -149,70 +102,73 @@ extern "C" SEXP OU_RcppParallelUsesTbbC(){
 #endif
 }
 
-extern "C" SEXP OU_BruteForceKnnRcppParallelC(
-  SEXP dataMatrix,
-  SEXP queryMatrix,
-  SEXP kValue,
-  SEXP returnCode,
-  SEXP workersValue
+//' @title KNN bruto paralelo com RcppParallel
+//' @description Executa KNN euclidiano exato distribuindo consultas por trabalhadores nativos.
+//' @return Lista R com índices e distâncias conforme solicitado.
+extern "C" SEXP brute_force_knn_rcpp_parallel_c(
+  SEXP data_matrix,
+  SEXP query_matrix,
+  SEXP k_value,
+  SEXP return_code,
+  SEXP workers_value
 ){
-  sby_require_real_matrix(dataMatrix, "dataMatrix");
-  sby_require_real_matrix(queryMatrix, "queryMatrix");
+  sby_require_real_matrix(data_matrix, "data_matrix");
+  sby_require_real_matrix(query_matrix, "query_matrix");
 
-  SEXP dataDims = Rf_getAttrib(dataMatrix, R_DimSymbol);
-  SEXP queryDims = Rf_getAttrib(queryMatrix, R_DimSymbol);
-  const int nRef = INTEGER(dataDims)[0];
-  const int dataCols = INTEGER(dataDims)[1];
-  const int nQuery = INTEGER(queryDims)[0];
-  const int queryCols = INTEGER(queryDims)[1];
-  const int k = Rf_asInteger(kValue);
-  const int ret = Rf_asInteger(returnCode);
-  int workers = Rf_asInteger(workersValue);
+  SEXP data_dims = Rf_getAttrib(data_matrix, R_DimSymbol);
+  SEXP query_dims = Rf_getAttrib(query_matrix, R_DimSymbol);
+  const int n_ref = INTEGER(data_dims)[0];
+  const int data_cols = INTEGER(data_dims)[1];
+  const int n_query = INTEGER(query_dims)[0];
+  const int query_cols = INTEGER(query_dims)[1];
+  const int k = Rf_asInteger(k_value);
+  const int ret = Rf_asInteger(return_code);
+  int workers = Rf_asInteger(workers_value);
 
-  if(dataCols != queryCols){
-    Rf_error("'dataMatrix' e 'queryMatrix' devem ter o mesmo numero de colunas");
+  if(data_cols != query_cols){
+    Rf_error("'data_matrix' e 'query_matrix' devem ter o mesmo numero de colunas");
   }
-  if(k < 1 || k > nRef){
-    Rf_error("'kValue' deve estar entre 1 e nrow(dataMatrix)");
+  if(k < 1 || k > n_ref){
+    Rf_error("'k_value' deve estar entre 1 e nrow(data_matrix)");
   }
   if(workers < 1){
     workers = 1;
   }
 
-  const bool needIndex = ret == 0 || ret == 1;
-  const bool needDist = ret == 0 || ret == 2;
-  SEXP indexOut = R_NilValue;
-  SEXP distOut = R_NilValue;
+  const bool need_index = ret == 0 || ret == 1;
+  const bool need_dist = ret == 0 || ret == 2;
+  SEXP index_out = R_NilValue;
+  SEXP dist_out = R_NilValue;
   SEXP out = PROTECT(Rf_allocVector(VECSXP, 2));
   SEXP names = PROTECT(Rf_allocVector(STRSXP, 2));
   SET_STRING_ELT(names, 0, Rf_mkChar("nn.index"));
   SET_STRING_ELT(names, 1, Rf_mkChar("nn.dist"));
 
-  if(needIndex){
-    indexOut = PROTECT(Rf_allocMatrix(INTSXP, nQuery, k));
+  if(need_index){
+    index_out = PROTECT(Rf_allocMatrix(INTSXP, n_query, k));
   }else{
-    indexOut = PROTECT(Rf_allocMatrix(INTSXP, 0, 0));
+    index_out = PROTECT(Rf_allocMatrix(INTSXP, 0, 0));
   }
-  if(needDist){
-    distOut = PROTECT(Rf_allocMatrix(REALSXP, nQuery, k));
+  if(need_dist){
+    dist_out = PROTECT(Rf_allocMatrix(REALSXP, n_query, k));
   }else{
-    distOut = PROTECT(Rf_allocMatrix(REALSXP, 0, 0));
+    dist_out = PROTECT(Rf_allocMatrix(REALSXP, 0, 0));
   }
 
-  SbyBruteForceKnnWorker worker(dataMatrix, queryMatrix, indexOut, distOut, k, needIndex, needDist);
+  sby_brute_force_knn_worker worker(data_matrix, query_matrix, index_out, dist_out, k, need_index, need_dist);
   RcppParallel::parallelFor(
     0,
-    static_cast<std::size_t>(nQuery),
+    static_cast<std::size_t>(n_query),
     worker,
     1,
     workers
   );
 
-  if(needIndex){
-    SET_VECTOR_ELT(out, 0, indexOut);
+  if(need_index){
+    SET_VECTOR_ELT(out, 0, index_out);
   }
-  if(needDist){
-    SET_VECTOR_ELT(out, 1, distOut);
+  if(need_dist){
+    SET_VECTOR_ELT(out, 1, dist_out);
   }
   Rf_setAttrib(out, R_NamesSymbol, names);
   UNPROTECT(4);

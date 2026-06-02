@@ -231,7 +231,7 @@ test_that("native NearMiss selector matches R fallback without ties", {
   # O pacote chama R_useDynamicSymbols(dll, FALSE) em R_init_sbyadanear, entao
   # .Call por string + PACKAGE= e proibido. A forma correta usa o objeto de
   # simbolo nativo gerado por useDynLib(.registration = TRUE) no namespace.
-  c_idx <- .Call(sbyadanear:::OU_SelectNearMissMajorityC, nn_dist, majority_index, as.integer(retained))
+  c_idx <- .Call(sbyadanear:::select_nearmiss_majority_c, nn_dist, majority_index, as.integer(retained))
   r_idx <- majority_index[order(rowMeans(nn_dist), majority_index)[seq_len(retained)]]
 
   expect_equal(sort(c_idx), sort(r_idx))

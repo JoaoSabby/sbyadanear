@@ -40,7 +40,7 @@ sby_drop_self_neighbor_index <- function(sby_neighbor_index, sby_self_index, sby
   if(sby_adanear_native_available()){
     storage.mode(sby_neighbor_index) <- "integer"
     return(.Call(
-      OU_DropSelfNeighborC,
+      drop_self_neighbor_c,
       sby_neighbor_index,
       sby_self_index,
       sby_desired_k

@@ -132,7 +132,7 @@ sby_nearmiss_index <- function(
         storage.mode(sby_minority_matrix) <- "double"
         storage.mode(sby_majority_matrix) <- "double"
         sby_selected_majority_index <- .Call(
-          OU_NearMissBruteSelectC,
+          nearmiss_brute_select_c,
           sby_minority_matrix,
           sby_majority_matrix,
           as.integer(sby_majority_index),
@@ -157,7 +157,7 @@ sby_nearmiss_index <- function(
 
         if(sby_adanear_native_available()){
           sby_selected_majority_index <- .Call(
-            OU_SelectNearMissMajorityC,
+            select_nearmiss_majority_c,
             sby_knn_result$nn.dist,
             as.integer(sby_majority_index),
             as.integer(sby_retained_majority_count)

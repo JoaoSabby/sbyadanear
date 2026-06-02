@@ -10,28 +10,9 @@ sby_adanear_native_available <- function(){
   
   # Verifica se a DLL do pacote esta registrada na sessao atual
   return(is.loaded(
-    symbol = "OU_ApplyZScoreC",
+    symbol = "apply_z_score_c",
     PACKAGE = "sbyadanear"
   ))
-}
-####
-## Fim
-#
-
-
-#' Verificar disponibilidade do backend Intel oneDAL
-#'
-#' @return Valor logico indicando se a rotina oneDAL foi compilada e registrada
-#' @noRd
-sby_adanear_onedal_available <- function(){
-  if(!is.loaded(
-    symbol = "OU_OneDalAvailableC",
-    PACKAGE = "sbyadanear"
-  )){
-    return(FALSE)
-  }
-
-  return(isTRUE(.Call(OU_OneDalAvailableC)))
 }
 ####
 ## Fim

@@ -115,9 +115,9 @@ sby_get_knnx <- function(
     }
 
     # Caminho rapido nativo (BLAS): quando o algoritmo selecionado e brute
-    # force exato e o kernel C nativo esta disponivel, usa rotinas OU_BruteForceKnn*
+    # force exato e o kernel C nativo esta disponivel, usa rotinas brute_force_knn_*
     # que computam o produto cruzado via dgemm (BLAS) e selecionam top-k por
-    # heap. As variantes index-only e dist-only evitam alocar componentes que
+    # ordenacao parcial. As variantes index-only e dist-only evitam alocar componentes que
     # ADASYN e NearMiss descartariam imediatamente. Em alta dimensionalidade
     # isso costuma ser mais rapido que FNN::get.knnx(algorithm="brute"),
     # especialmente com OpenBLAS/MKL.
@@ -139,18 +139,8 @@ sby_get_knnx <- function(
           storage.mode(sby_data) <- "double"
           storage.mode(sby_query_chunk) <- "double"
           if(identical(sby_knn_parallel_backend, "RcppParallel")){
-            if(isTRUE(getOption("sbyadanear.sby_use_onedal", TRUE)) &&
-               sby_adanear_onedal_available()){
-              return(.Call(
-                run_one_dal_knn_c,
-                sby_data,
-                sby_query_chunk,
-                as.integer(sby_k),
-                as.integer(sby_knn_workers)
-              ))
-            }
             return(.Call(
-              OU_BruteForceKnnRcppParallelC,
+              brute_force_knn_rcpp_parallel_c,
               sby_data,
               sby_query_chunk,
               as.integer(sby_k),
@@ -160,7 +150,7 @@ sby_get_knnx <- function(
           }
           if(identical(sby_knn_return, "index")){
             return(.Call(
-              OU_BruteForceKnnIndexC,
+              brute_force_knn_index_c,
               sby_data,
               sby_query_chunk,
               as.integer(sby_k)
@@ -168,14 +158,14 @@ sby_get_knnx <- function(
           }
           if(identical(sby_knn_return, "dist")){
             return(.Call(
-              OU_BruteForceKnnDistC,
+              brute_force_knn_dist_c,
               sby_data,
               sby_query_chunk,
               as.integer(sby_k)
             ))
           }
           return(.Call(
-            OU_BruteForceKnnC,
+            brute_force_knn_c,
             sby_data,
             sby_query_chunk,
             as.integer(sby_k)

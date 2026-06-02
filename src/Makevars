@@ -1,6 +1,22 @@
+CXX_STD = CXX17
+
 PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
 PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")
 PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
+
+ifeq ($(SBY_USE_ONEMATH),1)
+  ifneq ($(ONEAPI_ROOT),)
+    ONEMATHROOT ?= $(ONEAPI_ROOT)/onemath/latest
+    MKLROOT ?= $(ONEAPI_ROOT)/mkl/latest
+  endif
+  ifneq ($(ONEMATHROOT),)
+    PKG_CPPFLAGS += -I$(ONEMATHROOT)/include -DSBYADANEAR_ONEAPI_MKL=1
+    PKG_LIBS += -L$(ONEMATHROOT)/lib -Wl,--no-as-needed -lonemath -ltbb -lpthread -lm -ldl
+  else ifneq ($(MKLROOT),)
+    PKG_CPPFLAGS += -I$(MKLROOT)/include -DSBYADANEAR_ONEAPI_MKL=1
+    PKG_LIBS += -L$(MKLROOT)/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl
+  endif
+endif
 
 ifeq ($(SBY_USE_ONEAPI_MKL),1)
   ifneq ($(ONEAPI_ROOT),)
@@ -12,13 +28,15 @@ ifeq ($(SBY_USE_ONEAPI_MKL),1)
   endif
 endif
 
-ifeq ($(SBY_USE_ONEDAL),1)
+ifeq ($(SBY_USE_ONEDPL),1)
   ifneq ($(ONEAPI_ROOT),)
-    DALROOT ?= $(ONEAPI_ROOT)/dal/latest
+    DPLROOT ?= $(ONEAPI_ROOT)/dpl/latest
   endif
-  ifneq ($(DALROOT),)
-    CXX_STD = CXX17
-    PKG_CPPFLAGS += -I$(DALROOT)/include -DSBYADANEAR_ONEDAL=1
-    PKG_LIBS += -L$(DALROOT)/lib/intel64 -Wl,--no-as-needed -lonedal_core -lonedal_thread -ltbb -ldl
+  ifneq ($(DPLROOT),)
+    PKG_CPPFLAGS += -I$(DPLROOT)/include -DSBYADANEAR_ONEDPL=1
+    PKG_LIBS += -ltbb -lpthread -ldl
+  else
+    PKG_CPPFLAGS += -DSBYADANEAR_ONEDPL=1
+    PKG_LIBS += -ltbb -lpthread -ldl
   endif
 endif
