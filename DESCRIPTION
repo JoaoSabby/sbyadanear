@@ -20,6 +20,7 @@ ByteCompile: true
 Depends:
     R (>= 4.0.0)
 Imports:
+    Rcpp,
     RcppHNSW,
     RcppParallel,
     FNN,
@@ -36,6 +37,7 @@ Imports:
     Rfast,
     coop
 LinkingTo:
+    Rcpp,
     RcppParallel
 Suggests:
     modeldata,
