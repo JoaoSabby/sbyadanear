@@ -188,12 +188,12 @@ sby_generate_adasyn_samples <- function(
 
     # Escolha de kernel ADASYN nativo.
     #
-    # Default = "row": kernel original linha-a-linha (OU_GenerateSyntheticAdasynC).
+    # Default = "row": kernel original linha-a-linha (generate_synthetic_adasyn_c).
     # Vence em testes empiricos com p moderado (p <= 200) e n_synthetic moderado
     # porque tem overhead minimo: nao pre-aloca vetores temporarios e gera +
     # escreve cada sintetico em uma unica passada.
     #
-    # Opcao "col": kernel column-friendly (OU_GenerateSyntheticAdasynColC), que
+    # Opcao "col": kernel column-friendly (generate_synthetic_adasyn_col_c), que
     # pre-resolve (baseRow, nbrRow, weight) em vetores contiguos e percorre as
     # colunas no laco externo. Em teoria favorece locality em dimensionalidade
     # muito alta (p >> 200) e n_synthetic alto (> 10^5). Em casos pequenos a
@@ -203,14 +203,14 @@ sby_generate_adasyn_samples <- function(
     sby_adasyn_kernel <- "row"
     if(identical(sby_adasyn_kernel, "col")){
       sby_synthetic_matrix <- .Call(
-        OU_GenerateSyntheticAdasynColC,
+        generate_synthetic_adasyn_col_c,
         sby_minority_matrix,
         sby_minority_neighbor_index,
         as.integer(sby_synthetic_per_row)
       )
     }else{
       sby_synthetic_matrix <- .Call(
-        OU_GenerateSyntheticAdasynC,
+        generate_synthetic_adasyn_c,
         sby_minority_matrix,
         sby_minority_neighbor_index,
         as.integer(sby_synthetic_per_row)
@@ -293,7 +293,7 @@ sby_generate_adasyn_samples <- function(
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
     sby_expanded_x <- .Call(
-      OU_RbindDoubleMatrixC,
+      rbind_double_matrix_c,
       sby_x_scaled,
       sby_synthetic_matrix
     )

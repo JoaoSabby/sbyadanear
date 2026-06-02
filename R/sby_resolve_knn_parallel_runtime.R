@@ -13,7 +13,7 @@ sby_resolve_knn_parallel_runtime <- function(sby_knn_parallel_backend){
     return("parallel")
   }
 
-  sby_uses_tbb <- isTRUE(.Call(OU_RcppParallelUsesTbbC))
+  sby_uses_tbb <- isTRUE(.Call(rcpp_parallel_uses_tbb_c))
   if(isTRUE(sby_uses_tbb)){
     return("RcppParallel::TBB")
   }

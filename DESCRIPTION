@@ -42,4 +42,4 @@ Suggests:
     Matrix,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
-SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), optional Intel oneDAL, OpenMP (optional), GNU make
+SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), OpenMP (optional), GNU make

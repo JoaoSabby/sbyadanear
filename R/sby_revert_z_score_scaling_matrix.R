@@ -27,7 +27,7 @@ sby_revert_z_score_scaling_matrix <- function(sby_x_matrix, sby_scaling_info){
 
     # Reverte z-score por chamada nativa registrada no pacote
     sby_restored <- .Call(
-      OU_ApplyZScoreC,
+      apply_z_score_c,
       sby_x_matrix,
       as.numeric(sby_scaling_info$centers),
       as.numeric(sby_scaling_info$scales),
