@@ -1,3 +1,4 @@
+#include <Rcpp.h>
 #include <RcppParallel.h>
 #include <Rinternals.h>
 #include <R_ext/Error.h>
@@ -28,10 +29,10 @@ struct sby_brute_force_knn_worker : public RcppParallel::Worker {
   const bool need_dist;
 
   sby_brute_force_knn_worker(
-    SEXP data_,
-    SEXP query_,
-    SEXP index_out_,
-    SEXP dist_out_,
+    Rcpp::NumericMatrix data_,
+    Rcpp::NumericMatrix query_,
+    Rcpp::IntegerMatrix index_out_,
+    Rcpp::NumericMatrix dist_out_,
     int k_,
     bool need_index_,
     bool need_dist_
@@ -155,7 +156,20 @@ extern "C" SEXP brute_force_knn_rcpp_parallel_c(
     dist_out = PROTECT(Rf_allocMatrix(REALSXP, 0, 0));
   }
 
-  sby_brute_force_knn_worker worker(data_matrix, query_matrix, index_out, dist_out, k, need_index, need_dist);
+  Rcpp::NumericMatrix data_rcpp(data_matrix);
+  Rcpp::NumericMatrix query_rcpp(query_matrix);
+  Rcpp::IntegerMatrix index_out_rcpp(index_out);
+  Rcpp::NumericMatrix dist_out_rcpp(dist_out);
+
+  sby_brute_force_knn_worker worker(
+    data_rcpp,
+    query_rcpp,
+    index_out_rcpp,
+    dist_out_rcpp,
+    k,
+    need_index,
+    need_dist
+  );
   RcppParallel::parallelFor(
     0,
     static_cast<std::size_t>(n_query),
