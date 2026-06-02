@@ -10,8 +10,8 @@
 #' @noRd
 sby_normalize_l2 <- function(sby_x_matrix){
   
-  # Calcula norma euclidiana por linha com operacoes vetorizadas base
-  sby_row_norm <- sqrt(rowSums(sby_x_matrix^2))
+  # Calcula norma euclidiana por linha com rotina vetorizada rapida
+  sby_row_norm <- sqrt(Rfast::rowsums(sby_x_matrix^2))
 
   # Protege linhas nulas contra divisao por zero sem alterar sua direcao nula
   sby_row_norm[sby_row_norm == 0] <- 1

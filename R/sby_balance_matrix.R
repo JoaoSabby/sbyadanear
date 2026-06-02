@@ -46,16 +46,16 @@ sby_balance_matrix <- function(
       sby_output_class_distribution = sby_class_info_input$sby_class_counts,
       sby_diagnostics = list(
         sby_method = sby_strategy,
-        sby_input_rows = nrow(sby_x_matrix),
-        sby_output_rows = nrow(sby_x_matrix),
+        sby_input_rows = collapse::fnrow(sby_x_matrix),
+        sby_output_rows = collapse::fnrow(sby_x_matrix),
         sby_data_changed = FALSE
       )
     ))
   }
 
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != nrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
+  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
+    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
 

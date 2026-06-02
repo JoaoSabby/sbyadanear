@@ -29,7 +29,7 @@ sby_validate_sampling_inputs <- function(
   }
 
   # Verifica se os preditores possuem ao menos uma linha
-  if(NROW(sby_predictor_data) == 0L){
+  if(collapse::fnrow(sby_predictor_data) == 0L){
 
     # Aborta quando nao ha observacoes para balanceamento
     sby_adanear_abort(
@@ -38,7 +38,7 @@ sby_validate_sampling_inputs <- function(
   }
 
   # Verifica se alvo e preditores possuem o mesmo numero de linhas
-  if(length(sby_target_vector) != NROW(sby_predictor_data)){
+  if(length(sby_target_vector) != collapse::fnrow(sby_predictor_data)){
 
     # Aborta quando o alvo nao esta alinhado aos preditores
     sby_adanear_abort(

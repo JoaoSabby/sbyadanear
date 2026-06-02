@@ -18,7 +18,7 @@ sby_restore_numeric_column_types <- function(sby_x_matrix, sby_type_info, sby_as
   )
 
   # Verifica compatibilidade entre matriz e metadados de tipos
-  if(NCOL(sby_x_matrix) != nrow(sby_type_info)){
+  if(collapse::fncol(sby_x_matrix) != collapse::fnrow(sby_type_info)){
 
     # Aborta quando os metadados nao correspondem as colunas da matriz
     sby_adanear_abort(
@@ -27,7 +27,7 @@ sby_restore_numeric_column_types <- function(sby_x_matrix, sby_type_info, sby_as
   }
 
   # Ajusta valores numericos conforme o tipo inferido de cada coluna
-  for(j in seq_len(NCOL(sby_x_matrix))){
+  for(j in seq_len(collapse::fncol(sby_x_matrix))){
     # Verifica interrupcao periodicamente durante restauracao matricial
     if(j %% 64L == 1L){
 
@@ -44,11 +44,10 @@ sby_restore_numeric_column_types <- function(sby_x_matrix, sby_type_info, sby_as
       y = "binary"
     )){
 
-      # Reclassifica valores continuos para codigos binarios
-      sby_x_matrix[, j] <- ifelse(
+      sby_x_matrix[, j] <- kit::iif(
         test = sby_x_matrix[, j] >= 0.5,
-        yes  = 1,
-        no   = 0
+        yes = 1,
+        no = 0
       )
     }else if(identical(
       x = sby_inferred_type,
@@ -77,7 +76,7 @@ sby_restore_numeric_column_types <- function(sby_x_matrix, sby_type_info, sby_as
   names(sby_out) <- sby_type_info$sby_column_name
 
   # Converte colunas do data frame para os tipos numericos inferidos
-  for(j in seq_len(NCOL(sby_x_matrix))){
+  for(j in seq_len(collapse::fncol(sby_x_matrix))){
     # Verifica interrupcao periodicamente durante conversao tabular
     if(j %% 64L == 1L){
 

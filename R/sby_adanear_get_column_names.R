@@ -19,7 +19,7 @@ sby_adanear_get_column_names <- function(sby_predictor_data){
     # Cria nomes sequenciais para todas as colunas preditoras
     sby_names <- paste0(
       "V",
-      seq_len(NCOL(sby_predictor_data))
+      seq_len(collapse::fncol(sby_predictor_data))
     )
   }
 

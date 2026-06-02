@@ -203,7 +203,7 @@ sby_adasyn <- function(
 
   sby_final_predictors <- sby_build_preserved_predictors(
     sby_original_predictor_data = sby_original_predictor_data,
-    sby_retained_index = seq_len(nrow(sby_matrix_result$sby_balanced_scaled$x)),
+    sby_retained_index = seq_len(collapse::fnrow(sby_matrix_result$sby_balanced_scaled$x)),
     sby_final_scaled = sby_matrix_result$sby_balanced_scaled$x,
     sby_scaling_info = sby_matrix_result$sby_scaling_info,
     sby_type_info = sby_type_info,

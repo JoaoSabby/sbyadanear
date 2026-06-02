@@ -29,13 +29,17 @@ Imports:
     generics,
     recipes,
     rlang,
-    tibble
+    tibble,
+    collapse,
+    data.table,
+    kit,
+    Rfast,
+    coop
 LinkingTo:
     RcppParallel
 Suggests:
     modeldata,
     Matrix,
-    Rfast,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), optional Intel oneDAL, OpenMP (optional), GNU make

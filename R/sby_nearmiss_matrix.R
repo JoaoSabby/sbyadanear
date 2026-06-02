@@ -38,12 +38,12 @@ sby_nearmiss_matrix <- function(
   sby_memory_guard <- sby_validate_logical_scalar(sby_memory_guard, "sby_memory_guard")
 
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != nrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
+  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
+    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
   if(isTRUE(sby_memory_guard)){
-    sby_check_dense_memory_budget(nrow(sby_x_matrix), ncol(sby_x_matrix), 2L, Inf, "sby_nearmiss_matrix")
+    sby_check_dense_memory_budget(collapse::fnrow(sby_x_matrix), collapse::fncol(sby_x_matrix), 2L, Inf, "sby_nearmiss_matrix")
   }
 
   sby_index_result <- sby_nearmiss_index(

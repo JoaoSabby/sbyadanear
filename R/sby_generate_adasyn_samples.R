@@ -47,7 +47,7 @@ sby_generate_adasyn_samples <- function(
   # Calcula vizinhos de cada linha minoritaria contra todo o conjunto escalado
   sby_effective_all_k     <- min(
     as.integer(sby_knn_over_k) + 1L,
-    nrow(sby_x_scaled)
+    collapse::fnrow(sby_x_scaled)
   )
   sby_all_neighbor_result <- sby_get_knnx(
     sby_data                    = sby_x_scaled,
@@ -71,7 +71,7 @@ sby_generate_adasyn_samples <- function(
   sby_neighbor_index <- sby_all_neighbor_result$nn.index
   sby_desired_all_k  <- min(
     as.integer(sby_knn_over_k),
-    nrow(sby_x_scaled) - 1L
+    collapse::fnrow(sby_x_scaled) - 1L
   )
 
   # Verifica se a consulta retornou mais de um vizinho candidato
@@ -88,14 +88,17 @@ sby_generate_adasyn_samples <- function(
   # Calcula mascara de vizinhos pertencentes a classe majoritaria
   sby_majority_mask <- sby_target_factor[as.vector(sby_neighbor_index)] == sby_class_roles$sby_majority_label
 
-  # Reaproveita o vetor logico como matriz para evitar copia extra em bases grandes
-  dim(sby_majority_mask) <- dim(sby_neighbor_index)
+  sby_majority_mask <- matrix(
+    data = sby_majority_mask,
+    nrow = collapse::fnrow(sby_neighbor_index),
+    ncol = collapse::fncol(sby_neighbor_index)
+  )
 
   # Verifica se ha solicitacao de interrupcao antes do calculo de razoes
   sby_adanear_check_user_interrupt()
 
   # Calcula proporcao de vizinhos majoritarios por linha minoritaria
-  sby_majority_ratio <- rowMeans(
+  sby_majority_ratio <- Rfast::rowmeans(
     x = sby_majority_mask
   )
 
@@ -137,7 +140,7 @@ sby_generate_adasyn_samples <- function(
   # Calcula vizinhos minoritarios usados para interpolacao sintetica
   sby_effective_minority_k     <- min(
     as.integer(sby_knn_over_k) + 1L,
-    nrow(sby_minority_matrix)
+    collapse::fnrow(sby_minority_matrix)
   )
   sby_minority_neighbor_result <- sby_get_knnx(
     sby_data                    = sby_minority_matrix,
@@ -162,7 +165,7 @@ sby_generate_adasyn_samples <- function(
   sby_minority_neighbor_index <- sby_minority_neighbor_result$nn.index
   sby_desired_minority_k      <- min(
     as.integer(sby_knn_over_k),
-    nrow(sby_minority_matrix) - 1L
+    collapse::fnrow(sby_minority_matrix) - 1L
   )
 
   # Verifica se a consulta minoritaria retornou mais de um vizinho candidato
@@ -171,7 +174,7 @@ sby_generate_adasyn_samples <- function(
     # Remove autorreferencias da matriz de vizinhos minoritarios
     sby_minority_neighbor_index <- sby_drop_self_neighbor_index(
       sby_neighbor_index = sby_minority_neighbor_index,
-      sby_self_index     = seq_len(nrow(sby_minority_matrix)),
+      sby_self_index     = seq_len(collapse::fnrow(sby_minority_matrix)),
       sby_desired_k      = sby_desired_minority_k
     )
   }
@@ -222,7 +225,7 @@ sby_generate_adasyn_samples <- function(
     sby_synthetic_matrix <- matrix(
       data = 0,
       nrow = sby_synthetic_count,
-      ncol = NCOL(sby_x_scaled)
+      ncol = collapse::fncol(sby_x_scaled)
     )
     sby_write_start   <- 1L
     sby_positive_rows <- which(
@@ -240,13 +243,13 @@ sby_generate_adasyn_samples <- function(
       sby_base_rows   <- matrix(
         data = sby_minority_matrix[i, ],
         nrow = sby_row_count,
-        ncol = NCOL(sby_x_scaled),
+        ncol = collapse::fncol(sby_x_scaled),
         byrow = TRUE
       )
 
       # Amostra vizinhos minoritarios para interpolacao local
       sby_selected_neighbor_rows <- sby_minority_neighbor_index[i, sample.int(
-        n = ncol(sby_minority_neighbor_index),
+        n = collapse::fncol(sby_minority_neighbor_index),
         size = sby_row_count,
         replace = TRUE
       )]
@@ -286,10 +289,6 @@ sby_generate_adasyn_samples <- function(
   )
 
   # Consolida a matriz expandida por kernel nativo quando possivel.
-  # base::rbind() e generico e faz validacoes/despacho desnecessarios aqui;
-  # neste ponto ambas as entradas ja sao matrizes double com o mesmo numero
-  # de colunas. O caminho nativo aloca a saida uma unica vez e copia cada
-  # coluna em blocos contiguos.
   if(sby_adanear_native_available()){
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
@@ -299,10 +298,17 @@ sby_generate_adasyn_samples <- function(
       sby_synthetic_matrix
     )
   }else{
-    sby_expanded_x <- rbind(
-      sby_x_scaled,
-      sby_synthetic_matrix
+    sby_input_rows <- collapse::fnrow(sby_x_scaled)
+    sby_synthetic_rows <- collapse::fnrow(sby_synthetic_matrix)
+    sby_expanded_x <- matrix(
+      data = 0,
+      nrow = sby_input_rows + sby_synthetic_rows,
+      ncol = collapse::fncol(sby_x_scaled)
     )
+    sby_expanded_x[seq_len(sby_input_rows), ] <- sby_x_scaled
+    if(sby_synthetic_rows > 0L){
+      sby_expanded_x[seq.int(sby_input_rows + 1L, collapse::fnrow(sby_expanded_x)), ] <- sby_synthetic_matrix
+    }
   }
 
   return(list(

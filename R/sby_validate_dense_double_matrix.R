@@ -27,13 +27,15 @@ sby_validate_dense_double_matrix <- function(
     )
   }
 
-  if(nrow(sby_x_matrix) < 2L){
+  sby_matrix_dim <- collapse::fdim(sby_x_matrix)
+
+  if(sby_matrix_dim[[1L]] < 2L){
     sby_adanear_abort(
       sby_message = paste0("'", sby_name, "' deve conter ao menos duas linhas")
     )
   }
 
-  if(ncol(sby_x_matrix) < 1L){
+  if(sby_matrix_dim[[2L]] < 1L){
     sby_adanear_abort(
       sby_message = paste0("'", sby_name, "' deve conter ao menos uma coluna")
     )
@@ -44,8 +46,8 @@ sby_validate_dense_double_matrix <- function(
     if(isTRUE(sby_allow_integer) && identical(sby_matrix_type, "integer")){
       sby_x_matrix <- matrix(
         data = as.double(sby_x_matrix),
-        nrow = nrow(sby_x_matrix),
-        ncol = ncol(sby_x_matrix),
+        nrow = sby_matrix_dim[[1L]],
+        ncol = sby_matrix_dim[[2L]],
         dimnames = dimnames(sby_x_matrix)
       )
     }else{

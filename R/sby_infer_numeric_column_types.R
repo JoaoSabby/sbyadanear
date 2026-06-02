@@ -60,7 +60,7 @@ sby_infer_numeric_column_types <- function(sby_data_frame){
   return(data.frame(
     sby_column_name = sby_column_names,
     sby_inferred_type = vapply(
-      X = seq_len(NCOL(sby_x_matrix)),
+      X = seq_len(collapse::fncol(sby_x_matrix)),
       FUN = function(j){
         # Infere o tipo da coluna corrente da matriz numerica
         return(sby_infer_one(
