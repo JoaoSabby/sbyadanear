@@ -30,7 +30,7 @@ sby_build_preserved_predictors <- function(
     stringsAsFactors = FALSE
   )
   sby_retained_index <- as.integer(sby_retained_index)
-  sby_original_row_count <- nrow(sby_original_predictor_data)
+  sby_original_row_count <- collapse::fnrow(sby_original_predictor_data)
   sby_is_original <- sby_retained_index <= sby_original_row_count
 
   # Caminho rapido 1: nenhuma linha sintetica retida (NearMiss puro). Basta
@@ -66,7 +66,12 @@ sby_build_preserved_predictors <- function(
      identical(sby_orig_positions, seq_len(length(sby_orig_positions))) &&
      identical(sby_synth_positions, seq.int(length(sby_orig_positions) + 1L, length(sby_retained_index)))){
     sby_orig_block <- sby_original_predictor_data[sby_retained_index[sby_orig_positions], , drop = FALSE]
-    sby_final_predictors <- rbind(sby_orig_block, sby_synthetic_predictors)
+    sby_final_predictors <- data.table::rbindlist(
+      l = list(sby_orig_block, sby_synthetic_predictors),
+      use.names = TRUE,
+      fill = FALSE
+    )
+    sby_final_predictors <- as.data.frame(sby_final_predictors, stringsAsFactors = FALSE)
     rownames(sby_final_predictors) <- NULL
     return(sby_final_predictors)
   }

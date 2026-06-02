@@ -25,22 +25,13 @@ sby_compute_z_score_params <- function(sby_x_matrix){
     )
   }else{
 
-    # Estima centros e escalas. Quando Rfast esta disponivel, usa rotinas
-    # vetorizadas otimizadas; caso contrario, recorre a base R.
-    if(requireNamespace("Rfast", quietly = TRUE)){
-      sby_params <- list(
-        centers = Rfast::colmeans(sby_x_matrix),
-        scales  = Rfast::colVars(
-          x = sby_x_matrix,
-          std = TRUE
-        )
+    sby_params <- list(
+      centers = Rfast::colmeans(sby_x_matrix),
+      scales = Rfast::colVars(
+        x = sby_x_matrix,
+        std = TRUE
       )
-    }else{
-      sby_params <- list(
-        centers = colMeans(sby_x_matrix),
-        scales  = apply(sby_x_matrix, 2L, stats::sd)
-      )
-    }
+    )
   }
 
   # Identifica escalas ausentes, infinitas ou nao positivas
@@ -58,7 +49,7 @@ sby_compute_z_score_params <- function(sby_x_matrix){
       # Cria nomes sequenciais para as colunas invalidas
       sby_column_names <- paste0(
         "V",
-        seq_len(NCOL(sby_x_matrix))
+        seq_len(collapse::fncol(sby_x_matrix))
       )
     }
 

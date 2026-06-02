@@ -30,38 +30,44 @@ sby_resolve_knn_engine <- function(
     return(sby_knn_engine)
   }
 
-  # Heuristica 1: metricas nao euclidianas exigem RcppHNSW (FNN nao suporta)
-  if(!identical(sby_knn_distance_metric, "euclidean")){
+  sby_min_cells <- 5e6
+  sby_have_dims <- !is.na(sby_row_count) && !is.na(sby_predictor_column_count) &&
+    is.finite(sby_row_count) && is.finite(sby_predictor_column_count)
+  sby_cells <- 0
+  if(sby_have_dims){
+    sby_cells <- as.numeric(sby_row_count) * as.numeric(sby_predictor_column_count)
+  }
+
+  sby_route_code <- kit::nif(
+    !identical(sby_knn_distance_metric, "euclidean"),
+    1L,
+    sby_have_dims && sby_cells >= sby_min_cells && sby_predictor_column_count >= 50L,
+    2L,
+    default = 3L
+  )
+  sby_route_code <- as.integer(sby_route_code[[1L]])
+
+  if(identical(sby_route_code, 1L)){
     sby_adanear_inform(
       sby_message = paste0(
-        "KNN automatico: sby_knn_engine = \"RcppHNSW\". ",
-        "Justificativa: a metrica \"", sby_knn_distance_metric,
-        "\" so e suportada pelo engine RcppHNSW; FNN aceita apenas euclidean."
+        "KNN automático: sby_knn_engine = \"RcppHNSW\". ",
+        "Justificativa: a métrica \"", sby_knn_distance_metric,
+        "\" só é suportada pelo engine RcppHNSW; FNN aceita apenas euclidean."
       )
     )
     return("RcppHNSW")
   }
 
-  # Heuristica 2: bases grandes e de alta dimensionalidade tendem a se beneficiar
-  # de HNSW (aproximado) em vez de FNN exato. Os limiares sao conservadores e podem
-  # ser sobrescritos por opcao sbyadanear.sby_auto_engine_hnsw_min_cells.
-  sby_min_cells <- 5e6
-  sby_have_dims <- !is.na(sby_row_count) && !is.na(sby_predictor_column_count) &&
-    is.finite(sby_row_count) && is.finite(sby_predictor_column_count)
-
-  if(sby_have_dims){
-    sby_cells <- as.numeric(sby_row_count) * as.numeric(sby_predictor_column_count)
-    if(sby_cells >= sby_min_cells && sby_predictor_column_count >= 50L){
-      sby_adanear_inform(
-        sby_message = paste0(
-          "KNN automatico: sby_knn_engine = \"RcppHNSW\". ",
-          "Justificativa: dados grandes (n=", sby_row_count,
-          ", p=", sby_predictor_column_count, ") favorecem busca aproximada HNSW. ",
-          "Para forcar FNN exato, defina sby_knn_engine = \"FNN\"."
-        )
+  if(identical(sby_route_code, 2L)){
+    sby_adanear_inform(
+      sby_message = paste0(
+        "KNN automático: sby_knn_engine = \"RcppHNSW\". ",
+        "Justificativa: dados grandes (n=", sby_row_count,
+        ", p=", sby_predictor_column_count, ") favorecem busca aproximada HNSW. ",
+        "Para forçar FNN exato, defina sby_knn_engine = \"FNN\"."
       )
-      return("RcppHNSW")
-    }
+    )
+    return("RcppHNSW")
   }
 
   # Heuristica 3: caso padrao - FNN exato, sequencial ou paralelo por blocos

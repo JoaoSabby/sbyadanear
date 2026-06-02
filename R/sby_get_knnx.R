@@ -239,7 +239,7 @@ sby_get_knnx <- function(
         as.integer(sby_knn_hnsw_ef),
         as.integer(sby_k)
       ),
-      nrow(sby_data)
+      collapse::fnrow(sby_data)
     )
 
     # Define rotina HNSW completa em funcao local. O caminho padrao executa
@@ -355,7 +355,7 @@ sby_query_knn_in_chunks <- function(
   sby_need_dist <- sby_knn_return %in% c("both", "dist")
 
   # Calcula numero de linhas da matriz de consulta
-  sby_query_rows <- nrow(sby_query)
+  sby_query_rows <- collapse::fnrow(sby_query)
 
   # Executa consulta diretamente quando os dados cabem em um unico bloco
   if(sby_query_rows <= sby_knn_query_chunk_size){

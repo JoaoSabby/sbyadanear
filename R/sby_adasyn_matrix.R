@@ -39,8 +39,8 @@ sby_adasyn_matrix <- function(
   sby_memory_guard <- sby_validate_logical_scalar(sby_memory_guard, "sby_memory_guard")
 
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != nrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
+  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
+    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
   # ADASYN exige ao menos duas observacoes na classe minoritaria para que
@@ -72,31 +72,31 @@ sby_adasyn_matrix <- function(
     sby_knn_engine = sby_knn_engine,
     sby_knn_workers = sby_knn_workers,
     sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_row_count = nrow(sby_x_matrix),
-    sby_predictor_column_count = NCOL(sby_x_matrix)
+    sby_row_count = collapse::fnrow(sby_x_matrix),
+    sby_predictor_column_count = collapse::fncol(sby_x_matrix)
   )
-  sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, NCOL(sby_x_matrix), sby_knn_engine)
+  sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, collapse::fncol(sby_x_matrix), sby_knn_engine)
 
   sby_synthetic_count <- sby_compute_minority_expansion_count(sby_y_vector, sby_over_ratio)
-  sby_output_rows <- nrow(sby_x_matrix) + sby_synthetic_count
+  sby_output_rows <- collapse::fnrow(sby_x_matrix) + sby_synthetic_count
   if(is.finite(sby_max_output_rows) && sby_output_rows > sby_max_output_rows){
     sby_adanear_abort("'sby_max_output_rows' seria excedido pelo ADASYN")
   }
   if(isTRUE(sby_memory_guard)){
-    sby_check_dense_memory_budget(sby_output_rows, ncol(sby_x_matrix), 2L, sby_max_dense_gb, "sby_adasyn_matrix")
+    sby_check_dense_memory_budget(sby_output_rows, collapse::fncol(sby_x_matrix), 2L, sby_max_dense_gb, "sby_adasyn_matrix")
   }
 
   if(isTRUE(sby_input_already_scaled)){
     if(is.null(sby_scaling_info)){
       sby_adanear_abort("'sby_scaling_info' e obrigatorio quando 'sby_input_already_scaled = TRUE'")
     }
-    sby_validate_scaling_info(sby_scaling_info, NCOL(sby_x_matrix))
+    sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
     sby_x_scaled <- sby_x_matrix
   }else{
     if(is.null(sby_scaling_info)){
       sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix)
     }else{
-      sby_validate_scaling_info(sby_scaling_info, NCOL(sby_x_matrix))
+      sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
     }
     sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info)
   }
@@ -130,8 +130,8 @@ sby_adasyn_matrix <- function(
 
   sby_diagnostics <- list(
     sby_method = "adasyn",
-    sby_input_rows = nrow(sby_x_matrix),
-    sby_output_rows = nrow(sby_x_out),
+    sby_input_rows = collapse::fnrow(sby_x_matrix),
+    sby_output_rows = collapse::fnrow(sby_x_out),
     sby_generated_rows = sby_synthetic_count,
     sby_output_scale = sby_output_scale,
     sby_knn_engine = sby_knn_engine,

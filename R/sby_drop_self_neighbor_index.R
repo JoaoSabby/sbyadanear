@@ -16,8 +16,8 @@
 #' @return Matriz de indices de vizinhos sem o proprio ponto
 #' @noRd
 sby_drop_self_neighbor_index <- function(sby_neighbor_index, sby_self_index, sby_desired_k){
-  sby_n <- nrow(sby_neighbor_index)
-  sby_k_plus <- ncol(sby_neighbor_index)
+  sby_n <- collapse::fnrow(sby_neighbor_index)
+  sby_k_plus <- collapse::fncol(sby_neighbor_index)
   sby_desired_k <- as.integer(sby_desired_k)
   sby_self_index <- as.integer(sby_self_index)
 
@@ -58,7 +58,7 @@ sby_drop_self_neighbor_index <- function(sby_neighbor_index, sby_self_index, sby
   # Identifica linhas que ainda contem self dentro do bloco baseline.
   sby_baseline_self <- sby_out == sby_self_index
   sby_baseline_self[is.na(sby_baseline_self)] <- FALSE
-  sby_rows_to_fix <- which(.rowSums(sby_baseline_self, m = sby_n, n = sby_desired_k) > 0L)
+  sby_rows_to_fix <- which(Rfast::rowsums(sby_baseline_self + 0L) > 0L)
 
   if(length(sby_rows_to_fix) == 0L){
     # Mas tambem precisamos confirmar que o self nao esta na ultima coluna

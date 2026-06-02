@@ -34,8 +34,8 @@ sby_nearmiss_index <- function(
   sby_return_scaling_info <- sby_validate_logical_scalar(sby_return_scaling_info, "sby_return_scaling_info")
   sby_return_reduced_scaled <- sby_validate_logical_scalar(sby_return_reduced_scaled, "sby_return_reduced_scaled")
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != nrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
+  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
+    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
   # NearMiss-1 calcula medias de distancia ate k vizinhos minoritarios; com
@@ -64,28 +64,28 @@ sby_nearmiss_index <- function(
     sby_knn_engine = sby_knn_engine,
     sby_knn_workers = sby_knn_workers,
     sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_row_count = nrow(sby_x_matrix),
-    sby_predictor_column_count = NCOL(sby_x_matrix)
+    sby_row_count = collapse::fnrow(sby_x_matrix),
+    sby_predictor_column_count = collapse::fncol(sby_x_matrix)
   )
-  sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, NCOL(sby_x_matrix), sby_knn_engine)
+  sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, collapse::fncol(sby_x_matrix), sby_knn_engine)
 
   if(isTRUE(sby_input_already_scaled)){
     if(is.null(sby_scaling_info)){
       sby_adanear_abort("'sby_scaling_info' e obrigatorio quando 'sby_input_already_scaled = TRUE'")
     }
-    sby_validate_scaling_info(sby_scaling_info, NCOL(sby_x_matrix))
+    sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
     sby_x_scaled <- sby_x_matrix
   }else{
     if(is.null(sby_scaling_info)){
       sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix)
     }else{
-      sby_validate_scaling_info(sby_scaling_info, NCOL(sby_x_matrix))
+      sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
     }
     sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info)
   }
 
   if(identical(sby_class_info_input$sby_minority_count, sby_class_info_input$sby_majority_count)){
-    sby_retained_index <- seq_len(nrow(sby_x_matrix))
+    sby_retained_index <- seq_len(collapse::fnrow(sby_x_matrix))
     sby_selected_majority_index <- integer(0L)
   }else{
     sby_class_roles <- sby_get_binary_class_roles(
@@ -104,7 +104,7 @@ sby_nearmiss_index <- function(
       sby_minority_label = sby_class_roles$sby_minority_label,
       sby_majority_label = sby_class_roles$sby_majority_label
     )
-    sby_effective_k <- min(as.integer(sby_knn_under_k), nrow(sby_minority_matrix))
+    sby_effective_k <- min(as.integer(sby_knn_under_k), collapse::fnrow(sby_minority_matrix))
     if(sby_effective_k < 1L){
       sby_adanear_abort("Sem linhas minoritarias suficientes para NearMiss")
     }
@@ -163,7 +163,7 @@ sby_nearmiss_index <- function(
             as.integer(sby_retained_majority_count)
           )
         }else{
-          sby_mean_distances <- rowMeans(sby_knn_result$nn.dist)
+          sby_mean_distances <- Rfast::rowmeans(sby_knn_result$nn.dist)
           sby_selected_order <- order(sby_mean_distances, decreasing = FALSE)
           sby_selected_majority_index <- sby_majority_index[sby_selected_order[seq_len(sby_retained_majority_count)]]
         }
@@ -176,9 +176,9 @@ sby_nearmiss_index <- function(
   sby_class_info_output <- sby_binary_class_counts_fast(sby_y_out)
   sby_diagnostics <- list(
     sby_method = "nearmiss_index",
-    sby_input_rows = nrow(sby_x_matrix),
+    sby_input_rows = collapse::fnrow(sby_x_matrix),
     sby_output_rows = length(sby_retained_index),
-    sby_removed_rows = nrow(sby_x_matrix) - length(sby_retained_index),
+    sby_removed_rows = collapse::fnrow(sby_x_matrix) - length(sby_retained_index),
     sby_knn_engine = sby_knn_engine,
     sby_knn_algorithm = sby_knn_algorithm,
     sby_knn_distance_metric = sby_knn_distance_metric,

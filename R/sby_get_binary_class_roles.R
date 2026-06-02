@@ -27,11 +27,11 @@ sby_get_binary_class_roles <- function(
     bin = as.integer(sby_target_factor),
     nbins = length(sby_levels)
   )
-  # Reconstroi um objeto compativel com table() (1D named array com class
-  # "table") usando dimnames apropriadamente sobre um array, nao um vetor.
-  sby_class_counts <- sby_counts_int
-  dim(sby_class_counts) <- length(sby_class_counts)
-  dimnames(sby_class_counts) <- structure(list(sby_levels), names = "sby_target_factor")
+  sby_class_counts <- array(
+    data = sby_counts_int,
+    dim = length(sby_counts_int),
+    dimnames = structure(list(sby_levels), names = "sby_target_factor")
+  )
   class(sby_class_counts) <- "table"
 
   # Verifica se o alvo possui exatamente duas classes

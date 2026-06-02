@@ -34,8 +34,8 @@ sby_adanear_matrix <- function(
   sby_return_scaled <- sby_validate_logical_scalar(sby_return_scaled, "sby_return_scaled")
   sby_return_original_scale <- sby_validate_logical_scalar(sby_return_original_scale, "sby_return_original_scale")
   sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != nrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual a nrow(sby_x_matrix)")
+  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
+    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
   sby_original_roles <- sby_get_binary_class_roles(sby_target_factor = sby_y_vector)
@@ -92,9 +92,9 @@ sby_adanear_matrix <- function(
   sby_class_info_output <- sby_binary_class_counts_fast(sby_under_result$sby_y_vector)
   sby_diagnostics <- list(
     sby_method = "adanear",
-    sby_input_rows = nrow(sby_x_matrix),
-    sby_after_oversampling_rows = nrow(sby_over_result$sby_balanced_scaled$x),
-    sby_output_rows = nrow(sby_under_result$sby_x_matrix),
+    sby_input_rows = collapse::fnrow(sby_x_matrix),
+    sby_after_oversampling_rows = collapse::fnrow(sby_over_result$sby_balanced_scaled$x),
+    sby_output_rows = collapse::fnrow(sby_under_result$sby_x_matrix),
     sby_output_scale = sby_under_result$sby_diagnostics$sby_output_scale,
     sby_original_minority_label = sby_original_roles$sby_minority_label,
     sby_original_majority_label = sby_original_roles$sby_majority_label,
@@ -115,7 +115,7 @@ sby_adanear_matrix <- function(
   if(isTRUE(sby_audit_light)){
     sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
     sby_result$sby_diagnostics$sby_generated_rows <- sby_over_result$sby_diagnostics$sby_generated_rows
-    sby_result$sby_diagnostics$sby_removed_rows <- nrow(sby_over_result$sby_balanced_scaled$x) - nrow(sby_under_result$sby_x_matrix)
+    sby_result$sby_diagnostics$sby_removed_rows <- collapse::fnrow(sby_over_result$sby_balanced_scaled$x) - collapse::fnrow(sby_under_result$sby_x_matrix)
   }
   if(isTRUE(sby_audit_full)){
     sby_result$sby_oversampling_result <- sby_over_result
