@@ -1197,6 +1197,8 @@ SEXP OU_RbindDoubleMatrixC(SEXP firstMatrix, SEXP secondMatrix){
  * @brief Mapeia as rotinas internas em C para as chamadas .Call dinamicas provenientes do R.
  */
 extern SEXP OU_BruteForceKnnRcppParallelC(SEXP, SEXP, SEXP, SEXP, SEXP);
+extern SEXP run_one_dal_knn_c(SEXP, SEXP, SEXP, SEXP);
+extern SEXP OU_OneDalAvailableC(void);
 extern SEXP OU_RcppParallelUsesTbbC(void);
 
 static const R_CallMethodDef CallEntries[] = {
@@ -1211,6 +1213,8 @@ static const R_CallMethodDef CallEntries[] = {
   {"OU_BruteForceKnnIndexC", (DL_FUNC) &OU_BruteForceKnnIndexC, 3},
   {"OU_BruteForceKnnDistC", (DL_FUNC) &OU_BruteForceKnnDistC, 3},
   {"OU_BruteForceKnnRcppParallelC", (DL_FUNC) &OU_BruteForceKnnRcppParallelC, 5},
+  {"run_one_dal_knn_c", (DL_FUNC) &run_one_dal_knn_c, 4},
+  {"OU_OneDalAvailableC", (DL_FUNC) &OU_OneDalAvailableC, 0},
   {"OU_RcppParallelUsesTbbC", (DL_FUNC) &OU_RcppParallelUsesTbbC, 0},
   {"OU_NearMissBruteSelectC", (DL_FUNC) &OU_NearMissBruteSelectC, 5},
   {"OU_RbindDoubleMatrixC", (DL_FUNC) &OU_RbindDoubleMatrixC, 2},

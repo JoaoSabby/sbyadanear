@@ -11,3 +11,14 @@ ifeq ($(SBY_USE_ONEAPI_MKL),1)
     PKG_LIBS += -L$(MKLROOT)/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl
   endif
 endif
+
+ifeq ($(SBY_USE_ONEDAL),1)
+  ifneq ($(ONEAPI_ROOT),)
+    DALROOT ?= $(ONEAPI_ROOT)/dal/latest
+  endif
+  ifneq ($(DALROOT),)
+    CXX_STD = CXX17
+    PKG_CPPFLAGS += -I$(DALROOT)/include -DSBYADANEAR_ONEDAL=1
+    PKG_LIBS += -L$(DALROOT)/lib/intel64 -Wl,--no-as-needed -lonedal_core -lonedal_thread -ltbb -ldl
+  endif
+endif
