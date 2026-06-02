@@ -198,3 +198,18 @@ test_that("OU_RbindDoubleMatrixC matches base rbind and preserves column names",
   expect_equal(out, rbind(first, second))
   expect_equal(colnames(out), c("a", "b"))
 })
+
+test_that("run_one_dal_knn_c fallback matches native exact KNN", {
+  set.seed(73)
+  data <- matrix(rnorm(40 * 3), 40, 3)
+  query <- matrix(rnorm(7 * 3), 7, 3)
+  storage.mode(data) <- "double"
+  storage.mode(query) <- "double"
+
+  out <- .Call(sbyadanear:::run_one_dal_knn_c, data, query, 4L, 2L)
+  ref <- .Call(sbyadanear:::OU_BruteForceKnnC, data, query, 4L)
+
+  expect_equal(out$nn.index, ref$nn.index)
+  expect_equal(out$nn.dist, ref$nn.dist, tolerance = 1e-8)
+  expect_type(.Call(sbyadanear:::OU_OneDalAvailableC), "logical")
+})
