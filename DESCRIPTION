@@ -21,6 +21,7 @@ Depends:
     R (>= 4.0.0)
 Imports:
     RcppHNSW,
+    RcppParallel,
     FNN,
     parallel,
     tools,
@@ -29,10 +30,12 @@ Imports:
     recipes,
     rlang,
     tibble
+LinkingTo:
+    RcppParallel
 Suggests:
     modeldata,
     Matrix,
     Rfast,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
-SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), OpenMP (optional)
+SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), OpenMP (optional), GNU make

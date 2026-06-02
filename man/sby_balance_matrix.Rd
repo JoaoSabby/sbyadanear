@@ -12,7 +12,7 @@ sby_balance_matrix(sby_x_matrix, sby_y_vector,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
   sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
-  sby_knn_workers = 1L, sby_knn_hnsw_m = 16L,
+  sby_knn_workers = 1L, sby_knn_parallel_backend = c("parallel", "RcppParallel"), sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L, sby_knn_query_chunk_size = 1000L, sby_memory_guard = TRUE,
   sby_max_output_rows = Inf, sby_max_dense_gb = Inf)
 }
@@ -25,11 +25,11 @@ sby_balance_matrix(sby_x_matrix, sby_y_vector,
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Auditoria none/light/full.}
 \item{sby_return_index, sby_return_scaled, sby_return_original_scale}{Componentes e escala retornados.}
-\item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
+\item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_parallel_backend, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
 \item{sby_memory_guard, sby_max_output_rows, sby_max_dense_gb}{Controles de memória.}
 }
 \description{Seleciona a estratégia de balanceamento adequada para pipelines industriais.}
-\details{\code{none} e \code{weight} não alteram dados nem densificam matrizes. \code{adasyn}, \code{nearmiss}, \code{adanear} e \code{adanearWeight} fazem balanceamento físico e exigem matrix double densa. Em \code{adanearWeight}, use \code{sby_class_ratio_output} para \code{scale_pos_weight} pós-balanceamento.}
+\details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. \code{none} e \code{weight} não alteram dados nem densificam matrizes. \code{adasyn}, \code{nearmiss}, \code{adanear} e \code{adanearWeight} fazem balanceamento físico e exigem matrix double densa. Em \code{adanearWeight}, use \code{sby_class_ratio_output} para \code{scale_pos_weight} pós-balanceamento.}
 \value{Lista padronizada com \code{sby_x_matrix}, \code{sby_y_vector}, razões/distribuições e diagnósticos.}
 \examples{
 x <- matrix(rnorm(40), ncol = 2); storage.mode(x) <- "double"

@@ -12,7 +12,7 @@ sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_under_ratio = 0.5,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
   sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
-  sby_knn_workers = 1L, sby_knn_hnsw_m = 16L,
+  sby_knn_workers = 1L, sby_knn_parallel_backend = c("parallel", "RcppParallel"), sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L, sby_knn_query_chunk_size = 1000L, sby_memory_guard = TRUE)
 }
 \arguments{
@@ -27,11 +27,11 @@ sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_under_ratio = 0.5,
 \item{sby_return_original_scale}{Reverte a saída para escala original.}
 \item{sby_scaling_info, sby_input_already_scaled}{Permitem reutilizar z-score já aplicado.}
 \item{sby_fixed_minority_label, sby_fixed_majority_label}{Papéis de classe fixos usados por ADANEAR.}
-\item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
+\item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_parallel_backend, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
 \item{sby_memory_guard}{Ativa proteções de memória.}
 }
 \description{Implementa NearMiss-1, retendo majoritários mais próximos da minoria.}
-\details{NearMiss-1 não remove majoritários por redundância interna da classe majoritária. A função reaproveita a matriz reduzida escalada calculada por \code{sby_nearmiss_index()} para evitar recálculo de z-score.}
+\details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. NearMiss-1 não remove majoritários por redundância interna da classe majoritária. A função reaproveita a matriz reduzida escalada calculada por \code{sby_nearmiss_index()} para evitar recálculo de z-score.}
 \value{Lista com matriz e alvo reduzidos, distribuições, razões, diagnósticos e opcionalmente índices/escala.}
 \examples{
 x <- matrix(rnorm(40), ncol = 2); storage.mode(x) <- "double"

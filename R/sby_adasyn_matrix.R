@@ -20,6 +20,7 @@ sby_adasyn_matrix <- function(
   sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
   sby_knn_workers = 1L,
+  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L,
   sby_knn_query_chunk_size = 1000L,
@@ -57,6 +58,7 @@ sby_adasyn_matrix <- function(
   sby_knn_engine <- match.arg(sby_knn_engine)
   sby_knn_distance_metric <- match.arg(sby_knn_distance_metric)
   sby_knn_workers <- sby_validate_knn_workers(sby_knn_workers)
+  sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(sby_knn_parallel_backend)
   sby_hnsw_params <- sby_validate_hnsw_params(
     sby_knn_hnsw_m = sby_knn_hnsw_m,
     sby_knn_hnsw_ef = sby_knn_hnsw_ef
@@ -109,6 +111,7 @@ sby_adasyn_matrix <- function(
     sby_knn_engine = sby_knn_engine,
     sby_knn_distance_metric = sby_knn_distance_metric,
     sby_knn_workers = sby_knn_workers,
+    sby_knn_parallel_backend = sby_knn_parallel_backend,
     sby_knn_hnsw_m = sby_knn_hnsw_m,
     sby_knn_hnsw_ef = sby_knn_hnsw_ef,
     sby_knn_query_chunk_size = sby_knn_query_chunk_size
@@ -135,6 +138,8 @@ sby_adasyn_matrix <- function(
     sby_knn_algorithm = sby_knn_algorithm,
     sby_knn_distance_metric = sby_knn_distance_metric,
     sby_knn_workers = sby_knn_workers,
+    sby_knn_parallel_backend = sby_knn_parallel_backend,
+    sby_knn_parallel_runtime = sby_resolve_knn_parallel_runtime(sby_knn_parallel_backend),
     sby_knn_query_chunk_size = sby_knn_query_chunk_size,
     sby_minority_label = sby_class_info_input$sby_minority_label,
     sby_majority_label = sby_class_info_input$sby_majority_label

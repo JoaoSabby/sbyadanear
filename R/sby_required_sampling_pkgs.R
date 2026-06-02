@@ -19,7 +19,8 @@ sby_required_sampling_pkgs <- function(){
     "cli",
     "tibble",
     "FNN",
-    "RcppHNSW"
+    "RcppHNSW",
+    "RcppParallel"
   ))
 }
 ####

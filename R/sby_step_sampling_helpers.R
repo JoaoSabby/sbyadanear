@@ -66,6 +66,7 @@ sby_prep_step_sampling <- function(x, training, info, sby_step_name){
     sby_knn_engine              = sby_x$sby_knn_engine,
     sby_knn_distance_metric     = sby_x$sby_knn_distance_metric,
     sby_knn_workers             = sby_x$sby_knn_workers,
+    sby_knn_parallel_backend     = sby_x$sby_knn_parallel_backend,
     sby_knn_hnsw_m              = sby_x$sby_knn_hnsw_m,
     sby_knn_hnsw_ef             = sby_x$sby_knn_hnsw_ef,
     sby_knn_query_chunk_size  = sby_x$sby_knn_query_chunk_size,
@@ -156,6 +157,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
       sby_knn_engine          = sby_object$sby_knn_engine,
       sby_knn_distance_metric = sby_object$sby_knn_distance_metric,
       sby_knn_workers         = sby_object$sby_knn_workers,
+      sby_knn_parallel_backend = sby_object$sby_knn_parallel_backend,
       sby_knn_hnsw_m          = sby_object$sby_knn_hnsw_m,
       sby_knn_hnsw_ef         = sby_object$sby_knn_hnsw_ef,
       sby_knn_query_chunk_size  = sby_object$sby_knn_query_chunk_size
@@ -175,6 +177,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
       sby_knn_engine          = sby_object$sby_knn_engine,
       sby_knn_distance_metric = sby_object$sby_knn_distance_metric,
       sby_knn_workers         = sby_object$sby_knn_workers,
+      sby_knn_parallel_backend = sby_object$sby_knn_parallel_backend,
       sby_knn_hnsw_m          = sby_object$sby_knn_hnsw_m,
       sby_knn_hnsw_ef         = sby_object$sby_knn_hnsw_ef,
       sby_knn_query_chunk_size  = sby_object$sby_knn_query_chunk_size
@@ -196,6 +199,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
       sby_knn_engine          = sby_object$sby_knn_engine,
       sby_knn_distance_metric = sby_object$sby_knn_distance_metric,
       sby_knn_workers         = sby_object$sby_knn_workers,
+      sby_knn_parallel_backend = sby_object$sby_knn_parallel_backend,
       sby_knn_hnsw_m          = sby_object$sby_knn_hnsw_m,
       sby_knn_hnsw_ef         = sby_object$sby_knn_hnsw_ef,
       sby_knn_query_chunk_size  = sby_object$sby_knn_query_chunk_size

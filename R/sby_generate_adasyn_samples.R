@@ -11,6 +11,7 @@
 #' @param sby_knn_algorithm Algoritmo KNN configurado
 #' @param sby_knn_engine Engine KNN configurado
 #' @param sby_knn_distance_metric Metrica de distancia KNN configurada
+#' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "FNN"`, `sby_knn_algorithm = "brute"`).
 #' @param sby_knn_workers Numero de workers KNN configurado
 #' @param sby_knn_hnsw_m Conectividade HNSW configurada
 #' @param sby_knn_hnsw_ef Lista dinamica HNSW configurada
@@ -26,6 +27,7 @@ sby_generate_adasyn_samples <- function(
   sby_knn_engine,
   sby_knn_distance_metric,
   sby_knn_workers,
+  sby_knn_parallel_backend,
   sby_knn_hnsw_m,
   sby_knn_hnsw_ef,
   sby_knn_query_chunk_size
@@ -55,6 +57,7 @@ sby_generate_adasyn_samples <- function(
     sby_knn_engine             = sby_knn_engine,
     sby_knn_distance_metric         = sby_knn_distance_metric,
     sby_knn_workers             = sby_knn_workers,
+    sby_knn_parallel_backend     = sby_knn_parallel_backend,
     sby_knn_hnsw_m                  = sby_knn_hnsw_m,
     sby_knn_hnsw_ef                 = sby_knn_hnsw_ef,
     sby_knn_query_chunk_size      = sby_knn_query_chunk_size,
@@ -144,6 +147,7 @@ sby_generate_adasyn_samples <- function(
     sby_knn_engine             = sby_knn_engine,
     sby_knn_distance_metric         = sby_knn_distance_metric,
     sby_knn_workers             = sby_knn_workers,
+    sby_knn_parallel_backend     = sby_knn_parallel_backend,
     sby_knn_hnsw_m                  = sby_knn_hnsw_m,
     sby_knn_hnsw_ef                 = sby_knn_hnsw_ef,
     sby_knn_query_chunk_size      = sby_knn_query_chunk_size,

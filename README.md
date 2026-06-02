@@ -56,6 +56,9 @@ As rotinas usam KNN para estimar vizinhanças locais. Os principais controles s�
 - `sby_knn_workers`: número de workers. Em `FNN`, consultas exatas são
   paralelizadas por blocos; em `RcppHNSW`, os workers são repassados aos
   threads nativos do índice aproximado.
+- `sby_knn_parallel_backend`: backend do paralelismo exato. Use `"parallel"`
+  para manter o particionamento por blocos do R ou `"RcppParallel"` para
+  acionar threads nativos no kernel exato bruto (`FNN` + `brute`).
 - `sby_knn_hnsw_m` e `sby_knn_hnsw_ef`: parâmetros do HNSW quando
   `sby_knn_engine = "RcppHNSW"`.
 - `sby_knn_query_chunk_size`: quantidade de linhas de consulta processadas por
@@ -94,13 +97,30 @@ sby_adanear(
   sby_knn_engine = "FNN",
   sby_knn_algorithm = "brute",
   sby_knn_distance_metric = "euclidean",
-  sby_knn_workers = 1L
+  sby_knn_workers = 1L,
+  sby_knn_parallel_backend = "parallel"
 )
 ```
 
 Quando o R estiver ligado ao Intel oneAPI/MKL, `sby_knn_workers = 1L` permite que
 o BLAS use seus próprios threads. Quando `sby_knn_workers > 1L`, o pacote reduz
-threads BLAS por processo para evitar competição excessiva de CPU.
+threads BLAS por processo para evitar competição excessiva de CPU. Para trocar o
+paralelismo por blocos do R por threads nativos no caminho exato bruto, combine
+`sby_knn_engine = "FNN"`, `sby_knn_algorithm = "brute"` e
+`sby_knn_parallel_backend = "RcppParallel"`.
+
+`RcppParallel` decide o runtime concreto: em plataformas suportadas ele usa TBB
+/ oneTBB e, nas demais, cai para TinyThread. Por isso o pacote não expõe um
+parâmetro separado `oneTBB`; quando `sby_audit = TRUE`, os diagnósticos incluem
+`sby_knn_parallel_runtime` para indicar se a execução efetiva foi
+`"parallel"`, `"RcppParallel::TBB"` ou `"RcppParallel::TinyThread"`.
+
+O kernel `RcppParallel` do `sbyadanear` não contém regiões OpenMP internas. Ainda
+assim, duplo paralelismo pode ocorrer se o usuário envolver a chamada em outro
+backend paralelo ou se uma biblioteca numérica externa abrir threads ao mesmo
+tempo. O pacote mitiga esse cenário reduzindo `OMP_NUM_THREADS` e
+`MKL_NUM_THREADS` para `1` quando `sby_knn_workers > 1L`; em pipelines já
+paralelos, prefira `sby_knn_workers = 1L` por tarefa externa.
 
 Para HNSW com maior proximidade em relação ao resultado exato, aumente `M` e
 `ef`. A configuração abaixo prioriza fidelidade sobre velocidade e memória:

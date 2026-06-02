@@ -30,6 +30,11 @@
 
 ## Desempenho
 
+* `sby_knn_parallel_backend = "RcppParallel"` agora registra nos diagnósticos
+  `sby_knn_parallel_runtime`, indicando se o runtime efetivo é TBB/oneTBB ou
+  TinyThread. O pacote não expõe um parâmetro separado para oneTBB porque essa
+  decisão é feita pela instalação do `RcppParallel`.
+
 * API tabular `sby_adasyn()` ficou ~24x mais rapida em `n = 10.000, p = 20`
   ao substituir o loop linha-a-linha (`[[.data.frame` + `do.call(rbind, ...)`)
   por indexacao vetorizada em `sby_build_preserved_predictors()`.

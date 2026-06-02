@@ -236,3 +236,39 @@ test_that("native NearMiss selector matches R fallback without ties", {
 
   expect_equal(sort(c_idx), sort(r_idx))
 })
+
+test_that("RcppParallel backend matches native exact brute KNN", {
+  testthat::skip_if_not_installed("RcppParallel")
+  set.seed(1003)
+  x <- cbind(rnorm(18), rnorm(18), rnorm(18))
+  storage.mode(x) <- "double"
+  query <- x[1:7, , drop = FALSE]
+
+  serial <- sbyadanear:::sby_get_knnx(
+    x, query, 4L,
+    sby_knn_algorithm = "brute",
+    sby_knn_engine = "FNN",
+    sby_knn_distance_metric = "euclidean",
+    sby_knn_workers = 1L,
+    sby_knn_hnsw_m = 16L,
+    sby_knn_hnsw_ef = 200L,
+    sby_knn_return = "both"
+  )
+  rcpp_parallel <- sbyadanear:::sby_get_knnx(
+    x, query, 4L,
+    sby_knn_algorithm = "brute",
+    sby_knn_engine = "FNN",
+    sby_knn_distance_metric = "euclidean",
+    sby_knn_workers = 2L,
+    sby_knn_hnsw_m = 16L,
+    sby_knn_hnsw_ef = 200L,
+    sby_knn_parallel_backend = "RcppParallel",
+    sby_knn_return = "both"
+  )
+
+  expect_identical(rcpp_parallel$nn.index, serial$nn.index)
+  expect_equal(rcpp_parallel$nn.dist, serial$nn.dist, tolerance = 1e-10)
+
+  runtime <- sbyadanear:::sby_resolve_knn_parallel_runtime("RcppParallel")
+  expect_true(runtime %in% c("RcppParallel::TBB", "RcppParallel::TinyThread"))
+})
