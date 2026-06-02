@@ -139,6 +139,16 @@ sby_get_knnx <- function(
           storage.mode(sby_data) <- "double"
           storage.mode(sby_query_chunk) <- "double"
           if(identical(sby_knn_parallel_backend, "RcppParallel")){
+            if(isTRUE(getOption("sbyadanear.sby_use_onedal", TRUE)) &&
+               sby_adanear_onedal_available()){
+              return(.Call(
+                run_one_dal_knn_c,
+                sby_data,
+                sby_query_chunk,
+                as.integer(sby_k),
+                as.integer(sby_knn_workers)
+              ))
+            }
             return(.Call(
               OU_BruteForceKnnRcppParallelC,
               sby_data,
