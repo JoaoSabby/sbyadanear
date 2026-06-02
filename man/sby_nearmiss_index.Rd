@@ -9,7 +9,7 @@ sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 0.5,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
   sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
-  sby_knn_workers = 1L, sby_knn_hnsw_m = 16L,
+  sby_knn_workers = 1L, sby_knn_parallel_backend = c("parallel", "RcppParallel"), sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L, sby_knn_query_chunk_size = 1000L, sby_audit = FALSE,
   sby_audit_level = c("none", "light", "full"),
   sby_return_scaling_info = FALSE, sby_return_reduced_scaled = FALSE)
@@ -20,13 +20,13 @@ sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 0.5,
 \item{sby_under_ratio, sby_knn_under_k, sby_seed}{Controles NearMiss.}
 \item{sby_scaling_info, sby_input_already_scaled}{Reuso de escala.}
 \item{sby_fixed_minority_label, sby_fixed_majority_label}{Papéis fixos de classe.}
-\item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
+\item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_parallel_backend, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
 \item{sby_audit, sby_audit_level}{Auditoria.}
 \item{sby_return_scaling_info}{Retorna parâmetros de escala sem exigir auditoria full.}
 \item{sby_return_reduced_scaled}{Retorna matriz reduzida em z-score sem expor a matriz escalada completa.}
 }
 \description{Retorna índices de retenção NearMiss-1 para que pipelines possam aplicar a seleção em matrizes externas.}
-\details{Útil para preservar matrizes esparsas fora do pacote quando a estratégia for apenas NearMiss. A seleção nativa retém menores distâncias médias; empates favorecem o menor índice original.}
+\details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. Útil para preservar matrizes esparsas fora do pacote quando a estratégia for apenas NearMiss. A seleção nativa retém menores distâncias médias; empates favorecem o menor índice original.}
 \value{Lista com \code{sby_retained_index}, distribuições e diagnósticos; opcionalmente escala e matriz reduzida escalada.}
 \examples{
 x <- matrix(rnorm(40), ncol = 2); storage.mode(x) <- "double"

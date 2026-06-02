@@ -28,6 +28,7 @@
 #'     "euclidean", "ip", "cosine"
 #'   ),
 #'   sby_knn_workers = 1L,
+#'   sby_knn_parallel_backend = c("parallel", "RcppParallel"),
 #'   sby_knn_hnsw_m = 16L,
 #'   sby_knn_hnsw_ef = 200L
 #' )
@@ -44,6 +45,7 @@
 #' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
 #' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"FNN"` ou `"RcppHNSW"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, paralelismo exato via `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
 #' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
+#' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "FNN"`, `sby_knn_algorithm = "brute"`).
 #' @param sby_knn_workers Número inteiro positivo de workers usados nas consultas KNN quando o engine efetivo oferece suporte. O padrão é `1L`. Aumentar esse número pode acelerar o pipeline completo, mas eleva uso de recursos e deve ser compatível com o backend escolhido.
 #' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
@@ -161,6 +163,7 @@ sby_adanear <- function(
   sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
   sby_knn_workers = 1L,
+  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L,
   sby_knn_query_chunk_size = 1000L
@@ -196,6 +199,7 @@ sby_adanear <- function(
     sby_knn_engine = sby_knn_engine,
     sby_knn_distance_metric = sby_knn_distance_metric,
     sby_knn_workers = sby_knn_workers,
+    sby_knn_parallel_backend = sby_knn_parallel_backend,
     sby_knn_hnsw_m = sby_knn_hnsw_m,
     sby_knn_hnsw_ef = sby_knn_hnsw_ef,
     sby_knn_query_chunk_size = sby_knn_query_chunk_size

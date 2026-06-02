@@ -10,6 +10,7 @@
 #' @param sby_knn_algorithm Algoritmo KNN configurado
 #' @param sby_knn_engine Engine KNN configurado
 #' @param sby_knn_workers Numero de workers KNN configurado
+#' @param sby_knn_parallel_backend Backend usado quando ha paralelismo exato por blocos ou kernel nativo
 #' @param sby_knn_hnsw_m Conectividade HNSW configurada
 #' @param sby_knn_hnsw_ef Lista dinamica HNSW configurada
 #' @param sby_knn_query_chunk_size Tamanho de bloco para consultas KNN
@@ -27,6 +28,7 @@ sby_get_knnx <- function(
   sby_knn_workers,
   sby_knn_hnsw_m,
   sby_knn_hnsw_ef,
+  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
   sby_knn_query_chunk_size = 1000L,
   sby_query_is_data = FALSE,
   sby_knn_return = c("both", "index", "dist")
@@ -34,6 +36,11 @@ sby_get_knnx <- function(
   
   # Verifica se ha solicitacao de interrupcao antes da consulta KNN
   sby_adanear_check_user_interrupt()
+
+  # Resolve o backend de paralelismo solicitado para consultas exatas
+  sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(
+    sby_knn_parallel_backend = sby_knn_parallel_backend
+  )
 
   # Apply MKL/BLAS thread hints when enabled.
   sby_configure_blas_threads(sby_workers = sby_knn_workers)
@@ -126,10 +133,21 @@ sby_get_knnx <- function(
         sby_k = sby_k,
         sby_knn_query_chunk_size = sby_knn_query_chunk_size,
         sby_knn_workers = sby_knn_workers,
+        sby_knn_parallel_backend = sby_knn_parallel_backend,
         sby_knn_return = sby_knn_return,
         sby_query_fun = function(sby_query_chunk){
           storage.mode(sby_data) <- "double"
           storage.mode(sby_query_chunk) <- "double"
+          if(identical(sby_knn_parallel_backend, "RcppParallel")){
+            return(.Call(
+              OU_BruteForceKnnRcppParallelC,
+              sby_data,
+              sby_query_chunk,
+              as.integer(sby_k),
+              as.integer(match(sby_knn_return, c("both", "index", "dist")) - 1L),
+              as.integer(sby_knn_workers)
+            ))
+          }
           if(identical(sby_knn_return, "index")){
             return(.Call(
               OU_BruteForceKnnIndexC,
@@ -155,12 +173,18 @@ sby_get_knnx <- function(
         }
       )
     }else{
+      if(identical(sby_knn_parallel_backend, "RcppParallel")){
+        sby_adanear_warn(
+          sby_message = "'sby_knn_parallel_backend = RcppParallel' e usado apenas no kernel nativo exato com 'sby_knn_algorithm = brute'; usando 'parallel' para este engine/algoritmo."
+        )
+      }
       # Consulta vizinhos FNN em blocos interrompiveis, sequenciais ou paralelos
       sby_knn_result <- sby_query_knn_in_chunks(
         sby_query = sby_query,
         sby_k = sby_k,
         sby_knn_query_chunk_size = sby_knn_query_chunk_size,
         sby_knn_workers = sby_knn_workers,
+        sby_knn_parallel_backend = "parallel",
         sby_knn_return = sby_knn_return,
         sby_query_fun = function(sby_query_chunk){
           # Executa consulta FNN para o bloco corrente
@@ -242,6 +266,7 @@ sby_get_knnx <- function(
         sby_k = sby_k,
         sby_knn_query_chunk_size = sby_hnsw_query_chunk_size,
         sby_knn_workers = 1L,
+        sby_knn_parallel_backend = "parallel",
         sby_knn_return = sby_knn_return,
         sby_query_fun = function(sby_query_chunk){
           # Executa busca HNSW para o bloco corrente
@@ -310,10 +335,12 @@ sby_query_knn_in_chunks <- function(
   sby_k,
   sby_knn_query_chunk_size,
   sby_knn_workers,
+  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
   sby_query_fun,
   sby_knn_return = c("both", "index", "dist")
 ){
   sby_knn_return <- match.arg(sby_knn_return)
+  sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(sby_knn_parallel_backend)
   sby_need_index <- sby_knn_return %in% c("both", "index")
   sby_need_dist <- sby_knn_return %in% c("both", "dist")
 
@@ -365,10 +392,14 @@ sby_query_knn_in_chunks <- function(
     return(sby_out)
   }
 
-  sby_effective_workers <- min(
-    as.integer(sby_knn_workers),
-    length(sby_chunk_ranges)
-  )
+  sby_effective_workers <- if(identical(sby_knn_parallel_backend, "RcppParallel")){
+    1L
+  }else{
+    min(
+      as.integer(sby_knn_workers),
+      length(sby_chunk_ranges)
+    )
+  }
 
   if(sby_effective_workers <= 1L){
     sby_chunk_results <- vector(
