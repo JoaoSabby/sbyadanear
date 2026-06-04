@@ -10,7 +10,7 @@ sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_under_ratio = 0.5,
   sby_input_already_scaled = FALSE, sby_fixed_minority_label = NULL,
   sby_fixed_majority_label = NULL,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
+  sby_knn_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
   sby_knn_workers = 1L, sby_knn_parallel_backend = c("parallel", "RcppParallel"), sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L, sby_knn_query_chunk_size = 1000L, sby_memory_guard = TRUE)

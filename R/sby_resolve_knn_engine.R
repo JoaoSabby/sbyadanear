@@ -2,13 +2,14 @@
 #'
 #' @details
 #' A funcao implementa uma unidade interna do fluxo de balanceamento com contrato de entrada explicito e retorno controlado.
-#' A heuristica auto considera dimensionalidade, tamanho da base e metrica para escolher entre FNN (exato) e RcppHNSW (aproximado).
+#' A heuristica auto e conservadora: para ADASYN e NearMiss, busca aproximada so e selecionada quando explicitamente permitida.
 #'
 #' @param sby_knn_engine Engine KNN informado pelo chamador
 #' @param sby_knn_workers Numero de workers validado para consulta KNN
 #' @param sby_knn_distance_metric Metrica de distancia configurada
 #' @param sby_row_count Numero total de linhas dos dados (opcional)
 #' @param sby_predictor_column_count Numero de colunas preditoras (opcional)
+#' @param sby_knn_allow_approx Permite que a heuristica automatica selecione engines aproximados
 #'
 #' @return Nome do engine KNN resolvido
 #' @noRd
@@ -17,7 +18,8 @@ sby_resolve_knn_engine <- function(
   sby_knn_workers,
   sby_knn_distance_metric = "euclidean",
   sby_row_count = NA_integer_,
-  sby_predictor_column_count = NA_integer_
+  sby_predictor_column_count = NA_integer_,
+  sby_knn_allow_approx = getOption("sbyadanear.sby_knn_allow_approx", FALSE)
 ){
 
   # Retorna engine explicito quando modo automatico nao foi solicitado
@@ -30,56 +32,69 @@ sby_resolve_knn_engine <- function(
     return(sby_knn_engine)
   }
 
-  sby_min_cells <- 5e6
-  sby_have_dims <- !is.na(sby_row_count) && !is.na(sby_predictor_column_count) &&
-    is.finite(sby_row_count) && is.finite(sby_predictor_column_count)
-  sby_cells <- 0
-  if(sby_have_dims){
-    sby_cells <- as.numeric(sby_row_count) * as.numeric(sby_predictor_column_count)
+  sby_knn_allow_approx <- isTRUE(sby_knn_allow_approx)
+
+  # Metricas nao euclidianas exigem HNSW na integracao atual. Como ADASYN e
+  # NearMiss sao sensiveis a vizinhos, a rota aproximada so e escolhida quando
+  # o usuario permite explicitamente.
+  if(!identical(sby_knn_distance_metric, "euclidean")){
+    if(isTRUE(sby_knn_allow_approx) && requireNamespace("RcppHNSW", quietly = TRUE)){
+      sby_adanear_inform(
+        sby_message = paste0(
+          "KNN automatico: sby_knn_engine = \"RcppHNSW\". ",
+          "Justificativa: a metrica \"", sby_knn_distance_metric,
+          "\" nao e suportada pelas rotas exatas atuais e busca aproximada foi permitida."
+        )
+      )
+      return("RcppHNSW")
+    }
+
+    sby_adanear_abort(
+      sby_message = paste0(
+        "KNN automatico exato suporta apenas 'sby_knn_distance_metric = euclidean'. ",
+        "Para usar '", sby_knn_distance_metric,
+        "' automaticamente, defina a opcao sbyadanear.sby_knn_allow_approx = TRUE ou escolha sby_knn_engine = 'RcppHNSW' explicitamente."
+      )
+    )
   }
 
-  sby_route_code <- kit::nif(
-    !identical(sby_knn_distance_metric, "euclidean"),
-    1L,
-    sby_have_dims && sby_cells >= sby_min_cells && sby_predictor_column_count >= 50L,
-    2L,
-    default = 3L
-  )
-  sby_route_code <- as.integer(sby_route_code[[1L]])
-
-  if(identical(sby_route_code, 1L)){
+  # Preferencia conservadora: usa a engine nativa exata quando disponivel.
+  if(sby_adanear_native_available()){
     sby_adanear_inform(
       sby_message = paste0(
-        "KNN automático: sby_knn_engine = \"RcppHNSW\". ",
-        "Justificativa: a métrica \"", sby_knn_distance_metric,
-        "\" só é suportada pelo engine RcppHNSW; FNN aceita apenas euclidean."
+        "KNN automatico: sby_knn_engine = \"native\". ",
+        "Justificativa: a engine nativa executa KNN euclidiano exato denso ",
+        "com contrato nn.index/nn.dist e evita selecionar busca aproximada sem permissao explicita."
+      )
+    )
+    return("native")
+  }
+
+  # Fallback exato externo quando o kernel nativo nao estiver carregado.
+  if(requireNamespace("FNN", quietly = TRUE)){
+    sby_adanear_inform(
+      sby_message = paste0(
+        "KNN automatico: sby_knn_engine = \"FNN\". ",
+        "Justificativa: a engine nativa nao esta disponivel e FNN fornece busca euclidiana exata."
+      )
+    )
+    return("FNN")
+  }
+
+  # Ultimo recurso aproximado, apenas com permissao explicita.
+  if(isTRUE(sby_knn_allow_approx) && requireNamespace("RcppHNSW", quietly = TRUE)){
+    sby_adanear_inform(
+      sby_message = paste0(
+        "KNN automatico: sby_knn_engine = \"RcppHNSW\". ",
+        "Justificativa: nenhuma engine exata esta disponivel e busca aproximada foi permitida."
       )
     )
     return("RcppHNSW")
   }
 
-  if(identical(sby_route_code, 2L)){
-    sby_adanear_inform(
-      sby_message = paste0(
-        "KNN automático: sby_knn_engine = \"RcppHNSW\". ",
-        "Justificativa: dados grandes (n=", sby_row_count,
-        ", p=", sby_predictor_column_count, ") favorecem busca aproximada HNSW. ",
-        "Para forçar FNN exato, defina sby_knn_engine = \"FNN\"."
-      )
-    )
-    return("RcppHNSW")
-  }
-
-  # Heuristica 3: caso padrao - FNN exato, sequencial ou paralelo por blocos
-  sby_adanear_inform(
-    sby_message = paste0(
-      "KNN automatico: sby_knn_engine = \"FNN\". ",
-      "Justificativa: FNN e o engine exato padrao; quando sby_knn_workers e ",
-      "maior que 1, o pacote paraleliza a consulta por blocos sem depender ",
-      "de dependencias adicionais."
-    )
+  sby_adanear_abort(
+    sby_message = "Nenhuma engine KNN exata compativel esta disponivel. Instale FNN ou carregue as rotinas nativas do pacote."
   )
-  return("FNN")
 }
 ####
 ## Fim

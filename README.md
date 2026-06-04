@@ -49,16 +49,16 @@ reprodutibilidade.
 
 As rotinas usam KNN para estimar vizinhanças locais. Os principais controles são:
 
-- `sby_knn_engine`: engine de busca (`"auto"`, `"FNN"`, `"RcppHNSW"`).
+- `sby_knn_engine`: engine de busca (`"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"`, `"bigKNN"`).
 - `sby_knn_algorithm`: algoritmo exato do FNN (`"auto"`, `"kd_tree"`,
-  `"cover_tree"`, `"brute"`).
+  `"cover_tree"`, `"brute"`); a engine `native` aceita `"auto"` ou `"brute"` e resolve internamente a rota exata.
 - `sby_knn_distance_metric`: métrica (`"euclidean"`, `"cosine"`, `"ip"`).
-- `sby_knn_workers`: número de workers. Em `FNN`, consultas exatas são
+- `sby_knn_workers`: número de workers. Em `native`, os workers podem acionar o kernel RcppParallel exato; em `FNN`, consultas exatas são
   paralelizadas por blocos; em `RcppHNSW`, os workers são repassados aos
   threads nativos do índice aproximado.
 - `sby_knn_parallel_backend`: backend do paralelismo exato. Use `"parallel"`
   para manter o particionamento por blocos do R ou `"RcppParallel"` para
-  acionar threads nativos no kernel exato bruto (`FNN` + `brute`).
+  acionar threads nativos no kernel exato bruto (`native` ou compatibilidade `FNN` + `brute`).
 - `sby_knn_hnsw_m` e `sby_knn_hnsw_ef`: parâmetros do HNSW quando
   `sby_knn_engine = "RcppHNSW"`.
 - `sby_knn_query_chunk_size`: quantidade de linhas de consulta processadas por
@@ -70,8 +70,14 @@ Resumo de compatibilidade:
 
 | Engine | Tipo de busca | Métricas suportadas |
 |---|---|---|
+| `native` | Exata densa via kernel C/C++ interno | `euclidean` |
 | `FNN` | Exata | `euclidean` |
 | `RcppHNSW` | Aproximada por HNSW | `euclidean`, `cosine`, `ip` |
+
+A seleção automática evita busca aproximada por padrão. Para permitir que `auto`
+escolha `RcppHNSW` em métricas não euclidianas quando a aproximação é aceitável,
+use `options(sbyadanear.sby_knn_allow_approx = TRUE)`.
+
 
 Consultas KNN longas são executadas em blocos para permitir interrupção por
 `Ctrl + C` entre blocos e para controlar o pico de memória. Ajuste esse
@@ -106,7 +112,7 @@ Quando o R estiver ligado ao Intel oneAPI/MKL, `sby_knn_workers = 1L` permite qu
 o BLAS use seus próprios threads. Quando `sby_knn_workers > 1L`, o pacote reduz
 threads BLAS por processo para evitar competição excessiva de CPU. Para trocar o
 paralelismo por blocos do R por threads nativos no caminho exato bruto, combine
-`sby_knn_engine = "FNN"`, `sby_knn_algorithm = "brute"` e
+`sby_knn_engine = "native"`, `sby_knn_algorithm = "brute"` e
 `sby_knn_parallel_backend = "RcppParallel"`.
 
 `RcppParallel` decide o runtime concreto: em plataformas suportadas ele usa TBB
@@ -118,8 +124,9 @@ parâmetro separado `oneTBB`; quando `sby_audit = TRUE`, os diagnósticos inclue
 O kernel `RcppParallel` do `sbyadanear` não contém regiões OpenMP internas. Ainda
 assim, duplo paralelismo pode ocorrer se o usuário envolver a chamada em outro
 backend paralelo ou se uma biblioteca numérica externa abrir threads ao mesmo
-tempo. O pacote mitiga esse cenário reduzindo `OMP_NUM_THREADS` e
-`MKL_NUM_THREADS` para `1` quando `sby_knn_workers > 1L`; em pipelines já
+tempo. Em servidores com Intel oneAPI/MKL, o pacote mitiga esse cenário
+reduzindo `OMP_NUM_THREADS` e `MKL_NUM_THREADS` para `1` quando
+`sby_knn_workers > 1L` e fixa `MKL_DYNAMIC = "FALSE"`; em pipelines já
 paralelos, prefira `sby_knn_workers = 1L` por tarefa externa.
 
 Para HNSW com maior proximidade em relação ao resultado exato, aumente `M` e
@@ -419,8 +426,7 @@ Para diagnostico dentro do container:
 ```r
 Sys.getenv("OMP_NUM_THREADS")
 Sys.getenv("MKL_NUM_THREADS")
-Sys.getenv("OPENBLAS_NUM_THREADS")
-Sys.getenv("BLIS_NUM_THREADS")
+Sys.getenv("MKL_DYNAMIC")
 ```
 
 Se `RhpcBLASctl` estiver instalado no ambiente:
@@ -439,8 +445,7 @@ normalmente reduz oversubscription:
 Sys.setenv(
   OMP_NUM_THREADS = "1",
   MKL_NUM_THREADS = "1",
-  OPENBLAS_NUM_THREADS = "1",
-  BLIS_NUM_THREADS = "1"
+  MKL_DYNAMIC = "FALSE"
 )
 ```
 

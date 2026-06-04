@@ -31,6 +31,7 @@ sby_get_knnx <- function(
   sby_knn_parallel_backend = c("parallel", "RcppParallel"),
   sby_knn_query_chunk_size = 1000L,
   sby_query_is_data = FALSE,
+  sby_exclude_self = FALSE,
   sby_knn_return = c("both", "index", "dist")
 ){
   
@@ -73,6 +74,27 @@ sby_get_knnx <- function(
         sby_x_matrix = sby_query
       )
     }
+  }
+
+
+  # Executa consulta pelo engine nativo explicito quando selecionado
+  if(identical(
+    x = sby_knn_engine,
+    y = "native"
+  )){
+    return(sby_get_knnx_native(
+      sby_data = sby_data,
+      sby_query = sby_query,
+      sby_k = sby_k,
+      sby_knn_algorithm = sby_knn_algorithm,
+      sby_knn_distance_metric = sby_knn_distance_metric,
+      sby_knn_workers = sby_knn_workers,
+      sby_knn_parallel_backend = sby_knn_parallel_backend,
+      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+      sby_query_is_data = sby_query_is_data,
+      sby_exclude_self = sby_exclude_self,
+      sby_knn_return = sby_knn_return
+    ))
   }
 
   # Executa consulta pelo engine FNN quando selecionado
@@ -420,8 +442,110 @@ sby_get_knnx <- function(
 
   # Aborta engines desconhecidos para manter o contrato publico atual
   sby_adanear_abort(
-    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'FNN', 'RcppHNSW', 'KernelKnn' ou 'bigKNN'. Use FNN com sby_knn_workers > 1L para paralelismo exato."
+    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'native', 'FNN', 'RcppHNSW', 'KernelKnn' ou 'bigKNN'. Use native para paralelismo exato controlado."
   )
+}
+
+#' Executar consulta KNN pelo kernel nativo explicito
+#'
+#' @return Lista com matrizes `nn.index` e/ou `nn.dist`
+#' @noRd
+sby_get_knnx_native <- function(
+  sby_data,
+  sby_query,
+  sby_k,
+  sby_knn_algorithm,
+  sby_knn_distance_metric,
+  sby_knn_workers,
+  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
+  sby_knn_query_chunk_size = 1000L,
+  sby_query_is_data = FALSE,
+  sby_exclude_self = FALSE,
+  sby_knn_return = c("both", "index", "dist")
+){
+  sby_knn_return <- match.arg(sby_knn_return)
+  sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(sby_knn_parallel_backend)
+  sby_query_is_data <- sby_validate_logical_scalar(sby_query_is_data, "sby_query_is_data")
+  sby_exclude_self <- sby_validate_logical_scalar(sby_exclude_self, "sby_exclude_self")
+
+  if(!identical(sby_knn_distance_metric, "euclidean")){
+    sby_adanear_abort(
+      sby_message = "'sby_knn_engine = native' suporta apenas 'sby_knn_distance_metric = euclidean'"
+    )
+  }
+  if(!(sby_knn_algorithm %in% c("auto", "brute"))){
+    sby_adanear_abort(
+      sby_message = "'sby_knn_algorithm' deve ser 'auto' ou 'brute' quando 'sby_knn_engine = native'"
+    )
+  }
+  if(!sby_adanear_native_available()){
+    sby_adanear_abort(
+      sby_message = "'sby_knn_engine = native' requer as rotinas nativas carregadas do pacote"
+    )
+  }
+  if(isTRUE(sby_exclude_self) && !isTRUE(sby_query_is_data)){
+    sby_adanear_abort(
+      sby_message = "'sby_exclude_self = TRUE' requer 'sby_query_is_data = TRUE'"
+    )
+  }
+  if(isTRUE(sby_exclude_self) && collapse::fnrow(sby_query) != collapse::fnrow(sby_data)){
+    sby_adanear_abort(
+      sby_message = "'sby_query_is_data = TRUE' requer nrow(sby_query) igual a nrow(sby_data)"
+    )
+  }
+  if(isTRUE(sby_exclude_self) && as.integer(sby_k) > collapse::fnrow(sby_data) - 1L){
+    sby_adanear_abort(
+      sby_message = "'sby_k' nao pode exceder nrow(sby_data) - 1 quando 'sby_exclude_self = TRUE'"
+    )
+  }
+  if(anyNA(sby_data) || anyNA(sby_query) || any(!is.finite(sby_data)) || any(!is.finite(sby_query))){
+    sby_adanear_abort(
+      sby_message = "'sby_knn_engine = native' nao aceita NA, NaN, Inf ou -Inf em sby_data/sby_query"
+    )
+  }
+
+  sby_return_code <- as.integer(match(sby_knn_return, c("both", "index", "dist")) - 1L)
+  storage.mode(sby_data) <- "double"
+
+  sby_knn_result <- sby_query_knn_in_chunks(
+    sby_query = sby_query,
+    sby_k = sby_k,
+    sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+    sby_knn_workers = sby_knn_workers,
+    sby_knn_parallel_backend = sby_knn_parallel_backend,
+    sby_knn_return = sby_knn_return,
+    sby_query_fun_accepts_index = TRUE,
+    sby_query_fun = function(sby_query_chunk, sby_query_chunk_index){
+      storage.mode(sby_query_chunk) <- "double"
+      sby_query_offset <- as.integer(min(sby_query_chunk_index) - 1L)
+      if(identical(sby_knn_parallel_backend, "RcppParallel")){
+        return(.Call(
+          brute_force_knn_native_parallel_c,
+          sby_data,
+          sby_query_chunk,
+          as.integer(sby_k),
+          sby_return_code,
+          as.integer(sby_knn_workers),
+          as.logical(sby_query_is_data),
+          as.logical(sby_exclude_self),
+          sby_query_offset
+        ))
+      }
+      return(.Call(
+        brute_force_knn_native_c,
+        sby_data,
+        sby_query_chunk,
+        as.integer(sby_k),
+        sby_return_code,
+        as.logical(sby_query_is_data),
+        as.logical(sby_exclude_self),
+        sby_query_offset
+      ))
+    }
+  )
+
+  sby_adanear_check_user_interrupt()
+  return(sby_trim_knn_result(sby_knn_result, sby_knn_return))
 }
 
 #' Executar consultas KNN em blocos interrompiveis
@@ -445,10 +569,15 @@ sby_query_knn_in_chunks <- function(
   sby_knn_workers,
   sby_knn_parallel_backend = c("parallel", "RcppParallel"),
   sby_query_fun,
-  sby_knn_return = c("both", "index", "dist")
+  sby_knn_return = c("both", "index", "dist"),
+  sby_query_fun_accepts_index = FALSE
 ){
   sby_knn_return <- match.arg(sby_knn_return)
   sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(sby_knn_parallel_backend)
+  sby_query_fun_accepts_index <- sby_validate_logical_scalar(
+    sby_query_fun_accepts_index,
+    "sby_query_fun_accepts_index"
+  )
   sby_need_index <- sby_knn_return %in% c("both", "index")
   sby_need_dist <- sby_knn_return %in% c("both", "dist")
 
@@ -457,8 +586,13 @@ sby_query_knn_in_chunks <- function(
 
   # Executa consulta diretamente quando os dados cabem em um unico bloco
   if(sby_query_rows <= sby_knn_query_chunk_size){
+    sby_single_result <- if(isTRUE(sby_query_fun_accepts_index)){
+      sby_query_fun(sby_query, seq_len(sby_query_rows))
+    }else{
+      sby_query_fun(sby_query)
+    }
     return(sby_trim_knn_result(
-      sby_query_fun(sby_query),
+      sby_single_result,
       sby_knn_return
     ))
   }
@@ -485,8 +619,13 @@ sby_query_knn_in_chunks <- function(
 
   # Funcao local que executa um bloco e descarta cedo componentes nao solicitados
   sby_run_chunk <- function(sby_chunk_index){
+    sby_chunk_result <- if(isTRUE(sby_query_fun_accepts_index)){
+      sby_query_fun(sby_query[sby_chunk_index, , drop = FALSE], sby_chunk_index)
+    }else{
+      sby_query_fun(sby_query[sby_chunk_index, , drop = FALSE])
+    }
     sby_chunk_result <- sby_trim_knn_result(
-      sby_query_fun(sby_query[sby_chunk_index, , drop = FALSE]),
+      sby_chunk_result,
       sby_knn_return
     )
 
