@@ -23,7 +23,7 @@ sby_resolve_knn_algorithm <- function(sby_knn_algorithm, sby_predictor_column_co
   }
 
   # Engines externos gerenciam seu algoritmo internamente
-  if(sby_knn_engine %in% c("RcppHNSW", "KernelKnn", "bigKNN")){
+  if(sby_knn_engine %in% c("native", "RcppHNSW", "KernelKnn", "bigKNN")){
 
     # Informa ao usuario que o engine selecionado gerencia o algoritmo internamente
     sby_adanear_inform(
@@ -76,7 +76,7 @@ sby_resolve_knn_algorithm <- function(sby_knn_algorithm, sby_predictor_column_co
 
   # Aborta engines desconhecidos para evitar combinacoes obsoletas ou removidas
   sby_adanear_abort(
-    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'FNN', 'RcppHNSW', 'KernelKnn' ou 'bigKNN'"
+    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'native', 'FNN', 'RcppHNSW', 'KernelKnn' ou 'bigKNN'"
   )
 
 }

@@ -2,19 +2,26 @@
 
 ## Mudancas de comportamento (breaking)
 
-* `sby_knn_engine = "auto"` agora seleciona o engine de forma sensivel ao
-  contexto, em vez de retornar sempre `"FNN"`:
-  - Metricas nao euclidianas (`"cosine"`, `"ip"`): seleciona `RcppHNSW`
-    automaticamente (o `FNN` nao suporta essas metricas neste pacote).
-  - Bases grandes em alta dimensionalidade
-    (`n * p >= 5e6` AND `p >= 50` por padrao): seleciona `RcppHNSW` por
-    custo de busca exata. Limite configuravel via
-    `options(sbyadanear.sby_auto_engine_hnsw_min_cells = ...)`.
-  - Demais casos: continua selecionando `FNN` exato.
-  Para preservar exatamente o comportamento anterior em qualquer caso,
-  passe `sby_knn_engine = "FNN"` explicitamente.
+* `sby_knn_engine = "native"` foi adicionado como engine explicito para KNN
+  euclidiano exato em matriz double densa, retornando `nn.index` e/ou
+  `nn.dist` no mesmo contrato usado por `FNN::get.knnx()`.
+* `sby_knn_engine = "auto"` agora e conservador para ADASYN e NearMiss:
+  - para `sby_knn_distance_metric = "euclidean"`, prefere `native` quando a
+    biblioteca nativa esta carregada e usa `FNN` como fallback exato;
+  - metricas nao euclidianas (`"cosine"`, `"ip"`) nao selecionam busca
+    aproximada automaticamente, exceto quando a opcao
+    `options(sbyadanear.sby_knn_allow_approx = TRUE)` e ativada ou quando o
+    usuario escolhe `sby_knn_engine = "RcppHNSW"` explicitamente.
+  Para preservar o comportamento anterior, passe `sby_knn_engine = "FNN"` ou
+  `sby_knn_engine = "RcppHNSW"` explicitamente.
 
 ## Correcoes
+
+* A engine `native` agora preserva `sby_knn_query_chunk_size` mesmo quando
+  `sby_exclude_self = TRUE`, passando o offset global da query para o kernel C++
+  para remover self-neighbors corretamente sem forcar uma consulta unica gigante.
+* Em ambientes Intel oneAPI/MKL, a configuracao de threads tambem fixa
+  `MKL_DYNAMIC = "FALSE"` e a documentacao deixou de assumir OpenBLAS.
 
 * `sby_adasyn_matrix()`, `sby_nearmiss_matrix()` e `sby_nearmiss_index()`
   agora rejeitam classes minoritarias com menos de duas observacoes,

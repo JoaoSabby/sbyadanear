@@ -39,7 +39,8 @@ sby_configure_blas_threads <- function(sby_workers){
 
   Sys.setenv(
     MKL_NUM_THREADS = as.character(sby_target_threads),
-    OMP_NUM_THREADS = as.character(sby_target_threads)
+    OMP_NUM_THREADS = as.character(sby_target_threads),
+    MKL_DYNAMIC = "FALSE"
   )
 
   invisible(TRUE)

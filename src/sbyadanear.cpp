@@ -189,6 +189,14 @@ static void require_real_matrix(SEXP x, const char *name){
   }
 }
 
+static void require_finite_real_matrix_values(const double *values, R_xlen_t length, const char *name){
+  for(R_xlen_t i = 0; i < length; ++i){
+    if(!R_FINITE(values[i])){
+      error("O parametro '%s' nao pode conter NA, NaN, Inf ou -Inf", name);
+    }
+  }
+}
+
 /**
  * @brief Calcula media e desvio padrao amostral por coluna para normalizacao.
  *
@@ -825,7 +833,7 @@ extern "C" SEXP drop_self_neighbor_c(SEXP nbr, SEXP self_index, SEXP desired_k){
  * ambos. Essa separacao reduz alocacoes quando ADASYN precisa apenas dos
  * indices e NearMiss precisa apenas das distancias.
  */
-static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value, int return_index, int return_dist){
+static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value, int return_index, int return_dist, int query_is_data = 0, int exclude_self = 0, R_xlen_t query_offset = 0){
   require_real_matrix(data, "data");
   require_real_matrix(query, "query");
   if(!isInteger(k_value) || LENGTH(k_value) != 1){
@@ -849,8 +857,19 @@ static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value, int return
   if(k < 1){
     error("'k' deve ser >= 1");
   }
+  if(n_ref > INT_MAX){
+    error("'data' excede o limite de indices inteiros suportado");
+  }
   if((R_xlen_t) k > n_ref){
     error("'k' nao pode exceder o numero de linhas de 'data'");
+  }
+  if((exclude_self == 1)){
+    if((query_is_data != 1)){
+      error("'exclude_self' requer 'query_is_data = TRUE'");
+    }
+    if((R_xlen_t) k > n_ref - 1){
+      error("'k' nao pode exceder nrow(data) - 1 quando 'exclude_self = TRUE'");
+    }
   }
   if(n_query > INT_MAX){
     error("'query' excede o limite suportado por allocMatrix");
@@ -858,6 +877,8 @@ static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value, int return
 
   const double *r_ref = REAL(data);
   const double *q_ref = REAL(query);
+  require_finite_real_matrix_values(r_ref, n_ref * p1, "data");
+  require_finite_real_matrix_values(q_ref, n_query * p2, "query");
 
   double *q_norm2 = (double *) R_alloc((size_t) n_query, sizeof(double));
   double *r_norm2 = (double *) R_alloc((size_t) n_ref, sizeof(double));
@@ -919,6 +940,10 @@ static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value, int return
       const double qn2 = q_norm2[q_idx];
 
       for(R_xlen_t j = 0; j < n_ref; ++j){
+        if((exclude_self == 1) && (query_offset + q_idx) == j){
+          neighbors[static_cast<std::size_t>(j)] = {R_PosInf, (int) (j + 1)};
+          continue;
+        }
         double d2 = qn2 + r_norm2[j] - 2.0 * cross[bi + j * cur_b];
         d2 = euclidean_d2_with_rescue(d2, q_ref, r_ref, q_idx, j, n_query, n_ref, p1);
         neighbors[static_cast<std::size_t>(j)] = {d2, (int) (j + 1)};
@@ -985,6 +1010,32 @@ extern "C" SEXP brute_force_knn_index_c(SEXP data, SEXP query, SEXP k_value){
 //' @return Lista com matriz de distâncias.
 extern "C" SEXP brute_force_knn_dist_c(SEXP data, SEXP query, SEXP k_value){
   return brute_force_knn_impl(data, query, k_value, 0, 1);
+}
+
+//' @title KNN bruto nativo parametrizado
+//' @description Executa KNN euclidiano exato interno com controle de retorno e self-neighbor.
+//' @return Lista com matrizes KNN solicitadas.
+extern "C" SEXP brute_force_knn_native_c(SEXP data, SEXP query, SEXP k_value, SEXP return_code, SEXP query_is_data_value, SEXP exclude_self_value, SEXP query_offset_value){
+  const int ret = asInteger(return_code);
+  const R_xlen_t query_offset = (R_xlen_t) asInteger(query_offset_value);
+  const int need_index = ret == 0 || ret == 1;
+  const int need_dist = ret == 0 || ret == 2;
+  if(ret < 0 || ret > 2){
+    error("'return_code' deve ser 0 (both), 1 (index) ou 2 (dist)");
+  }
+  if(query_offset < 0){
+    error("'query_offset' deve ser >= 0");
+  }
+  return brute_force_knn_impl(
+    data,
+    query,
+    k_value,
+    need_index,
+    need_dist,
+    asLogical(query_is_data_value),
+    asLogical(exclude_self_value),
+    query_offset
+  );
 }
 
 /**
@@ -1186,6 +1237,7 @@ extern "C" SEXP rbind_double_matrix_c(SEXP first_matrix, SEXP second_matrix){
  * @brief Mapeia as rotinas internas em C para as chamadas .Call dinamicas provenientes do R.
  */
 extern "C" SEXP brute_force_knn_rcpp_parallel_c(SEXP, SEXP, SEXP, SEXP, SEXP);
+extern "C" SEXP brute_force_knn_native_parallel_c(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP rcpp_parallel_uses_tbb_c(void);
 
 static const R_CallMethodDef call_entries[] = {
@@ -1200,6 +1252,8 @@ static const R_CallMethodDef call_entries[] = {
   {"brute_force_knn_index_c", (DL_FUNC) &brute_force_knn_index_c, 3},
   {"brute_force_knn_dist_c", (DL_FUNC) &brute_force_knn_dist_c, 3},
   {"brute_force_knn_rcpp_parallel_c", (DL_FUNC) &brute_force_knn_rcpp_parallel_c, 5},
+  {"brute_force_knn_native_c", (DL_FUNC) &brute_force_knn_native_c, 7},
+  {"brute_force_knn_native_parallel_c", (DL_FUNC) &brute_force_knn_native_parallel_c, 8},
   {"rcpp_parallel_uses_tbb_c", (DL_FUNC) &rcpp_parallel_uses_tbb_c, 0},
   {"nearmiss_brute_select_c", (DL_FUNC) &nearmiss_brute_select_c, 5},
   {"rbind_double_matrix_c", (DL_FUNC) &rbind_double_matrix_c, 2},

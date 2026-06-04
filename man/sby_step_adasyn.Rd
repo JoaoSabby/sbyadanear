@@ -17,7 +17,7 @@ sby_step_adasyn(
   sby_audit = FALSE,
   sby_restore_types = TRUE,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
+  sby_knn_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
   sby_knn_workers = 1L,
   sby_knn_parallel_backend = c("parallel", "RcppParallel"),
@@ -38,9 +38,9 @@ sby_step_adasyn(
 \item{sby_audit}{Indicador lógico escalar que controla se metadados de auditoria devem ser preservados.}
 \item{sby_restore_types}{Indicador lógico escalar que define se tipos numéricos originais devem ser restaurados.}
 \item{sby_knn_algorithm}{String escalar que escolhe a estratégia de busca KNN: \code{"auto"}, \code{"kd_tree"}, \code{"cover_tree"} ou \code{"brute"}. Use \code{"auto"} para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.}
-\item{sby_knn_engine}{String escalar que escolhe a biblioteca usada para executar a busca KNN: \code{"auto"}, \code{"FNN"} ou \code{"RcppHNSW"}. Na maioria dos casos, mantenha \code{"auto"}; informe explicitamente apenas quando precisar de uma implementação específica, paralelismo exato via \code{FNN} ou busca aproximada HNSW por \code{RcppHNSW}. Consulte os detalhes para saber quando o engine precisa ser declarado.}
+\item{sby_knn_engine}{String escalar que escolhe a biblioteca usada para executar a busca KNN: \code{"auto"}, \code{"native"}, \code{"FNN"}, \code{"RcppHNSW"}, \code{"KernelKnn"} ou \code{"bigKNN"}. Na maioria dos casos, mantenha \code{"auto"}; informe explicitamente apenas quando precisar da engine nativa exata, de FNN ou de busca aproximada HNSW por \code{RcppHNSW}. Consulte os detalhes para saber quando o engine precisa ser declarado.}
 \item{sby_knn_distance_metric}{String escalar que define a geometria da vizinhança: \code{"euclidean"}, \code{"cosine"} ou \code{"ip"}. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; \code{"euclidean"} é a opção mais geral, \code{"cosine"} privilegia direção angular e \code{"ip"} usa produto interno via \code{RcppHNSW}. Consulte os detalhes para recomendações.}
-\item{sby_knn_parallel_backend}{Backend de paralelismo para a busca KNN exata. Use \code{"parallel"} para manter o particionamento em blocos com o pacote base \pkg{parallel} ou \code{"RcppParallel"} para usar threads nativos no kernel bruto exato quando \code{sby_knn_engine = "FNN"} e \code{sby_knn_algorithm = "brute"}. O runtime concreto de \pkg{RcppParallel} pode ser TBB/oneTBB ou TinyThread conforme a instalação; quando auditoria estiver ativa, \code{sby_knn_parallel_runtime} registra o runtime efetivo. Nos demais engines ou algoritmos, o pacote preserva o backend apropriado do engine selecionado.}
+\item{sby_knn_parallel_backend}{Backend de paralelismo para a busca KNN exata. Use \code{"parallel"} para manter o particionamento em blocos com o pacote base \pkg{parallel} ou \code{"RcppParallel"} para usar threads nativos no kernel bruto exato quando \code{sby_knn_engine = "native"} ou, por compatibilidade, \code{sby_knn_engine = "FNN"} e \code{sby_knn_algorithm = "brute"}. O runtime concreto de \pkg{RcppParallel} pode ser TBB/oneTBB ou TinyThread conforme a instalação; quando auditoria estiver ativa, \code{sby_knn_parallel_runtime} registra o runtime efetivo. Nos demais engines ou algoritmos, o pacote preserva o backend apropriado do engine selecionado.}
 \item{sby_knn_workers}{Número de workers KNN configurado.}
 \item{sby_knn_hnsw_m}{Número inteiro positivo usado apenas quando o engine efetivo é \code{"RcppHNSW"}. Controla a conectividade máxima do grafo (\code{M}): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão \code{16L} costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.}
 \item{sby_knn_hnsw_ef}{Número inteiro positivo usado apenas quando o engine efetivo é \code{"RcppHNSW"}. Controla a largura da lista dinâmica de candidatos (\code{ef}) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão \code{200L} prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.}
@@ -89,7 +89,7 @@ As rotinas atuais operam sobre \code{matrix} numérica densa após seleção de 
 \subsection{Recomendações práticas}{
 \itemize{
 \item Comece com \code{sby_knn_engine = "auto"}, \code{sby_knn_algorithm = "auto"} e \code{sby_knn_distance_metric = "euclidean"}.
-\item Para bases grandes, embeddings, \code{"ip"} ou alta dimensionalidade, use \code{sby_knn_engine = "RcppHNSW"} e ajuste \code{sby_knn_hnsw_m}/\code{sby_knn_hnsw_ef}.
+\item Para bases grandes, embeddings, \code{"ip"} ou alta dimensionalidade com aproximacao explicitamente aceitavel, use \code{sby_knn_engine = "RcppHNSW"} e ajuste \code{sby_knn_hnsw_m}/\code{sby_knn_hnsw_ef}.
 \item Em ADASYN, vizinhos aproximados podem mudar quais regiões recebem amostras sintéticas; em NearMiss, podem mudar quais exemplos majoritários são retidos. Aumente \code{sby_knn_hnsw_ef} quando essa estabilidade for importante.
 }
 }

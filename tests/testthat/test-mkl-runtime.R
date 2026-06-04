@@ -5,8 +5,7 @@ test_that("mkl env vars are readable and config object is valid", {
   withr::local_envvar(c(
     OMP_NUM_THREADS = "2",
     MKL_NUM_THREADS = "2",
-    OPENBLAS_NUM_THREADS = "1",
-    BLIS_NUM_THREADS = "1"
+    MKL_DYNAMIC = "FALSE"
   ))
 
   cfg <- sbyadanear:::sby_resolve_oneapi_mkl()
@@ -15,4 +14,5 @@ test_that("mkl env vars are readable and config object is valid", {
   expect_true(is.logical(cfg$enabled))
   expect_true(is.numeric(cfg$threads) || is.integer(cfg$threads))
   expect_identical(Sys.getenv("MKL_NUM_THREADS"), "2")
+  expect_identical(Sys.getenv("MKL_DYNAMIC"), "FALSE")
 })
