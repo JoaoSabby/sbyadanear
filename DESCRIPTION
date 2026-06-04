@@ -42,6 +42,9 @@ LinkingTo:
 Suggests:
     modeldata,
     Matrix,
+    KernelKnn,
+    bigKNN,
+    bigmemory,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), OpenMP (optional), GNU make

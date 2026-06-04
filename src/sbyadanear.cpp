@@ -140,31 +140,12 @@ static double euclidean_d2_with_rescue(
   R_xlen_t col_count
 ){
   if(d2 < SBY_D2_RESCUE_EPS){
-    double *q_tmp = (double *) R_alloc((size_t) col_count, sizeof(double));
-    double *r_tmp = (double *) R_alloc((size_t) col_count, sizeof(double));
-    double *diff_tmp = (double *) R_alloc((size_t) col_count, sizeof(double));
-#pragma omp simd
-    for(R_xlen_t c = 0; c < col_count; ++c){
-      q_tmp[c] = q_ref[q_idx + c * n_query];
-      r_tmp[c] = r_ref[r_idx + c * n_ref];
-    }
-#if defined(SBYADANEAR_ONEAPI_MKL)
-    if(col_count <= INT_MAX){
-      vdSub((MKL_INT) col_count, q_tmp, r_tmp, diff_tmp);
-      vdSqr((MKL_INT) col_count, diff_tmp, diff_tmp);
-    } else
-#endif
-    {
-#pragma omp simd
-      for(R_xlen_t c = 0; c < col_count; ++c){
-        const double diff = q_tmp[c] - r_tmp[c];
-        diff_tmp[c] = diff * diff;
-      }
-    }
     long double exact_dist = 0.0L;
 #pragma omp simd reduction(+:exact_dist)
     for(R_xlen_t c = 0; c < col_count; ++c){
-      exact_dist += (long double) diff_tmp[c];
+      const long double diff = (long double) q_ref[q_idx + c * n_query] -
+        (long double) r_ref[r_idx + c * n_ref];
+      exact_dist += diff * diff;
     }
     d2 = (double) exact_dist;
   }
@@ -932,10 +913,10 @@ static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value, int return
       cross, &ldc_int FCONE FCONE
     );
 
+    std::vector<knn_neighbor> neighbors(static_cast<std::size_t>(n_ref));
     for(R_xlen_t bi = 0; bi < cur_b; ++bi){
       const R_xlen_t q_idx = q_start + bi;
       const double qn2 = q_norm2[q_idx];
-      std::vector<knn_neighbor> neighbors(static_cast<std::size_t>(n_ref));
 
       for(R_xlen_t j = 0; j < n_ref; ++j){
         double d2 = qn2 + r_norm2[j] - 2.0 * cross[bi + j * cur_b];
@@ -1100,10 +1081,10 @@ extern "C" SEXP nearmiss_brute_select_c(SEXP minority_data, SEXP majority_query,
       cross, &ldc_int FCONE FCONE
     );
 
+    std::vector<knn_neighbor> neighbors(static_cast<std::size_t>(n_ref));
     for(R_xlen_t bi = 0; bi < cur_b; ++bi){
       const R_xlen_t q_idx = q_start + bi;
       const double qn2 = q_norm2[q_idx];
-      std::vector<knn_neighbor> neighbors(static_cast<std::size_t>(n_ref));
 
       for(R_xlen_t j = 0; j < n_ref; ++j){
         double d2 = qn2 + r_norm2[j] - 2.0 * cross[bi + j * cur_b];

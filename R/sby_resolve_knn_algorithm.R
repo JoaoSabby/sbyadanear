@@ -2,7 +2,7 @@
 #'
 #' @details
 #' A funcao implementa uma unidade interna do fluxo de balanceamento com contrato de entrada explicito e retorno controlado.
-#' A resolucao considera o engine efetivo para que `auto` produza algoritmos compativeis com FNN ou RcppHNSW.
+#' A resolucao considera o engine efetivo para que `auto` produza algoritmos compativeis com FNN, RcppHNSW, KernelKnn ou bigKNN.
 #'
 #' @param sby_knn_algorithm Algoritmo KNN informado pelo chamador
 #' @param sby_predictor_column_count Quantidade de colunas preditoras
@@ -22,18 +22,15 @@ sby_resolve_knn_algorithm <- function(sby_knn_algorithm, sby_predictor_column_co
     return(sby_knn_algorithm)
   }
 
-  # RcppHNSW gerencia seu algoritmo internamente
-  if(identical(
-    x = sby_knn_engine,
-    y = "RcppHNSW"
-  )){
+  # Engines externos gerenciam seu algoritmo internamente
+  if(sby_knn_engine %in% c("RcppHNSW", "KernelKnn", "bigKNN")){
 
     # Informa ao usuario que o engine selecionado gerencia o algoritmo internamente
     sby_adanear_inform(
       sby_message = paste0(
-        "KNN automatico: sby_knn_algorithm = \"auto\" com sby_knn_engine = \"RcppHNSW\". ",
-        "Justificativa: RcppHNSW controla internamente a estrategia HNSW, entao o pacote ",
-        "mantem o algoritmo como auto porque algoritmos externos nao sao aplicados nessa rota."
+        "KNN automatico: sby_knn_algorithm = \"auto\" com sby_knn_engine = \"",
+        sby_knn_engine, "\". Justificativa: o engine selecionado controla ",
+        "internamente a estrategia de busca, entao algoritmos externos nao sao aplicados nessa rota."
       )
     )
 
@@ -79,7 +76,7 @@ sby_resolve_knn_algorithm <- function(sby_knn_algorithm, sby_predictor_column_co
 
   # Aborta engines desconhecidos para evitar combinacoes obsoletas ou removidas
   sby_adanear_abort(
-    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'FNN' ou 'RcppHNSW'"
+    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'FNN', 'RcppHNSW', 'KernelKnn' ou 'bigKNN'"
   )
 
 }

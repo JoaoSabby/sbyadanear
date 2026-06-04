@@ -31,10 +31,20 @@ sby_adanear_as_numeric_matrix <- function(sby_predictor_data){
   # Converte a entrada para matriz quando os preditores estao em data frame
   if(is.data.frame(sby_predictor_data)){
 
-    # Materializa data frame como matriz numerica
-    sby_x_matrix <- data.matrix(
-      frame = sby_predictor_data
+    sby_numeric_column <- vapply(
+      X = sby_predictor_data,
+      FUN = is.numeric,
+      FUN.VALUE = logical(1L)
     )
+    if(all(sby_numeric_column) && exists("qM", envir = asNamespace("collapse"), mode = "function")){
+      sby_x_matrix <- collapse::qM(
+        sby_predictor_data
+      )
+    }else{
+      sby_x_matrix <- data.matrix(
+        frame = sby_predictor_data
+      )
+    }
   }else{
 
     # Reutiliza matriz de entrada para conversao de armazenamento

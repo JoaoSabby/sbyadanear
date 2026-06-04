@@ -17,7 +17,7 @@ sby_adasyn_matrix <- function(
   sby_scaling_info = NULL,
   sby_input_already_scaled = FALSE,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
+  sby_knn_engine = c("auto", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
   sby_knn_workers = 1L,
   sby_knn_parallel_backend = c("parallel", "RcppParallel"),

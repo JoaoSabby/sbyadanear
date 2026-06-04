@@ -22,7 +22,7 @@
 #'     "auto", "kd_tree", "cover_tree", "brute"
 #'   ),
 #'   sby_knn_engine = c(
-#'     "auto", "FNN", "RcppHNSW"
+#'     "auto", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"
 #'   ),
 #'   sby_knn_distance_metric = c(
 #'     "euclidean", "ip", "cosine"
@@ -64,10 +64,8 @@
 #' Em geral, não: para o uso cotidiano, mantenha `sby_knn_engine = "auto"` e
 #' `sby_knn_algorithm = "auto"`. Nesse modo, o pacote usa `FNN` com paralelismo exato por blocos quando `sby_knn_workers > 1L`; o algoritmo também
 #' é escolhido automaticamente pela dimensionalidade dos preditores. Informe o
-#' engine explicitamente quando quiser garantir uma biblioteca específica, usar
-#' algoritmo que pertence a uma família específica. Na API atual, informar apenas
-#' `sby_knn_engine = "RcppHNSW"` quando quiser a implementação HNSW do pacote
-#' `RcppHNSW`.
+#' engine explicitamente quando quiser garantir uma biblioteca específica ou usar
+#' uma rota KNN opcional como `RcppHNSW`, `KernelKnn` ou `bigKNN`.
 #'
 #' ## Engines disponíveis
 #'
@@ -75,6 +73,8 @@
 #' |---|---|---|---|
 #' | `"FNN"` | Bases pequenas a médias, distância euclidiana, execução sequencial ou paralela por blocos e busca exata. | Simples, rápido para baixa/média dimensionalidade, determinístico e sem aproximação. | Aceita apenas `"euclidean"` neste pacote; só combina com `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. |
 #' | `"RcppHNSW"` | Bases grandes, alta dimensionalidade, métricas `"cosine"`/`"ip"` e consultas em que velocidade é mais importante que exatidão perfeita. | Implementa HNSW de alto desempenho, usa `sby_knn_workers`, costuma escalar melhor que busca exata e suporta `"euclidean"`, `"cosine"` e `"ip"`. | A busca é aproximada; exige calibrar `sby_knn_hnsw_m` e `sby_knn_hnsw_ef`; consome memória para o grafo; resultados podem diferir de uma busca exata quando `ef` é baixo. |
+#' | `"KernelKnn"` | Comparação exata euclidiana via OpenMP externo. | Permite benchmark de `KernelKnn::knn.index.dist()` dentro do contrato comum `nn.index`/`nn.dist`. | Somente `"euclidean"` nesta integração; usa OpenMP e pode competir com MKL, TBB ou `parallel` se todos forem multithread. |
+#' | `"bigKNN"` | Bases que se beneficiam de `bigmemory::big.matrix` e busca exata por blocos. | Usa `bigKNN::knn_bigmatrix()` e permite avaliar streaming por blocos em bases grandes. | Somente `"euclidean"` nesta integração; converte a referência densa para `big.matrix`; requer benchmark de memória. |
 #'
 #' ## Algoritmos disponíveis
 #'
@@ -82,7 +82,7 @@
 #' |---|---|---|---|---|
 #' | `"kd_tree"` | `FNN` | Exato | Dados euclidianos com poucas ou médias dimensões; tende a ser eficiente quando as partições espaciais ainda discriminam bem os vizinhos. | Alta dimensionalidade, muitas variáveis ruidosas ou métrica não euclidiana. |
 #' | `"cover_tree"` | `FNN` | Exato | Alternativa exata para dados euclidianos quando a estrutura intrínseca pode favorecer árvore de cobertura. | Quando testes rápidos mostram desempenho inferior a `"kd_tree"`/`"brute"`; não serve para cosseno ou produto interno. |
-#' | `"brute"` | `FNN` | Exato | Alta dimensionalidade moderada, bases pequenas/médias, auditorias ou cenários em que simplicidade e previsibilidade importam mais que indexação. | Bases muito grandes, pois compara muitos pares e pode ficar lento. |
+#' | `"brute"` | `FNN`, `KernelKnn`, `bigKNN` | Exato | Alta dimensionalidade moderada, auditorias ou cenários em que simplicidade e previsibilidade importam mais que indexação. | Bases muito grandes sem blocos ou sem controle de threads. |
 #'
 #' ## Desempenho, memória e matrizes esparsas
 #'
@@ -134,8 +134,10 @@
 #' - Comece com `sby_knn_engine = "auto"`, `sby_knn_algorithm = "auto"` e
 #'   `sby_knn_distance_metric = "euclidean"`.
 #' - Para auditoria, bases pequenas ou necessidade de vizinhos exatos, prefira `sby_knn_engine = "FNN"` com `sby_knn_algorithm = "kd_tree"` ou `"brute"`.
-#' - Para bases grandes, embeddings, `"ip"` ou alta dimensionalidade, use
+#' - Para bases grandes, embeddings, `"ip"` ou alta dimensionalidade aproximada, use
 #'   `sby_knn_engine = "RcppHNSW"` e ajuste `sby_knn_hnsw_m`/`sby_knn_hnsw_ef`.
+#' - Para benchmark exato euclidiano com OpenMP, teste `sby_knn_engine = "KernelKnn"`.
+#' - Para benchmark exato euclidiano com `bigmemory`, teste `sby_knn_engine = "bigKNN"`.
 #' - Em ADASYN, vizinhos aproximados podem mudar quais regiões recebem amostras
 #'   sintéticas; em NearMiss, podem mudar quais exemplos majoritários são retidos.
 #'   Aumente `sby_knn_hnsw_ef` quando essa estabilidade for importante.
@@ -166,7 +168,7 @@ sby_nearmiss <- function(
   sby_fixed_minority_label = NULL,
   sby_fixed_majority_label = NULL,
   sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "FNN", "RcppHNSW"),
+  sby_knn_engine = c("auto", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
   sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
   sby_knn_workers = 1L,
   sby_knn_parallel_backend = c("parallel", "RcppParallel"),
