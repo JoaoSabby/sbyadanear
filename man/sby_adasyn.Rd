@@ -22,7 +22,7 @@ sby_adasyn(
     "auto", "kd_tree", "cover_tree", "brute"
   ),
   sby_knn_engine = c(
-    "auto", "FNN", "RcppHNSW"
+    "auto", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"
   ),
   sby_knn_distance_metric = c(
     "euclidean", "ip", "cosine"

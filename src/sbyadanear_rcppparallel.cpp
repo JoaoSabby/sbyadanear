@@ -48,8 +48,8 @@ struct sby_brute_force_knn_worker : public RcppParallel::Worker {
     const std::size_t n_ref = data.nrow();
     const std::size_t n_cols = data.ncol();
 
+    std::vector<sby_neighbor> neighbors(n_ref);
     for(std::size_t q = begin; q < end; ++q){
-      std::vector<sby_neighbor> neighbors(n_ref);
       for(std::size_t r = 0; r < n_ref; ++r){
         long double dist2_ld = 0.0L;
 #pragma omp simd reduction(+:dist2_ld)

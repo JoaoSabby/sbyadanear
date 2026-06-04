@@ -1,4 +1,4 @@
-#' Executar consulta KNN usando FNN ou RcppHNSW
+#' Executar consulta KNN usando FNN, RcppHNSW, KernelKnn ou bigKNN
 #'
 #' @details
 #' A funcao implementa uma unidade interna do fluxo de balanceamento com contrato de entrada explicito e retorno controlado
@@ -310,9 +310,117 @@ sby_get_knnx <- function(
     return(sby_run_hnsw_query())
   }
 
+  # Executa consulta pelo engine KernelKnn quando selecionado
+  if(identical(
+    x = sby_knn_engine,
+    y = "KernelKnn"
+  )){
+    if(!identical(sby_knn_distance_metric, "euclidean")){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_engine = KernelKnn' suporta apenas 'sby_knn_distance_metric = euclidean' nesta integracao"
+      )
+    }
+    if(!(sby_knn_algorithm %in% c("auto", "brute"))){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_algorithm' deve ser 'auto' ou 'brute' quando 'sby_knn_engine = KernelKnn'"
+      )
+    }
+    if(!requireNamespace(package = "KernelKnn", quietly = TRUE)){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_engine = KernelKnn' requer o pacote KernelKnn"
+      )
+    }
+
+    sby_knn_result <- sby_query_knn_in_chunks(
+      sby_query = sby_query,
+      sby_k = sby_k,
+      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+      sby_knn_workers = 1L,
+      sby_knn_parallel_backend = "parallel",
+      sby_knn_return = sby_knn_return,
+      sby_query_fun = function(sby_query_chunk){
+        sby_kernel_result <- KernelKnn::knn.index.dist(
+          data = sby_data,
+          TEST_data = sby_query_chunk,
+          k = sby_k,
+          method = "euclidean",
+          transf_categ_cols = FALSE,
+          threads = sby_knn_workers
+        )
+        return(list(
+          nn.index = sby_as_knn_matrix(sby_kernel_result[[1L]], sby_k, "integer"),
+          nn.dist = sby_as_knn_matrix(sby_kernel_result[[2L]], sby_k, "double")
+        ))
+      }
+    )
+    sby_adanear_check_user_interrupt()
+    return(sby_trim_knn_result(sby_knn_result, sby_knn_return))
+  }
+
+  # Executa consulta pelo engine bigKNN quando selecionado
+  if(identical(
+    x = sby_knn_engine,
+    y = "bigKNN"
+  )){
+    if(!identical(sby_knn_distance_metric, "euclidean")){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_engine = bigKNN' suporta apenas 'sby_knn_distance_metric = euclidean' nesta integracao"
+      )
+    }
+    if(!(sby_knn_algorithm %in% c("auto", "brute"))){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_algorithm' deve ser 'auto' ou 'brute' quando 'sby_knn_engine = bigKNN'"
+      )
+    }
+    if(!requireNamespace(package = "bigKNN", quietly = TRUE)){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_engine = bigKNN' requer o pacote bigKNN"
+      )
+    }
+    if(!requireNamespace(package = "bigmemory", quietly = TRUE)){
+      sby_adanear_abort(
+        sby_message = "'sby_knn_engine = bigKNN' requer o pacote bigmemory"
+      )
+    }
+
+    sby_big_reference <- bigmemory::as.big.matrix(
+      x = sby_data,
+      type = "double"
+    )
+    sby_big_knn <- getExportedValue(
+      ns = "bigKNN",
+      name = "knn_bigmatrix"
+    )
+
+    sby_knn_result <- sby_query_knn_in_chunks(
+      sby_query = sby_query,
+      sby_k = sby_k,
+      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+      sby_knn_workers = 1L,
+      sby_knn_parallel_backend = "parallel",
+      sby_knn_return = sby_knn_return,
+      sby_query_fun = function(sby_query_chunk){
+        sby_big_result <- sby_big_knn(
+          x = sby_big_reference,
+          query = sby_query_chunk,
+          k = as.integer(sby_k),
+          metric = "euclidean",
+          block_size = as.integer(sby_knn_query_chunk_size),
+          exclude_self = FALSE
+        )
+        return(list(
+          nn.index = sby_as_knn_matrix(sby_big_result$index, sby_k, "integer"),
+          nn.dist = sby_as_knn_matrix(sby_big_result$distance, sby_k, "double")
+        ))
+      }
+    )
+    sby_adanear_check_user_interrupt()
+    return(sby_trim_knn_result(sby_knn_result, sby_knn_return))
+  }
+
   # Aborta engines desconhecidos para manter o contrato publico atual
   sby_adanear_abort(
-    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'FNN' ou 'RcppHNSW'. Use FNN com sby_knn_workers > 1L para paralelismo exato."
+    sby_message = "'sby_knn_engine' deve ser um de 'auto', 'FNN', 'RcppHNSW', 'KernelKnn' ou 'bigKNN'. Use FNN com sby_knn_workers > 1L para paralelismo exato."
   )
 }
 
