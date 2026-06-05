@@ -18,7 +18,7 @@ sby_validate_knn_query_chunk_size <- function(sby_knn_query_chunk_size){
   }
 
   # Verifica se o tamanho de bloco e um escalar numerico dentro do limite inteiro
-  if(!(is.numeric(sby_knn_query_chunk_size) && length(sby_knn_query_chunk_size) == 1L && !is.na(sby_knn_query_chunk_size) && sby_knn_query_chunk_size >= 1L && sby_knn_query_chunk_size <= .Machine$integer.max)){
+  if(!(is.numeric(sby_knn_query_chunk_size) && length(sby_knn_query_chunk_size) == 1L && !is.na(sby_knn_query_chunk_size) && is.finite(sby_knn_query_chunk_size) && sby_knn_query_chunk_size >= 1L && sby_knn_query_chunk_size == floor(sby_knn_query_chunk_size) && sby_knn_query_chunk_size <= .Machine$integer.max)){
 
     # Aborta quando o tamanho de bloco KNN e invalido
     sby_adanear_abort(

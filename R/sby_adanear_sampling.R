@@ -43,9 +43,9 @@
 #' @param sby_audit Indicador lógico escalar que controla se o retorno deve incluir resultados intermediários das etapas ADASYN e NearMiss. O padrão é `FALSE`, retornando somente os dados balanceados finais. Quando `TRUE`, o retorno passa a ser uma lista com auditoria completa, útil para inspeção de contagens e validação experimental.
 #' @param sby_restore_types Indicador lógico escalar que define se tipos numéricos originais devem ser restaurados ao final do pipeline. O padrão é `TRUE`. Mantê-lo ativado facilita reintegração com bases tabulares originais; desativá-lo mantém a saída no formato numérico produzido pelas transformações internas.
 #' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
-#' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"FNN"` ou `"RcppHNSW"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, paralelismo exato via `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
+#' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"` ou `"bigKNN"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, engine nativa exata, compatibilidade `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
 #' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
-#' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "FNN"`, `sby_knn_algorithm = "brute"`).
+#' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
 #' @param sby_knn_workers Número inteiro positivo de workers usados nas consultas KNN quando o engine efetivo oferece suporte. O padrão é `1L`. Aumentar esse número pode acelerar o pipeline completo, mas eleva uso de recursos e deve ser compatível com o backend escolhido.
 #' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
@@ -59,17 +59,21 @@
 #' `sby_knn_distance_metric` define a noção de proximidade.
 #'
 #' Em geral, não: para o uso cotidiano, mantenha `sby_knn_engine = "auto"` e
-#' `sby_knn_algorithm = "auto"`. Nesse modo, o pacote usa `FNN` com paralelismo exato por blocos quando `sby_knn_workers > 1L`; o algoritmo também
-#' é escolhido automaticamente pela dimensionalidade dos preditores. Informe o
-#' engine explicitamente quando quiser garantir uma biblioteca específica ou usar
-#' uma rota KNN opcional como `RcppHNSW`, `KernelKnn` ou `bigKNN`.
+#' `sby_knn_algorithm = "auto"`. Nesse modo, com métrica euclidiana, o pacote
+#' prefere a engine `native` exata quando as rotinas nativas estão carregadas e
+#' usa `FNN` como fallback exato. Busca aproximada por `RcppHNSW` só é escolhida
+#' automaticamente quando a opção `sbyadanear.sby_knn_allow_approx = TRUE` está
+#' ativa ou quando o engine é escolhido explicitamente.
 #'
 #' ## Engines disponíveis
 #'
 #' | Engine | Melhor para | Vantagens | Limitações e cuidados |
 #' |---|---|---|---|
-#' | `"FNN"` | Bases pequenas a médias, distância euclidiana, execução sequencial ou paralela por blocos e busca exata. | Simples, rápido para baixa/média dimensionalidade, determinístico e sem aproximação. | Aceita apenas `"euclidean"` neste pacote; só combina com `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. |
+#' | `"native"` | Busca exata euclidiana densa por kernel C/C++ interno. | Retorna índices 1-based e distâncias euclidianas reais; honra controle explícito de self-neighbor nas rotas internas. | Somente `"euclidean"`; só combina com `"auto"` ou `"brute"`. |
+#' | `"FNN"` | Bases pequenas a médias, distância euclidiana e busca exata. | Usa `FNN::get.knnx()`; a rota `"brute"` pode acionar o kernel nativo de compatibilidade quando disponível. | Aceita apenas `"euclidean"` neste pacote; só combina com `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. |
 #' | `"RcppHNSW"` | Bases grandes, alta dimensionalidade, métricas `"cosine"`/`"ip"` e consultas em que velocidade é mais importante que exatidão perfeita. | Implementa HNSW de alto desempenho, usa `sby_knn_workers`, costuma escalar melhor que busca exata e suporta `"euclidean"`, `"cosine"` e `"ip"`. | A busca é aproximada; exige calibrar `sby_knn_hnsw_m` e `sby_knn_hnsw_ef`; consome memória para o grafo; resultados podem diferir de uma busca exata quando `ef` é baixo. |
+#' | `"KernelKnn"` | Comparação exata euclidiana via OpenMP externo. | Permite benchmark de `KernelKnn::knn.index.dist()` dentro do contrato comum `nn.index`/`nn.dist`. | Somente `"euclidean"`; usa OpenMP e pode competir com outros backends multithread. |
+#' | `"bigKNN"` | Busca exata euclidiana baseada em `bigmemory::big.matrix`. | Usa `bigKNN::knn_bigmatrix()` e permite avaliar blocos em bases grandes. | Somente `"euclidean"`; converte a referência densa para `big.matrix`. |
 #' | `"KernelKnn"` | Comparação exata euclidiana via OpenMP externo. | Permite benchmark de `KernelKnn::knn.index.dist()` dentro do contrato comum `nn.index`/`nn.dist`. | Somente `"euclidean"` nesta integração; usa OpenMP e pode competir com MKL, TBB ou `parallel` se todos forem multithread. |
 #' | `"bigKNN"` | Bases que se beneficiam de `bigmemory::big.matrix` e busca exata por blocos. | Usa `bigKNN::knn_bigmatrix()` e permite avaliar streaming por blocos em bases grandes. | Somente `"euclidean"` nesta integração; converte a referência densa para `big.matrix`; requer benchmark de memória. |
 #'

@@ -53,10 +53,16 @@ sby_step_adasyn(
 \details{
 A função utiliza uma arquitetura KNN configurável sobre preditores numéricos padronizados por Z-score. Três escolhas trabalham em conjunto: \code{sby_knn_algorithm} define a estrutura/estratégia de busca, \code{sby_knn_engine} define a implementação computacional e \code{sby_knn_distance_metric} define a noção de proximidade.
 
+
+Com \code{sby_knn_engine = "auto"} e métrica euclidiana, o pacote prefere a engine \code{native} exata quando as rotinas nativas estão carregadas e usa \code{FNN} como fallback exato. Busca aproximada por \code{RcppHNSW} só é escolhida automaticamente quando a opção global \code{sbyadanear.sby_knn_allow_approx = TRUE} está ativa; essa opção não é argumento público das funções.
+
 \subsection{Engines disponíveis}{
 \describe{
-\item{\code{"FNN"}}{Melhor para bases pequenas a médias, distância euclidiana, execução sequencial ou paralela por blocos e busca exata. É simples, rápido para baixa/média dimensionalidade, determinístico e sem aproximação. Limitações: aceita apenas \code{"euclidean"} neste pacote e só combina com \code{"auto"}, \code{"kd_tree"}, \code{"cover_tree"} ou \code{"brute"}.}
+\item{\code{"native"}}{Busca exata euclidiana densa por kernel C/C++ interno. Retorna índices 1-based e distâncias euclidianas reais; honra controle explícito de self-neighbor nas rotas internas. Limitações: aceita apenas \code{"euclidean"} e só combina com \code{"auto"} ou \code{"brute"}.}
+\item{\code{"FNN"}}{Busca exata por \code{FNN::get.knnx()} para bases pequenas a médias e distância euclidiana. A rota \code{"brute"} pode acionar o kernel nativo de compatibilidade quando disponível. Limitações: aceita apenas \code{"euclidean"} neste pacote e só combina com \code{"auto"}, \code{"kd_tree"}, \code{"cover_tree"} ou \code{"brute"}.}
 \item{\code{"RcppHNSW"}}{Melhor para bases grandes, alta dimensionalidade, métricas \code{"cosine"}/\code{"ip"} e consultas em que velocidade é mais importante que exatidão perfeita. Implementa HNSW de alto desempenho, usa \code{sby_knn_workers}, costuma escalar melhor que busca exata e suporta \code{"euclidean"}, \code{"cosine"} e \code{"ip"}. Limitações: a busca é aproximada, exige calibrar \code{sby_knn_hnsw_m} e \code{sby_knn_hnsw_ef}, consome memória para o grafo e pode diferir de uma busca exata quando \code{ef} é baixo.}
+\item{\code{"KernelKnn"}}{Busca exata euclidiana via \code{KernelKnn::knn.index.dist()}; aceita \code{"auto"} ou \code{"brute"} nesta integração.}
+\item{\code{"bigKNN"}}{Busca exata euclidiana via \code{bigKNN::knn_bigmatrix()}; aceita \code{"auto"} ou \code{"brute"} nesta integração.}
 }
 }
 
