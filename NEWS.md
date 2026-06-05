@@ -1,5 +1,19 @@
 # sbyadanear 0.4.0 (em desenvolvimento)
 
+## Correções de contrato KNN
+
+* A rota de compatibilidade `sby_knn_engine = "FNN"` com
+  `sby_knn_algorithm = "brute"` agora reutiliza a engine `native` parametrizada,
+  preservando `sby_query_is_data`, `sby_exclude_self`, `sby_knn_return` e offsets
+  de chunks da mesma forma que `sby_knn_engine = "native"`.
+* Chamadas FNN com `sby_knn_algorithm = "auto"` agora resolvem o marcador para
+  um algoritmo aceito por `FNN::get.knnx()` antes da chamada externa.
+* Validadores de workers, tamanho de chunk e parâmetros HNSW passaram a rejeitar
+  valores fracionários em vez de truncá-los silenciosamente.
+* As rotas RcppParallel nativas agora preservam o formato de retorno parcial,
+  retornando apenas `nn.index` ou apenas `nn.dist` quando solicitado.
+
+
 ## Mudancas de comportamento (breaking)
 
 * `sby_knn_engine = "native"` foi adicionado como engine explicito para KNN

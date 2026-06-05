@@ -12,7 +12,7 @@
 sby_validate_hnsw_params <- function(sby_knn_hnsw_m, sby_knn_hnsw_ef){
   
   # Verifica se a conectividade HNSW e um escalar numerico finito valido
-  if(!(is.numeric(sby_knn_hnsw_m) && length(sby_knn_hnsw_m) == 1L && !is.na(sby_knn_hnsw_m) && is.finite(sby_knn_hnsw_m) && sby_knn_hnsw_m >= 2L)){
+  if(!(is.numeric(sby_knn_hnsw_m) && length(sby_knn_hnsw_m) == 1L && !is.na(sby_knn_hnsw_m) && is.finite(sby_knn_hnsw_m) && sby_knn_hnsw_m >= 2L && sby_knn_hnsw_m == floor(sby_knn_hnsw_m) && sby_knn_hnsw_m <= .Machine$integer.max)){
 
     # Aborta quando a conectividade HNSW esta fora do dominio permitido
     sby_adanear_abort(
@@ -21,7 +21,7 @@ sby_validate_hnsw_params <- function(sby_knn_hnsw_m, sby_knn_hnsw_ef){
   }
 
   # Verifica se a lista dinamica HNSW e um escalar numerico positivo finito
-  if(!(is.numeric(sby_knn_hnsw_ef) && length(sby_knn_hnsw_ef) == 1L && !is.na(sby_knn_hnsw_ef) && is.finite(sby_knn_hnsw_ef) && sby_knn_hnsw_ef >= 1L)){
+  if(!(is.numeric(sby_knn_hnsw_ef) && length(sby_knn_hnsw_ef) == 1L && !is.na(sby_knn_hnsw_ef) && is.finite(sby_knn_hnsw_ef) && sby_knn_hnsw_ef >= 1L && sby_knn_hnsw_ef == floor(sby_knn_hnsw_ef) && sby_knn_hnsw_ef <= .Machine$integer.max)){
 
     # Aborta quando o parametro de busca HNSW esta fora do dominio permitido
     sby_adanear_abort(

@@ -272,3 +272,27 @@ test_that("RcppParallel backend matches native exact brute KNN", {
   runtime <- sbyadanear:::sby_resolve_knn_parallel_runtime("RcppParallel")
   expect_true(runtime %in% c("RcppParallel::TBB", "RcppParallel::TinyThread"))
 })
+
+test_that("parallel backend partial native returns match sequential contract", {
+  testthat::skip_if_not_installed("RcppParallel")
+  skip_if_not(sby_adanear_native_available())
+  set.seed(1005)
+  x <- matrix(rnorm(12L * 3L), nrow = 12L, ncol = 3L)
+  q <- x[seq_len(5L), , drop = FALSE]
+  storage.mode(x) <- "double"
+  storage.mode(q) <- "double"
+
+  index <- .Call(
+    sbyadanear:::brute_force_knn_native_parallel_c,
+    x, q, 2L, 1L, 2L, FALSE, FALSE, 0L
+  )
+  dist <- .Call(
+    sbyadanear:::brute_force_knn_native_parallel_c,
+    x, q, 2L, 2L, 2L, FALSE, FALSE, 0L
+  )
+
+  expect_named(index, "nn.index")
+  expect_named(dist, "nn.dist")
+  expect_equal(dim(index$nn.index), c(5L, 2L))
+  expect_equal(dim(dist$nn.dist), c(5L, 2L))
+})

@@ -137,12 +137,10 @@ sby_get_knnx <- function(
     }
 
     # Caminho rapido nativo (BLAS): quando o algoritmo selecionado e brute
-    # force exato e o kernel C nativo esta disponivel, usa rotinas brute_force_knn_*
-    # que computam o produto cruzado via dgemm (BLAS) e selecionam top-k por
-    # ordenacao parcial. As variantes index-only e dist-only evitam alocar componentes que
-    # ADASYN e NearMiss descartariam imediatamente. Em alta dimensionalidade
-    # isso costuma ser mais rapido que FNN::get.knnx(algorithm="brute"),
-    # especialmente com OpenBLAS/MKL.
+    # force exato e o kernel C nativo esta disponivel, usa a mesma rota
+    # parametrizada da engine native explicita. Isso evita divergencias de
+    # contrato para query_is_data/exclude_self/query_offset entre "native" e o
+    # atalho historico FNN + brute.
     sby_native_brute_option <- getOption("sbyadanear.sby_use_native_brute", TRUE)
     sby_use_native_brute <- identical(sby_knn_algorithm, "brute") &&
       isTRUE(sby_native_brute_option) &&
@@ -150,51 +148,25 @@ sby_get_knnx <- function(
       !identical(getOption("sbyadanear.perf_mode", "auto"), "legacy")
 
     if(sby_use_native_brute){
-      sby_knn_result <- sby_query_knn_in_chunks(
+      sby_knn_result <- sby_get_knnx_native(
+        sby_data = sby_data,
         sby_query = sby_query,
         sby_k = sby_k,
-        sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+        sby_knn_algorithm = "brute",
+        sby_knn_distance_metric = sby_knn_distance_metric,
         sby_knn_workers = sby_knn_workers,
         sby_knn_parallel_backend = sby_knn_parallel_backend,
-        sby_knn_return = sby_knn_return,
-        sby_query_fun = function(sby_query_chunk){
-          storage.mode(sby_data) <- "double"
-          storage.mode(sby_query_chunk) <- "double"
-          if(identical(sby_knn_parallel_backend, "RcppParallel")){
-            return(.Call(
-              brute_force_knn_rcpp_parallel_c,
-              sby_data,
-              sby_query_chunk,
-              as.integer(sby_k),
-              as.integer(match(sby_knn_return, c("both", "index", "dist")) - 1L),
-              as.integer(sby_knn_workers)
-            ))
-          }
-          if(identical(sby_knn_return, "index")){
-            return(.Call(
-              brute_force_knn_index_c,
-              sby_data,
-              sby_query_chunk,
-              as.integer(sby_k)
-            ))
-          }
-          if(identical(sby_knn_return, "dist")){
-            return(.Call(
-              brute_force_knn_dist_c,
-              sby_data,
-              sby_query_chunk,
-              as.integer(sby_k)
-            ))
-          }
-          return(.Call(
-            brute_force_knn_c,
-            sby_data,
-            sby_query_chunk,
-            as.integer(sby_k)
-          ))
-        }
+        sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+        sby_query_is_data = sby_query_is_data,
+        sby_exclude_self = sby_exclude_self,
+        sby_knn_return = sby_knn_return
       )
     }else{
+      sby_fnn_algorithm <- if(identical(sby_knn_algorithm, "auto")){
+        "kd_tree"
+      }else{
+        sby_knn_algorithm
+      }
       if(identical(sby_knn_parallel_backend, "RcppParallel")){
         sby_adanear_warn(
           sby_message = "'sby_knn_parallel_backend = RcppParallel' e usado apenas no kernel nativo exato com 'sby_knn_algorithm = brute'; usando 'parallel' para este engine/algoritmo."
@@ -214,7 +186,7 @@ sby_get_knnx <- function(
             data = sby_data,
             query = sby_query_chunk,
             k = sby_k,
-            algorithm = sby_knn_algorithm
+            algorithm = sby_fnn_algorithm
           ))
         }
       )

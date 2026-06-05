@@ -159,15 +159,14 @@ extern "C" SEXP brute_force_knn_rcpp_parallel_c(
   if(workers < 1){
     workers = 1;
   }
+  if(ret < 0 || ret > 2){
+    Rf_error("'return_code' deve ser 0 (both), 1 (index) ou 2 (dist)");
+  }
 
   const bool need_index = ret == 0 || ret == 1;
   const bool need_dist = ret == 0 || ret == 2;
   SEXP index_out = R_NilValue;
   SEXP dist_out = R_NilValue;
-  SEXP out = PROTECT(Rf_allocVector(VECSXP, 2));
-  SEXP names = PROTECT(Rf_allocVector(STRSXP, 2));
-  SET_STRING_ELT(names, 0, Rf_mkChar("nn.index"));
-  SET_STRING_ELT(names, 1, Rf_mkChar("nn.dist"));
 
   if(need_index){
     index_out = PROTECT(Rf_allocMatrix(INTSXP, n_query, k));
@@ -205,11 +204,18 @@ extern "C" SEXP brute_force_knn_rcpp_parallel_c(
     workers
   );
 
+  const int out_length = need_index && need_dist ? 2 : 1;
+  SEXP out = PROTECT(Rf_allocVector(VECSXP, out_length));
+  SEXP names = PROTECT(Rf_allocVector(STRSXP, out_length));
+  int pos = 0;
   if(need_index){
-    SET_VECTOR_ELT(out, 0, index_out);
+    SET_STRING_ELT(names, pos, Rf_mkChar("nn.index"));
+    SET_VECTOR_ELT(out, pos, index_out);
+    ++pos;
   }
   if(need_dist){
-    SET_VECTOR_ELT(out, 1, dist_out);
+    SET_STRING_ELT(names, pos, Rf_mkChar("nn.dist"));
+    SET_VECTOR_ELT(out, pos, dist_out);
   }
   Rf_setAttrib(out, R_NamesSymbol, names);
   UNPROTECT(4);
@@ -275,10 +281,6 @@ extern "C" SEXP brute_force_knn_native_parallel_c(
   const bool need_dist = ret == 0 || ret == 2;
   SEXP index_out = R_NilValue;
   SEXP dist_out = R_NilValue;
-  SEXP out = PROTECT(Rf_allocVector(VECSXP, 2));
-  SEXP names = PROTECT(Rf_allocVector(STRSXP, 2));
-  SET_STRING_ELT(names, 0, Rf_mkChar("nn.index"));
-  SET_STRING_ELT(names, 1, Rf_mkChar("nn.dist"));
 
   if(need_index){
     index_out = PROTECT(Rf_allocMatrix(INTSXP, n_query, k));
@@ -316,11 +318,18 @@ extern "C" SEXP brute_force_knn_native_parallel_c(
     workers
   );
 
+  const int out_length = need_index && need_dist ? 2 : 1;
+  SEXP out = PROTECT(Rf_allocVector(VECSXP, out_length));
+  SEXP names = PROTECT(Rf_allocVector(STRSXP, out_length));
+  int pos = 0;
   if(need_index){
-    SET_VECTOR_ELT(out, 0, index_out);
+    SET_STRING_ELT(names, pos, Rf_mkChar("nn.index"));
+    SET_VECTOR_ELT(out, pos, index_out);
+    ++pos;
   }
   if(need_dist){
-    SET_VECTOR_ELT(out, 1, dist_out);
+    SET_STRING_ELT(names, pos, Rf_mkChar("nn.dist"));
+    SET_VECTOR_ELT(out, pos, dist_out);
   }
   Rf_setAttrib(out, R_NamesSymbol, names);
   UNPROTECT(4);
