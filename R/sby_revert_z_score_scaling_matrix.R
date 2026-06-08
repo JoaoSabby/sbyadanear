@@ -29,14 +29,13 @@ sby_revert_z_score_scaling_matrix <- function(
 
   # Aplica implementacao nativa Fortran se solicitada
   if(sby_engine == "native" && is.loaded("revert_zscore_fortran_c")){
-    sby_x_t <- t(sby_x_matrix)
-    sby_restored_t <- .Call(
-      "revert_zscore_fortran_c",
-      sby_x_t,
+    sby_configure_blas_threads(sby_workers = 1L)
+    sby_restored <- .Call(
+      revert_zscore_fortran_c,
+      sby_x_matrix,
       as.numeric(sby_scaling_info$centers),
       as.numeric(sby_scaling_info$scales)
     )
-    sby_restored <- t(sby_restored_t)
   } else if(sby_adanear_native_available()){
     # Reverte z-score por chamada nativa registrada no pacote em C
     sby_restored <- .Call(

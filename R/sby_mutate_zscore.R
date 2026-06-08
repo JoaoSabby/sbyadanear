@@ -35,19 +35,24 @@ sby_mutate_zscore <- function(
   storage.mode(x_matrix) <- "double"
 
   if (sby_engine == "native") {
-    # Transpoe para layout P x N (features nas linhas)
-    x_t <- t(x_matrix)
-
-    # Calcula media e desvio populacionais via Fortran
-    zscore_params <- .Call("compute_zscore_population_fortran_c", x_t)
+    sby_configure_blas_threads(sby_workers = 1L)
+    # Usa layout R n x p diretamente para evitar copias por transposicao
+    zscore_params <- .Call(
+      compute_zscore_population_fortran_c,
+      x_matrix
+    )
 
     # Aplica z-score via Fortran
-    x_scaled_t <- .Call("apply_zscore_fortran_c", x_t,
-                        zscore_params$means, zscore_params$sds)
+    x_scaled <- .Call(
+      apply_zscore_fortran_c,
+      x_matrix,
+      zscore_params$means,
+      zscore_params$sds
+    )
 
     return(list(
-      x_scaled_t = x_scaled_t,
-      x_original_t = x_t,
+      x_scaled = x_scaled,
+      x_original = x_matrix,
       means = zscore_params$means,
       sds = zscore_params$sds,
       feature_names = feature_names,
@@ -58,10 +63,17 @@ sby_mutate_zscore <- function(
   }
 
   # Fallback R puro: usa as rotinas C existentes
-  zscore_params <- .Call("compute_z_score_params_c", x_matrix)
-  x_scaled <- .Call("apply_z_score_c", x_matrix,
-                    zscore_params$centers, zscore_params$scales,
-                    FALSE)
+  zscore_params <- .Call(
+    compute_z_score_params_c,
+    x_matrix
+  )
+  x_scaled <- .Call(
+    apply_z_score_c,
+    x_matrix,
+    zscore_params$centers,
+    zscore_params$scales,
+    FALSE
+  )
 
   return(list(
     x_scaled = x_scaled,

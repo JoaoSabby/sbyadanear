@@ -189,6 +189,12 @@ static void require_finite_real_matrix_values(const double *values, R_xlen_t len
   }
 }
 
+static void require_real_vector_length(SEXP x, R_xlen_t expected_length, const char *name){
+  if(!isReal(x) || XLENGTH(x) != expected_length){
+    error("O parametro '%s' deve ser um vetor double com comprimento compativel", name);
+  }
+}
+
 //' @title Parâmetros nativos de Z-Score
 //' @description Calcula médias e desvios-padrão amostrais por coluna com aceleração vetorial quando disponível.
 //' @param x_matrix Matriz double de entrada.
@@ -1068,34 +1074,34 @@ extern "C" SEXP brute_force_knn_native_parallel_c(SEXP, SEXP, SEXP, SEXP, SEXP, 
 extern "C" SEXP rcpp_parallel_uses_tbb_c(void);
 
 extern "C" {
-  void sby_compute_zscore_population_f(const double *x, int p, int n,
+  void sby_compute_zscore_population_f(const double *x, int n, int p,
                                        double *means, double *sds, int *status);
-  void sby_apply_zscore_f(const double *x, int p, int n,
+  void sby_apply_zscore_f(const double *x, int n, int p,
                           const double *means, const double *sds,
                           double *x_out, int *status);
-  void sby_revert_zscore_f(const double *x, int p, int n,
+  void sby_revert_zscore_f(const double *x, int n, int p,
                            const double *means, const double *sds,
                            double *x_out, int *status);
-  void sby_rbind_matrix_f(const double *a, int p, int n1,
+  void sby_rbind_matrix_f(const double *a, int n1, int p,
                           const double *b, int n2,
                           double *c_out, int *status);
 }
 
 //' @title Z-Score populacional nativo Fortran
 //' @description Calcula media e desvio padrao populacionais via motor Fortran AVX-512.
-//' @param x_matrix Matriz double transposta (P x N).
+//' @param x_matrix Matriz double em layout R n x p.
 //' @return Lista com vetores means e sds.
 extern "C" SEXP compute_zscore_population_fortran_c(SEXP x_matrix){
   require_real_matrix(x_matrix, "x_matrix");
   SEXP dims   = getAttrib(x_matrix, R_DimSymbol);
-  const int p = INTEGER(dims)[0];
-  const int n = INTEGER(dims)[1];
+  const int n = INTEGER(dims)[0];
+  const int p = INTEGER(dims)[1];
 
   SEXP means_sexp = PROTECT(allocVector(REALSXP, p));
   SEXP sds_sexp   = PROTECT(allocVector(REALSXP, p));
 
   int status = 0;
-  sby_compute_zscore_population_f(REAL(x_matrix), p, n,
+  sby_compute_zscore_population_f(REAL(x_matrix), n, p,
                                   REAL(means_sexp), REAL(sds_sexp), &status);
   if(status != 0){
     UNPROTECT(2);
@@ -1117,19 +1123,21 @@ extern "C" SEXP compute_zscore_population_fortran_c(SEXP x_matrix){
 
 //' @title Aplicacao de Z-Score nativo Fortran
 //' @description Aplica padronizacao Z-Score via motor Fortran AVX-512.
-//' @param x_matrix Matriz double transposta (P x N).
+//' @param x_matrix Matriz double em layout R n x p.
 //' @param means Vetor double de medias.
 //' @param sds Vetor double de desvios padrao.
 //' @return Matriz double padronizada.
 extern "C" SEXP apply_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
   require_real_matrix(x_matrix, "x_matrix");
   SEXP dims   = getAttrib(x_matrix, R_DimSymbol);
-  const int p = INTEGER(dims)[0];
-  const int n = INTEGER(dims)[1];
+  const int n = INTEGER(dims)[0];
+  const int p = INTEGER(dims)[1];
+  require_real_vector_length(means, p, "means");
+  require_real_vector_length(sds, p, "sds");
 
-  SEXP out   = PROTECT(allocMatrix(REALSXP, p, n));
+  SEXP out   = PROTECT(allocMatrix(REALSXP, n, p));
   int status = 0;
-  sby_apply_zscore_f(REAL(x_matrix), p, n, REAL(means), REAL(sds),
+  sby_apply_zscore_f(REAL(x_matrix), n, p, REAL(means), REAL(sds),
                      REAL(out), &status);
   if(status != 0){
     UNPROTECT(1);
@@ -1142,19 +1150,21 @@ extern "C" SEXP apply_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
 
 //' @title Reversao de Z-Score nativo Fortran
 //' @description Reverte padronizacao Z-Score via motor Fortran AVX-512.
-//' @param x_matrix Matriz double transposta (P x N).
+//' @param x_matrix Matriz double em layout R n x p.
 //' @param means Vetor double de medias.
 //' @param sds Vetor double de desvios padrao.
 //' @return Matriz double na escala original.
 extern "C" SEXP revert_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
   require_real_matrix(x_matrix, "x_matrix");
   SEXP dims   = getAttrib(x_matrix, R_DimSymbol);
-  const int p = INTEGER(dims)[0];
-  const int n = INTEGER(dims)[1];
+  const int n = INTEGER(dims)[0];
+  const int p = INTEGER(dims)[1];
+  require_real_vector_length(means, p, "means");
+  require_real_vector_length(sds, p, "sds");
 
-  SEXP out   = PROTECT(allocMatrix(REALSXP, p, n));
+  SEXP out   = PROTECT(allocMatrix(REALSXP, n, p));
   int status = 0;
-  sby_revert_zscore_f(REAL(x_matrix), p, n, REAL(means), REAL(sds),
+  sby_revert_zscore_f(REAL(x_matrix), n, p, REAL(means), REAL(sds),
                       REAL(out), &status);
   if(status != 0){
     UNPROTECT(1);
@@ -1166,28 +1176,28 @@ extern "C" SEXP revert_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
 }
 
 //' @title Concatenacao de matrizes nativa Fortran
-//' @description Empilha duas matrizes P x N por colunas via motor Fortran com OpenMP.
-//' @param a_matrix Primeira matriz double (P x N1).
-//' @param b_matrix Segunda matriz double (P x N2).
-//' @return Matriz double (P x (N1+N2)).
+//' @description Empilha duas matrizes n x p por linhas via motor Fortran com OpenMP.
+//' @param a_matrix Primeira matriz double (N1 x P).
+//' @param b_matrix Segunda matriz double (N2 x P).
+//' @return Matriz double ((N1+N2) x P).
 extern "C" SEXP rbind_matrix_fortran_c(SEXP a_matrix, SEXP b_matrix){
   require_real_matrix(a_matrix, "a_matrix");
   require_real_matrix(b_matrix, "b_matrix");
 
   SEXP a_dims    = getAttrib(a_matrix, R_DimSymbol);
   SEXP b_dims    = getAttrib(b_matrix, R_DimSymbol);
-  const int p    = INTEGER(a_dims)[0];
-  const int n1   = INTEGER(a_dims)[1];
-  const int p2   = INTEGER(b_dims)[0];
-  const int n2   = INTEGER(b_dims)[1];
+  const int n1   = INTEGER(a_dims)[0];
+  const int p    = INTEGER(a_dims)[1];
+  const int n2   = INTEGER(b_dims)[0];
+  const int p2   = INTEGER(b_dims)[1];
 
   if(p != p2){
-    error("As matrizes devem ter o mesmo numero de linhas (features)");
+    error("As matrizes devem ter o mesmo numero de colunas (features)");
   }
 
-  SEXP out   = PROTECT(allocMatrix(REALSXP, p, n1 + n2));
+  SEXP out   = PROTECT(allocMatrix(REALSXP, n1 + n2, p));
   int status = 0;
-  sby_rbind_matrix_f(REAL(a_matrix), p, n1, REAL(b_matrix), n2,
+  sby_rbind_matrix_f(REAL(a_matrix), n1, p, REAL(b_matrix), n2,
                      REAL(out), &status);
   if(status != 0){
     UNPROTECT(1);
