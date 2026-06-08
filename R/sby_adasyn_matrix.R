@@ -94,11 +94,11 @@ sby_adasyn_matrix <- function(
     sby_x_scaled <- sby_x_matrix
   }else{
     if(is.null(sby_scaling_info)){
-      sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix)
+      sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix, sby_engine = sby_knn_engine)
     }else{
       sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
     }
-    sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info)
+    sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine)
   }
 
   set.seed(sby_seed)
@@ -119,7 +119,7 @@ sby_adasyn_matrix <- function(
   colnames(sby_adasyn_result$x) <- colnames(sby_x_matrix)
 
   if(isTRUE(sby_return_original_scale)){
-    sby_x_out <- sby_revert_z_score_scaling_matrix(sby_adasyn_result$x, sby_scaling_info)
+    sby_x_out <- sby_revert_z_score_scaling_matrix(sby_adasyn_result$x, sby_scaling_info, sby_engine = sby_knn_engine)
     sby_output_scale <- "original"
   }else{
     sby_x_out <- sby_adasyn_result$x

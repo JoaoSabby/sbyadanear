@@ -77,11 +77,11 @@ sby_nearmiss_index <- function(
     sby_x_scaled <- sby_x_matrix
   }else{
     if(is.null(sby_scaling_info)){
-      sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix)
+      sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix, sby_engine = sby_knn_engine)
     }else{
       sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
     }
-    sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info)
+    sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine)
   }
 
   if(identical(sby_class_info_input$sby_minority_count, sby_class_info_input$sby_majority_count)){

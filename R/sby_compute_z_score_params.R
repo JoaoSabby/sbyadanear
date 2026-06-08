@@ -8,23 +8,32 @@
 #'
 #' @return Lista com vetores numericos `centers` e `scales`
 #' @noRd
-sby_compute_z_score_params <- function(sby_x_matrix){
+sby_compute_z_score_params <- function(
+  sby_x_matrix,
+  sby_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN")
+){
+  sby_engine <- match.arg(sby_engine)
   
   # Normaliza entrada para matriz numerica de precisao dupla
   sby_x_matrix <- sby_adanear_as_numeric_matrix(
     sby_predictor_data = sby_x_matrix
   )
 
-  # Calcula parametros por rotina nativa quando disponivel
-  if(sby_adanear_native_available()){
-
-    # Estima centros e escalas por chamada nativa registrada no pacote
+  # Calcula parametros pela engine nativa Fortran
+  if(sby_engine == "native" && is.loaded("compute_zscore_population_fortran_c")){
+    sby_x_t <- t(sby_x_matrix)
+    sby_params_f <- .Call("compute_zscore_population_fortran_c", sby_x_t)
+    sby_params <- list(
+      centers = sby_params_f$means,
+      scales = sby_params_f$sds
+    )
+  } else if(sby_adanear_native_available()){
+    # Estima centros e escalas por chamada nativa em C
     sby_params <- .Call(
       compute_z_score_params_c,
       sby_x_matrix
     )
-  }else{
-
+  } else {
     sby_params <- list(
       centers = Rfast::colmeans(sby_x_matrix),
       scales = Rfast::colVars(

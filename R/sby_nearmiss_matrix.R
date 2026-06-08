@@ -75,7 +75,7 @@ sby_nearmiss_matrix <- function(
   sby_reduced_scaled <- sby_index_result$sby_reduced_scaled
 
   if(isTRUE(sby_return_original_scale)){
-    sby_x_out <- sby_revert_z_score_scaling_matrix(sby_reduced_scaled, sby_scaling_info)
+    sby_x_out <- sby_revert_z_score_scaling_matrix(sby_reduced_scaled, sby_scaling_info, sby_engine = sby_knn_engine)
     sby_output_scale <- "original"
   }else{
     sby_x_out <- sby_reduced_scaled

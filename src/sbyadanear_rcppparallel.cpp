@@ -79,12 +79,20 @@ struct sby_brute_force_knn_worker : public RcppParallel::Worker {
         neighbors[r] = {dist2, static_cast<int>(r + 1)};
       }
 
-      std::partial_sort(
+      if (static_cast<std::size_t>(k) < n_ref) {
+        std::nth_element(
+          neighbors.begin(),
+          neighbors.begin() + k,
+          neighbors.end(),
+          sby_neighbor_less
+        );
+      }
+      std::sort(
         neighbors.begin(),
         neighbors.begin() + k,
-        neighbors.end(),
         sby_neighbor_less
       );
+
       for(int j = 0; j < k; ++j){
         const sby_neighbor& neighbor = neighbors[static_cast<std::size_t>(j)];
         if(need_index){

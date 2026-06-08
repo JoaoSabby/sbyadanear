@@ -9,8 +9,13 @@
 #'
 #' @return Matriz numerica padronizada por z-score
 #' @noRd
-sby_apply_z_score_scaling_matrix <- function(sby_x_matrix, sby_scaling_info){
-  
+sby_apply_z_score_scaling_matrix <- function(
+  sby_x_matrix, 
+  sby_scaling_info,
+  sby_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN")
+){
+  sby_engine <- match.arg(sby_engine)
+
   # Normaliza entrada para matriz numerica de precisao dupla
   sby_x_matrix <- sby_adanear_as_numeric_matrix(
     sby_predictor_data = sby_x_matrix
@@ -22,10 +27,18 @@ sby_apply_z_score_scaling_matrix <- function(sby_x_matrix, sby_scaling_info){
     sby_predictor_column_count = collapse::fncol(sby_x_matrix)
   )
 
-  # Aplica implementacao nativa quando disponivel
-  if(sby_adanear_native_available()){
-
-    # Calcula z-score por chamada nativa registrada no pacote
+  # Aplica implementacao nativa Fortran se solicitada
+  if(sby_engine == "native" && is.loaded("apply_zscore_fortran_c")){
+    sby_x_t <- t(sby_x_matrix)
+    sby_scaled_t <- .Call(
+      "apply_zscore_fortran_c",
+      sby_x_t,
+      as.numeric(sby_scaling_info$centers),
+      as.numeric(sby_scaling_info$scales)
+    )
+    sby_scaled <- t(sby_scaled_t)
+  } else if(sby_adanear_native_available()){
+    # Aplica implementacao nativa C
     sby_scaled <- .Call(
       apply_z_score_c,
       sby_x_matrix,
@@ -33,7 +46,7 @@ sby_apply_z_score_scaling_matrix <- function(sby_x_matrix, sby_scaling_info){
       as.numeric(sby_scaling_info$scales),
       FALSE
     )
-  }else{
+  } else {
 
     sby_centered <- Rfast::eachrow(
       x = sby_x_matrix,

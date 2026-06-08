@@ -47,3 +47,9 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# translation temp files
+.po/*~
+
+# translation temp files
+.prompts/
