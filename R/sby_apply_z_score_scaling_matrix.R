@@ -29,14 +29,13 @@ sby_apply_z_score_scaling_matrix <- function(
 
   # Aplica implementacao nativa Fortran se solicitada
   if(sby_engine == "native" && is.loaded("apply_zscore_fortran_c")){
-    sby_x_t <- t(sby_x_matrix)
-    sby_scaled_t <- .Call(
-      "apply_zscore_fortran_c",
-      sby_x_t,
+    sby_configure_blas_threads(sby_workers = 1L)
+    sby_scaled <- .Call(
+      apply_zscore_fortran_c,
+      sby_x_matrix,
       as.numeric(sby_scaling_info$centers),
       as.numeric(sby_scaling_info$scales)
     )
-    sby_scaled <- t(sby_scaled_t)
   } else if(sby_adanear_native_available()){
     # Aplica implementacao nativa C
     sby_scaled <- .Call(

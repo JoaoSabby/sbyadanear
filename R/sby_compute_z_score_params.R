@@ -21,8 +21,11 @@ sby_compute_z_score_params <- function(
 
   # Calcula parametros pela engine nativa Fortran
   if(sby_engine == "native" && is.loaded("compute_zscore_population_fortran_c")){
-    sby_x_t <- t(sby_x_matrix)
-    sby_params_f <- .Call("compute_zscore_population_fortran_c", sby_x_t)
+    sby_configure_blas_threads(sby_workers = 1L)
+    sby_params_f <- .Call(
+      compute_zscore_population_fortran_c,
+      sby_x_matrix
+    )
     sby_params <- list(
       centers = sby_params_f$means,
       scales = sby_params_f$sds

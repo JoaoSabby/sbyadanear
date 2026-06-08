@@ -290,16 +290,14 @@ sby_generate_adasyn_samples <- function(
 
   # Consolida a matriz expandida por kernel nativo quando possivel.
   if(sby_knn_engine == "native" && is.loaded("rbind_matrix_fortran_c")){
+    sby_configure_blas_threads(sby_workers = 1L)
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
-    sby_x_t <- t(sby_x_scaled)
-    sby_syn_t <- t(sby_synthetic_matrix)
-    sby_expanded_t <- .Call(
-      "rbind_matrix_fortran_c",
-      sby_x_t,
-      sby_syn_t
+    sby_expanded_x <- .Call(
+      rbind_matrix_fortran_c,
+      sby_x_scaled,
+      sby_synthetic_matrix
     )
-    sby_expanded_x <- t(sby_expanded_t)
   } else if(sby_adanear_native_available()){
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
