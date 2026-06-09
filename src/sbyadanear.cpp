@@ -501,8 +501,13 @@ extern "C" SEXP select_nearmiss_majority_c(SEXP nn_dist, SEXP majority_index, SE
     if((i & 8191) == 0){
       R_CheckUserInterrupt();
     }
+    /* Acumulacao em long double para estabilidade da media de distancias.
+     * Este laco nao recebe diretiva omp simd: ele contem um desvio de
+     * validacao que pode acionar error() (longjmp da R-API) e mistura leitura
+     * double com acumulacao long double, o que impede a vetorizacao e fazia o
+     * compilador Intel emitir o aviso -Wpass-failed=transform-warning. A versao
+     * escalar e correta e ja se beneficia do desenrolamento automatico. */
     long double sum = 0.0L;
-#pragma omp simd reduction(+:sum)
     for(int j = 0; j < k; ++j){
       const double value = dist[i + ((R_xlen_t) j * n)];
       if(!R_FINITE(value)){
