@@ -39,6 +39,13 @@ sby_native_symbol_available <- function(sby_symbol_name){
   )
 }
 
+sby_call_native <- function(sby_symbol_name, ...){
+  .Call(
+    sby_load_native_symbol(sby_symbol_name),
+    ...
+  )
+}
+
 delayedAssign(check_user_interrupt_c, sby_load_native_symbol("check_user_interrupt_c"))
 delayedAssign(compute_z_score_params_c, sby_load_native_symbol("compute_z_score_params_c"))
 delayedAssign(apply_z_score_c, sby_load_native_symbol("apply_z_score_c"))

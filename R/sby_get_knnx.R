@@ -491,8 +491,8 @@ sby_get_knnx_native <- function(
       storage.mode(sby_query_chunk) <- "double"
       sby_query_offset <- as.integer(min(sby_query_chunk_index) - 1L)
       if(identical(sby_knn_parallel_backend, "RcppParallel")){
-        return(.Call(
-          brute_force_knn_native_parallel_c,
+        return(sby_call_native(
+          "brute_force_knn_native_parallel_c",
           sby_data,
           sby_query_chunk,
           as.integer(sby_k),
@@ -503,8 +503,8 @@ sby_get_knnx_native <- function(
           sby_query_offset
         ))
       }
-      return(.Call(
-        brute_force_knn_native_c,
+      return(sby_call_native(
+        "brute_force_knn_native_c",
         sby_data,
         sby_query_chunk,
         as.integer(sby_k),
