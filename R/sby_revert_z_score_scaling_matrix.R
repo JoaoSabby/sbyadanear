@@ -28,7 +28,7 @@ sby_revert_z_score_scaling_matrix <- function(
   )
 
   # Aplica implementacao nativa Fortran se solicitada
-  if(sby_engine == "native" && is.loaded("revert_zscore_fortran_c")){
+  if(sby_engine == "native" && sby_native_symbol_available("revert_zscore_fortran_c")){
     sby_configure_blas_threads(sby_workers = 1L)
     sby_restored <- .Call(
       revert_zscore_fortran_c,

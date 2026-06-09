@@ -20,7 +20,7 @@ sby_compute_z_score_params <- function(
   )
 
   # Calcula parametros pela engine nativa Fortran
-  if(sby_engine == "native" && is.loaded("compute_zscore_population_fortran_c")){
+  if(sby_engine == "native" && sby_native_symbol_available("compute_zscore_population_fortran_c")){
     sby_configure_blas_threads(sby_workers = 1L)
     sby_params_f <- .Call(
       compute_zscore_population_fortran_c,

@@ -127,6 +127,7 @@ void sby_require_finite_matrix(SEXP x, const char *name){
 //' @title Detecção de backend TBB em RcppParallel
 //' @description Informa se o RcppParallel foi compilado com suporte TBB.
 //' @return Valor lógico indicado pelo backend nativo.
+// [[Rcpp::export]]
 extern "C" SEXP rcpp_parallel_uses_tbb_c(){
 #if RCPP_PARALLEL_USE_TBB
   return Rf_ScalarLogical(1);
@@ -138,6 +139,7 @@ extern "C" SEXP rcpp_parallel_uses_tbb_c(){
 //' @title KNN bruto paralelo com RcppParallel
 //' @description Executa KNN euclidiano exato distribuindo consultas por trabalhadores nativos.
 //' @return Lista R com índices e distâncias conforme solicitado.
+// [[Rcpp::export]]
 extern "C" SEXP brute_force_knn_rcpp_parallel_c(
   SEXP data_matrix,
   SEXP query_matrix,
@@ -233,6 +235,7 @@ extern "C" SEXP brute_force_knn_rcpp_parallel_c(
 //' @title KNN bruto nativo paralelo parametrizado
 //' @description Executa KNN euclidiano exato distribuindo consultas por trabalhadores nativos, com controle de retorno e self-neighbor.
 //' @return Lista R com índices e distâncias conforme solicitado.
+// [[Rcpp::export]]
 extern "C" SEXP brute_force_knn_native_parallel_c(
   SEXP data_matrix,
   SEXP query_matrix,
