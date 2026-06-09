@@ -1273,10 +1273,19 @@ static const R_CallMethodDef call_entries[] = {
 };
 
 //' @title Registro nativo do pacote
-//' @description Registra as rotinas .Call e desativa resolução dinâmica de símbolos.
-//' @param dll Ponteiro para a biblioteca dinâmica carregada pelo R.
+//' @description Registra as rotinas .Call e configura a resolucao de simbolos.
+//' @param dll Ponteiro para a biblioteca dinamica carregada pelo R.
 extern "C" void attribute_visible R_init_sbyadanear(DllInfo *dll){
   R_registerRoutines(dll, NULL, call_entries, NULL, NULL);
+  /* Mantem R_useDynamicSymbols(FALSE) para que apenas rotinas registradas
+   * sejam encontradas, evitando buscas dinamicas de simbolos arbitrarios. */
   R_useDynamicSymbols(dll, FALSE);
-  R_forceSymbols(dll, TRUE);
+  /* R_forceSymbols precisa ser FALSE: o pacote resolve as rotinas .Call de
+   * forma preguicosa por getNativeSymbolInfo("nome", PACKAGE = "sbyadanear"),
+   * que e uma busca por nome de string. Com R_forceSymbols(TRUE) o R recusa
+   * qualquer busca por string e so aceita objetos NativeSymbolInfo, fazendo
+   * getNativeSymbolInfo falhar com 'no such symbol' e, por consequencia,
+   * sby_native_symbol_available() retornar FALSE para todas as rotinas, o que
+   * derrubava tanto o atalho HPC quanto a rota native classica em execucao. */
+  R_forceSymbols(dll, FALSE);
 }
