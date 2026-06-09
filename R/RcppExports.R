@@ -66,3 +66,6 @@ delayedAssign(compute_zscore_population_fortran_c, sby_load_native_symbol("compu
 delayedAssign(apply_zscore_fortran_c, sby_load_native_symbol("apply_zscore_fortran_c"))
 delayedAssign(revert_zscore_fortran_c, sby_load_native_symbol("revert_zscore_fortran_c"))
 delayedAssign(rbind_matrix_fortran_c, sby_load_native_symbol("rbind_matrix_fortran_c"))
+delayedAssign(sby_adanear_hpc_cpp, sby_load_native_symbol("sby_adanear_hpc_cpp"))
+delayedAssign(sby_adasyn_hpc_cpp, sby_load_native_symbol("sby_adasyn_hpc_cpp"))
+delayedAssign(sby_nearmiss_hpc_cpp, sby_load_native_symbol("sby_nearmiss_hpc_cpp"))

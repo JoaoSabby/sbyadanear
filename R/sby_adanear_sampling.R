@@ -184,6 +184,25 @@ sby_adanear <- function(
   sby_audit <- sby_validate_logical_scalar(sby_audit, "sby_audit")
   sby_restore_types <- sby_validate_logical_scalar(sby_restore_types, "sby_restore_types")
 
+  # Atalho HPC: a rota "native" delega ao motor consolidado quando disponivel.
+  # As rotinas originais continuam acessiveis em qualquer outro cenario.
+  sby_knn_engine_resolved <- match.arg(sby_knn_engine)
+  sby_knn_distance_metric_resolved <- match.arg(sby_knn_distance_metric)
+  if(sby_should_route_native_to_hpc(
+    sby_knn_engine = sby_knn_engine_resolved,
+    sby_knn_distance_metric = sby_knn_distance_metric_resolved,
+    sby_audit = sby_audit,
+    sby_restore_types = sby_restore_types,
+    sby_return_scaled = FALSE
+  )){
+    return(sby_adanear_hpc(
+      .data = sby_data,
+      formula = sby_formula,
+      sby_k_neighbor_adanear = sby_knn_over_k,
+      sby_k_neighbor_nearmiss = sby_knn_under_k
+    ))
+  }
+
   sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed)
   sby_x_matrix <- sby_adanear_as_numeric_matrix(sby_predictor_data)
   colnames(sby_x_matrix) <- sby_adanear_get_column_names(sby_predictor_data)

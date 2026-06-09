@@ -1,5 +1,24 @@
 # sbyadanear 0.4.0 (em desenvolvimento)
 
+## Atalho HPC (oneAPI, AVX-512, NUMA)
+
+* Novas funcoes exportadas `sby_adanear_hpc()`, `sby_adasyn_hpc()` e
+  `sby_nearmiss_hpc()`. Cada uma e um atalho de alto desempenho que executa o
+  fluxo estritamente no espaco padronizado, eliminando a dupla normalizacao, e
+  monta o tibble final por zero-copy diretamente em C++ via `Rcpp::List`.
+* O motor HPC consolidado usa a Vector Statistics Library para as estatisticas
+  iniciais, `cblas_dgemm` para a matriz de distancias
+  (`D^2 = ||A||^2 + ||B||^2 - 2 A B^T`), `vdrnguniform` para a interpolacao do
+  ADASYN e laco SIMD com FMA (`vfmadd213pd`) para a reversao do z-score.
+* As tres funcoes isolam o ambiente NUMA e MKL (`KMP_AFFINITY=scatter`,
+  `MKL_NUM_STRIPES`, `MKL_DISABLE_FAST_MM`, `MKL_DYNAMIC`) e restauram o estado
+  anterior por um bloco `on.exit()` inflexivel.
+* O atalho HPC substitui internamente a rota `sby_knn_engine = "native"` como
+  caminho rapido quando o motor consolidado esta compilado e carregado. As
+  funcoes originais `sby_adanear()`, `sby_adasyn()` e `sby_nearmiss()` continuam
+  acessiveis e o fluxo classico permanece inalterado quando o motor HPC nao esta
+  disponivel ou quando se pede auditoria, restauro de tipos ou escala intermediaria.
+
 ## Correções de contrato KNN
 
 * A rota de compatibilidade `sby_knn_engine = "FNN"` com

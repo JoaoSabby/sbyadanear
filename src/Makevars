@@ -1,6 +1,6 @@
 CXX_STD = CXX17
 
-OBJECTS = sbyadanear.o sbyadanear_rcppparallel.o sby_native_engine.o
+OBJECTS = sbyadanear.o sbyadanear_rcppparallel.o sby_native_engine.o sby_hpc_engine.o sby_hpc_engine_f.o
 
 PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
 PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")

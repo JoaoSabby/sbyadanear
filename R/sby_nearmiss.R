@@ -189,6 +189,30 @@ sby_nearmiss <- function(
   sby_input_already_scaled <- sby_validate_logical_scalar(sby_input_already_scaled, "sby_input_already_scaled")
   sby_restore_types <- sby_validate_logical_scalar(sby_restore_types, "sby_restore_types")
 
+  # Atalho HPC: a rota "native" delega ao motor consolidado quando disponivel.
+  # So e tomado em entrada fresca, sem escala previa e sem rotulos fixos, para
+  # nao alterar os fluxos especializados. As rotinas originais seguem acessiveis.
+  sby_knn_engine_resolved <- match.arg(sby_knn_engine)
+  sby_knn_distance_metric_resolved <- match.arg(sby_knn_distance_metric)
+  if(!isTRUE(sby_input_already_scaled) &&
+     is.null(sby_precomputed_scaling) &&
+     is.null(sby_fixed_minority_label) &&
+     is.null(sby_fixed_majority_label) &&
+     sby_should_route_native_to_hpc(
+       sby_knn_engine = sby_knn_engine_resolved,
+       sby_knn_distance_metric = sby_knn_distance_metric_resolved,
+       sby_audit = sby_audit,
+       sby_restore_types = sby_restore_types,
+       sby_return_scaled = FALSE
+     )){
+    return(sby_nearmiss_hpc(
+      .data = sby_data,
+      formula = sby_formula,
+      sby_k_neighbor_nearmiss = sby_knn_under_k,
+      sby_under_ratio = sby_under_ratio
+    ))
+  }
+
   sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed)
   sby_x_matrix <- sby_adanear_as_numeric_matrix(sby_predictor_data)
   colnames(sby_x_matrix) <- sby_adanear_get_column_names(sby_predictor_data)
