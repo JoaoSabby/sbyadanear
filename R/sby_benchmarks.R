@@ -189,7 +189,7 @@ sby_benchmark_engines <- function(
     is_available <- tryCatch({
       if (eng == "native") {
         # Engine nativa sempre disponivel se o pacote compilou
-        is.loaded("brute_force_knn_c")
+        sby_native_symbol_available("brute_force_knn_c")
       } else if (eng == "FNN") {
         requireNamespace("FNN", quietly = TRUE)
       } else if (eng == "RcppHNSW") {

@@ -7,12 +7,7 @@
 #' @return Valor logico indicando se rotinas nativas podem ser chamadas
 #' @noRd
 sby_adanear_native_available <- function(){
-  
-  # Verifica se a DLL do pacote esta registrada na sessao atual
-  return(is.loaded(
-    symbol = "apply_z_score_c",
-    PACKAGE = "sbyadanear"
-  ))
+  return(sby_native_symbol_available("apply_z_score_c"))
 }
 ####
 ## Fim
