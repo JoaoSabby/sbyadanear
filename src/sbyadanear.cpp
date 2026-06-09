@@ -42,7 +42,15 @@
 #include <vector>
 
 #if defined(SBYADANEAR_ONEAPI_MKL)
-#include <mkl.h>
+/* Inclui apenas os cabecalhos VML/tipos do MKL, evitando <mkl.h> completo.
+ * O cabecalho global arrasta <mkl_blas.h> e <mkl_lapack.h>, que redeclaram
+ * simbolos BLAS/LAPACK Fortran (por exemplo zspmv_, zhpmv_) com especificacao
+ * de excecao incompativel com as declaracoes ja feitas por <R_ext/BLAS.h>.
+ * Como este arquivo so usa as rotinas VML (vdSqr, vdAdd, vdSub, vdMul, vdDiv)
+ * e o tipo MKL_INT, restringir os includes elimina o conflito de redeclaracao
+ * preservando a aceleracao oneMKL. */
+#include <mkl_types.h>
+#include <mkl_vml.h>
 #endif
 
 #if defined(SBYADANEAR_ONEDPL)

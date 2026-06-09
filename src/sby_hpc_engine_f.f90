@@ -168,8 +168,10 @@ contains
     do j = 1, p
       mu = means(j)
       sd = sds(j)
-      ! Reversao: x_out = x * sd + mu  (fused multiply add por elemento)
-      !DIR$ SIMD
+      ! Reversao: x_out = x * sd + mu  (fused multiply add por elemento).
+      ! A diretiva OpenMP SIMD portavel forca a vetorizacao do laco; combinada
+      ! com -fp-model=fast o compilador funde a multiplicacao e a soma em uma
+      ! unica instrucao vfmadd213pd nas unidades FMA do AVX-512.
       !$omp simd
       do i = 1, n
         x_out(i, j) = x(i, j) * sd + mu
@@ -297,8 +299,9 @@ contains
       lam = lambda(s)
       if (bi < 1 .or. bi > n_min) bi = 1
       if (ni < 1 .or. ni > n_min) ni = 1
-      ! syn = base + lambda * (neighbor - base) por elemento, fused multiply add
-      !DIR$ SIMD
+      ! syn = base + lambda * (neighbor - base) por elemento. A diretiva OpenMP
+      ! SIMD portavel forca a vetorizacao e, com -fp-model=fast, o compilador
+      ! funde a multiplicacao e a soma na instrucao vfmadd213pd das unidades FMA.
       !$omp simd private(base_val, nbr_val)
       do j = 1, p
         base_val = minority(bi, j)
