@@ -37,6 +37,10 @@
 #'   etapa NearMiss-1. O padrao e `7`.
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. O padrao
 #'   `-1` deixa a funcao detectar os nucleos fisicos disponiveis.
+#' @param sby_over_ratio Fator relativo de expansao da classe minoritaria pela
+#'   etapa ADASYN. O padrao e `0.2`.
+#' @param sby_under_ratio Razao minima desejada entre minoria e maioria apos o
+#'   NearMiss-1. O padrao e `0.5`.
 #'
 #' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
 #' @export
@@ -45,7 +49,9 @@ sby_adanear_hpc <- function(
   formula,
   sby_k_neighbor_adanear = 3,
   sby_k_neighbor_nearmiss = 7,
-  sby_config_max_threads = -1
+  sby_config_max_threads = -1,
+  sby_over_ratio = 0.2,
+  sby_under_ratio = 0.5
 ){
   sby_adanear_check_user_interrupt()
 
@@ -74,6 +80,8 @@ sby_adanear_hpc <- function(
   sby_k_neighbor_nearmiss <- sby_validate_positive_integer_scalar(
     sby_k_neighbor_nearmiss, "sby_k_neighbor_nearmiss"
   )
+  sby_compute_minority_expansion_count(sby_target_factor, sby_over_ratio)
+  sby_compute_majority_retention_count(sby_target_factor, sby_under_ratio)
 
   # Caminho rapido: motor HPC consolidado com montagem zero-copy do tibble
   if(sby_adanear_hpc_available()){
@@ -83,6 +91,8 @@ sby_adanear_hpc <- function(
       sby_target_factor,
       as.integer(sby_k_neighbor_adanear),
       as.integer(sby_k_neighbor_nearmiss),
+      as.numeric(sby_over_ratio),
+      as.numeric(sby_under_ratio),
       as.integer(sby_total_threads),
       sby_column_names,
       sby_target_name,
@@ -95,6 +105,8 @@ sby_adanear_hpc <- function(
   sby_balanced_data <- sby_adanear(
     sby_formula = formula,
     sby_data = .data,
+    sby_over_ratio = sby_over_ratio,
+    sby_under_ratio = sby_under_ratio,
     sby_knn_over_k = sby_k_neighbor_adanear,
     sby_knn_under_k = sby_k_neighbor_nearmiss,
     sby_audit = FALSE,

@@ -435,6 +435,7 @@ static Rcpp::IntegerVector sby_extract_factor_codes(SEXP y){
 // [[Rcpp::export]]
 extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
                                     SEXP k_adanear, SEXP k_nearmiss,
+                                    SEXP over_ratio, SEXP under_ratio,
                                     SEXP max_threads, SEXP column_names,
                                     SEXP target_name, SEXP target_levels){
   Rcpp::NumericMatrix x(x_matrix);
@@ -445,6 +446,8 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
   int n_levels = levels.size();
   int k_over = Rcpp::as<int>(k_adanear);
   int k_under = Rcpp::as<int>(k_nearmiss);
+  double ratio_over = Rcpp::as<double>(over_ratio);
+  double ratio_under = Rcpp::as<double>(under_ratio);
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
@@ -458,12 +461,12 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
 
   // 2. ADASYN no espaco padronizado (expande o buffer e os codigos do alvo)
   int n_after_over = sby_run_adasyn_stage(x_scaled, n, p, y_codes,
-                                          minority_code, k_over, 0.2);
+                                          minority_code, k_over, ratio_over);
 
   // 3. NearMiss-1 no espaco padronizado sobre o conjunto expandido
   std::vector<int> retained = sby_run_nearmiss_stage(x_scaled, n_after_over, p,
                                                      y_codes, minority_code,
-                                                     k_under, 0.5);
+                                                     k_under, ratio_under);
   int n_final = (int) retained.size();
 
   // 4. Consolida o buffer final column major e os codigos finais do alvo

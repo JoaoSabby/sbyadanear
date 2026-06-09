@@ -199,7 +199,9 @@ sby_adanear <- function(
       .data = sby_data,
       formula = sby_formula,
       sby_k_neighbor_adanear = sby_knn_over_k,
-      sby_k_neighbor_nearmiss = sby_knn_under_k
+      sby_k_neighbor_nearmiss = sby_knn_under_k,
+      sby_over_ratio = sby_over_ratio,
+      sby_under_ratio = sby_under_ratio
     ))
   }
 

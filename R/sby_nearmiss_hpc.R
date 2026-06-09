@@ -56,6 +56,7 @@ sby_nearmiss_hpc <- function(
   sby_k_neighbor_nearmiss <- sby_validate_positive_integer_scalar(
     sby_k_neighbor_nearmiss, "sby_k_neighbor_nearmiss"
   )
+  sby_compute_majority_retention_count(sby_target_factor, sby_under_ratio)
 
   if(sby_adanear_hpc_available()){
     sby_balanced_data <- sby_call_native(

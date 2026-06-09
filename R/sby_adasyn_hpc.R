@@ -57,6 +57,7 @@ sby_adasyn_hpc <- function(
   sby_k_neighbor_adanear <- sby_validate_positive_integer_scalar(
     sby_k_neighbor_adanear, "sby_k_neighbor_adanear"
   )
+  sby_compute_minority_expansion_count(sby_target_factor, sby_over_ratio)
 
   if(sby_adanear_hpc_available()){
     sby_balanced_data <- sby_call_native(
