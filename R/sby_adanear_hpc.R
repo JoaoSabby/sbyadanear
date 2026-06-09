@@ -55,6 +55,10 @@ sby_adanear_hpc <- function(
 ){
   sby_adanear_check_user_interrupt()
 
+  # Captura a ordem original das colunas logo no inicio para que a tabela
+  # retornada tenha a mesma sequencia de colunas da tabela recebida.
+  sby_original_column_order <- colnames(.data)
+
   # Captura o ambiente previo e instala restauro inflexivel imediatamente
   sby_previous_env <- sby_hpc_capture_env()
   on.exit(sby_hpc_restore_env(sby_previous_env), add = TRUE)
@@ -65,6 +69,7 @@ sby_adanear_hpc <- function(
   # Extrai preditores numericos e alvo binario pelo mesmo contrato da API publica
   sby_formula_data <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
   sby_predictor_data <- sby_formula_data$sby_predictor_data
+  sby_original_predictor_data <- sby_predictor_data
   sby_target_vector <- sby_formula_data$sby_target_vector
 
   sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed = 1L)
@@ -73,6 +78,7 @@ sby_adanear_hpc <- function(
   colnames(sby_x_matrix) <- sby_column_names
   sby_target_factor <- as.factor(sby_target_vector)
   sby_target_name <- sby_formula_data$sby_target_name
+  sby_type_info <- sby_infer_numeric_column_types(sby_original_predictor_data)
 
   sby_k_neighbor_adanear <- sby_validate_positive_integer_scalar(
     sby_k_neighbor_adanear, "sby_k_neighbor_adanear"
@@ -85,8 +91,8 @@ sby_adanear_hpc <- function(
 
   # Caminho rapido: motor HPC consolidado com montagem zero-copy do tibble
   if(sby_adanear_hpc_available()){
-    sby_balanced_data <- sby_call_native(
-      "sby_adanear_hpc_cpp",
+    sby_hpc_result <- sby_call_native(
+      "sby_adanear_hpc_result_cpp",
       sby_x_matrix,
       sby_target_factor,
       as.integer(sby_k_neighbor_adanear),
@@ -95,9 +101,31 @@ sby_adanear_hpc <- function(
       as.numeric(sby_under_ratio),
       as.integer(sby_total_threads),
       sby_column_names,
-      sby_target_name,
       levels(sby_target_factor)
     )
+
+    sby_final_predictors <- sby_build_preserved_predictors(
+      sby_original_predictor_data = sby_original_predictor_data,
+      sby_retained_index = sby_hpc_result$sby_retained_index,
+      sby_final_scaled = sby_hpc_result$sby_final_scaled,
+      sby_scaling_info = sby_hpc_result$sby_scaling_info,
+      sby_type_info = sby_type_info,
+      sby_restore_types = TRUE
+    )
+    sby_balanced_data <- sby_build_balanced_tibble(
+      sby_predictor_data = sby_final_predictors,
+      sby_target_vector = sby_hpc_result$sby_y_vector
+    )
+
+    if(!identical(sby_target_name, "TARGET")){
+      names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
+    }
+
+    sby_balanced_data <- collapse::fselect(
+      .x = sby_balanced_data,
+      sby_original_column_order
+    )
+
     return(sby_balanced_data)
   }
 
@@ -110,10 +138,20 @@ sby_adanear_hpc <- function(
     sby_knn_over_k = sby_k_neighbor_adanear,
     sby_knn_under_k = sby_k_neighbor_nearmiss,
     sby_audit = FALSE,
-    sby_restore_types = FALSE,
+    sby_restore_types = TRUE,
     sby_knn_engine = "native",
     sby_knn_distance_metric = "euclidean"
   )
+
+  if(!identical(sby_target_name, "TARGET") && "TARGET" %in% names(sby_balanced_data)){
+    names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
+  }
+
+  sby_balanced_data <- collapse::fselect(
+    .x = sby_balanced_data,
+    sby_original_column_order
+  )
+
   return(sby_balanced_data)
 }
 ####

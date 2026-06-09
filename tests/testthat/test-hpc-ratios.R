@@ -48,3 +48,36 @@ test_that("HPC shortcuts validate sampling ratios before native execution", {
   expect_error(sby_adanear_hpc(dat, y ~ ., sby_under_ratio = 2),
                regexp = "sby_under_ratio")
 })
+
+test_that("sby_adanear_hpc restores original scale and integer predictor types", {
+  skip_if_not(sby_adanear_hpc_available())
+  set.seed(321)
+  dat <- data.frame(
+    int_col = as.integer(c(1:5, 20:34)),
+    class_col = factor(c(rep("rare", 5), rep("common", 15)),
+                       levels = c("rare", "common")),
+    dbl_col = c(rnorm(5, -10, 0.25), rnorm(15, 10, 0.25))
+  )
+
+  out <- sby_adanear_hpc(
+    dat,
+    class_col ~ .,
+    sby_k_neighbor_adanear = 3,
+    sby_k_neighbor_nearmiss = 3,
+    sby_over_ratio = 1,
+    sby_under_ratio = 0.5
+  )
+
+  expect_s3_class(out, "tbl_df")
+  expect_true(is.integer(out$int_col))
+  expect_type(out$dbl_col, "double")
+  expect_true(all(out$int_col >= min(dat$int_col)))
+  expect_true(all(out$int_col <= max(dat$int_col)))
+  expect_identical(names(out), names(dat))
+  expect_true("class_col" %in% names(out))
+  expect_false("TARGET" %in% names(out))
+  expect_setequal(levels(out$class_col), levels(dat$class_col))
+
+  expect_true(any(out$dbl_col > 1))
+  expect_false(all(abs(out$dbl_col) < 4))
+})
