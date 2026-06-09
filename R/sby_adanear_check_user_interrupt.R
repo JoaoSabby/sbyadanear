@@ -12,8 +12,8 @@ sby_adanear_check_user_interrupt <- function(){
   if(sby_adanear_native_available()){
 
     # Aciona ponto de interrupcao implementado em codigo nativo
-    .Call(
-      check_user_interrupt_c
+    sby_call_native(
+      "check_user_interrupt_c"
     )
   }else{
 

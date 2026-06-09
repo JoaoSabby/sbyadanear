@@ -39,8 +39,8 @@ sby_drop_self_neighbor_index <- function(sby_neighbor_index, sby_self_index, sby
   # o overhead R consideravelmente.
   if(sby_adanear_native_available()){
     storage.mode(sby_neighbor_index) <- "integer"
-    return(.Call(
-      drop_self_neighbor_c,
+    return(sby_call_native(
+      "drop_self_neighbor_c",
       sby_neighbor_index,
       sby_self_index,
       sby_desired_k

@@ -202,15 +202,15 @@ sby_generate_adasyn_samples <- function(
     # Automatic selection: prefer row kernel as default stable path.
     sby_adasyn_kernel <- "row"
     if(identical(sby_adasyn_kernel, "col")){
-      sby_synthetic_matrix <- .Call(
-        generate_synthetic_adasyn_col_c,
+      sby_synthetic_matrix <- sby_call_native(
+        "generate_synthetic_adasyn_col_c",
         sby_minority_matrix,
         sby_minority_neighbor_index,
         as.integer(sby_synthetic_per_row)
       )
     }else{
-      sby_synthetic_matrix <- .Call(
-        generate_synthetic_adasyn_c,
+      sby_synthetic_matrix <- sby_call_native(
+        "generate_synthetic_adasyn_c",
         sby_minority_matrix,
         sby_minority_neighbor_index,
         as.integer(sby_synthetic_per_row)
@@ -293,16 +293,16 @@ sby_generate_adasyn_samples <- function(
     sby_configure_blas_threads(sby_workers = 1L)
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
-    sby_expanded_x <- .Call(
-      rbind_matrix_fortran_c,
+    sby_expanded_x <- sby_call_native(
+      "rbind_matrix_fortran_c",
       sby_x_scaled,
       sby_synthetic_matrix
     )
   } else if(sby_adanear_native_available()){
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
-    sby_expanded_x <- .Call(
-      rbind_double_matrix_c,
+    sby_expanded_x <- sby_call_native(
+      "rbind_double_matrix_c",
       sby_x_scaled,
       sby_synthetic_matrix
     )

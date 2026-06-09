@@ -37,14 +37,14 @@ sby_mutate_zscore <- function(
   if (sby_engine == "native") {
     sby_configure_blas_threads(sby_workers = 1L)
     # Usa layout R n x p diretamente para evitar copias por transposicao
-    zscore_params <- .Call(
-      compute_zscore_population_fortran_c,
+    zscore_params <- sby_call_native(
+      "compute_zscore_population_fortran_c",
       x_matrix
     )
 
     # Aplica z-score via Fortran
-    x_scaled <- .Call(
-      apply_zscore_fortran_c,
+    x_scaled <- sby_call_native(
+      "apply_zscore_fortran_c",
       x_matrix,
       zscore_params$means,
       zscore_params$sds
@@ -63,12 +63,12 @@ sby_mutate_zscore <- function(
   }
 
   # Fallback R puro: usa as rotinas C existentes
-  zscore_params <- .Call(
-    compute_z_score_params_c,
+  zscore_params <- sby_call_native(
+    "compute_z_score_params_c",
     x_matrix
   )
-  x_scaled <- .Call(
-    apply_z_score_c,
+  x_scaled <- sby_call_native(
+    "apply_z_score_c",
     x_matrix,
     zscore_params$centers,
     zscore_params$scales,
