@@ -489,6 +489,77 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
                                        Rcpp::as<std::string>(target_name), levels);
 }
 
+//' @title Motor HPC consolidado do pipeline ADASYN mais NearMiss-1 com metadados
+//' @description Executa o pipeline no espaco padronizado e retorna matriz final escalada, indices retidos, alvo e parametros de z-score.
+// [[Rcpp::export]]
+extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP x_matrix, SEXP y_factor,
+                                           SEXP k_adanear, SEXP k_nearmiss,
+                                           SEXP over_ratio, SEXP under_ratio,
+                                           SEXP max_threads, SEXP column_names,
+                                           SEXP target_levels){
+  Rcpp::NumericMatrix x(x_matrix);
+  int n = x.nrow();
+  int p = x.ncol();
+  Rcpp::IntegerVector y_codes_in = sby_extract_factor_codes(y_factor);
+  Rcpp::CharacterVector levels(target_levels);
+  int n_levels = levels.size();
+  int k_over = Rcpp::as<int>(k_adanear);
+  int k_under = Rcpp::as<int>(k_nearmiss);
+  double ratio_over = Rcpp::as<double>(over_ratio);
+  double ratio_under = Rcpp::as<double>(under_ratio);
+
+  int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
+
+  std::vector<double> means, sds;
+  sby_zscore_population(x.begin(), n, p, means, sds);
+  std::vector<double> x_scaled;
+  sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
+
+  std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
+  int n_after_over = sby_run_adasyn_stage(x_scaled, n, p, y_codes,
+                                          minority_code, k_over, ratio_over);
+
+  std::vector<int> retained = sby_run_nearmiss_stage(x_scaled, n_after_over, p,
+                                                     y_codes, minority_code,
+                                                     k_under, ratio_under);
+  int n_final = (int) retained.size();
+
+  Rcpp::NumericMatrix final_scaled(n_final, p);
+  for(int j = 0; j < p; ++j){
+    const double* src = x_scaled.data() + (size_t) j * (size_t) n_after_over;
+    for(int r = 0; r < n_final; ++r){
+      final_scaled(r, j) = src[retained[r]];
+    }
+  }
+  final_scaled.attr("dimnames") = Rcpp::List::create(R_NilValue, column_names);
+
+  Rcpp::IntegerVector y_final(n_final);
+  Rcpp::IntegerVector retained_index(n_final);
+  for(int r = 0; r < n_final; ++r){
+    y_final[r] = y_codes[retained[r]];
+    retained_index[r] = retained[r] + 1;
+  }
+  y_final.attr("levels") = levels;
+  y_final.attr("class") = "factor";
+
+  Rcpp::NumericVector centers(p);
+  Rcpp::NumericVector scales(p);
+  for(int j = 0; j < p; ++j){
+    centers[j] = means[j];
+    scales[j] = sds[j];
+  }
+
+  return Rcpp::List::create(
+    Rcpp::Named("sby_final_scaled") = final_scaled,
+    Rcpp::Named("sby_y_vector") = y_final,
+    Rcpp::Named("sby_retained_index") = retained_index,
+    Rcpp::Named("sby_scaling_info") = Rcpp::List::create(
+      Rcpp::Named("centers") = centers,
+      Rcpp::Named("scales") = scales
+    )
+  );
+}
+
 //' @title Motor HPC consolidado do oversampling ADASYN
 //' @description Executa apenas o ADASYN no espaco padronizado e monta o tibble por zero-copy.
 // [[Rcpp::export]]

@@ -54,10 +54,21 @@ sby_restore_numeric_column_types <- function(sby_x_matrix, sby_type_info, sby_as
       y = "integer"
     )){
 
-      # Arredonda valores para restaurar semantica inteira
+      # Arredonda valores para restaurar semantica inteira e respeita os
+      # limites observados na coluna original antes da padronizacao.
       sby_x_matrix[, j] <- round(
         x = sby_x_matrix[, j]
       )
+
+      if("sby_integer_min" %in% names(sby_type_info) &&
+         "sby_integer_max" %in% names(sby_type_info) &&
+         is.finite(sby_type_info$sby_integer_min[[j]]) &&
+         is.finite(sby_type_info$sby_integer_max[[j]])){
+        sby_x_matrix[, j] <- pmin(
+          pmax(sby_x_matrix[, j], sby_type_info$sby_integer_min[[j]]),
+          sby_type_info$sby_integer_max[[j]]
+        )
+      }
     }
   }
 

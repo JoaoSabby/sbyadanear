@@ -10,65 +10,60 @@
 #' @noRd
 sby_infer_numeric_column_types <- function(sby_data_frame){
   
-  # Converte dados de entrada para matriz numerica padronizada
-  sby_x_matrix <- sby_adanear_as_numeric_matrix(
-    sby_predictor_data = sby_data_frame
-  )
-
   # Captura nomes de colunas associados aos preditores
   sby_column_names <- sby_adanear_get_column_names(
     sby_predictor_data = sby_data_frame
   )
 
-  #' Inferir tipo numerico de uma coluna isolada
-  #'
-  #' @details
-  #' A funcao local classifica valores numericos em categorias discretas ou continuas para apoiar restauracao posterior de tipos
-  #'
-  #' @param sby_column_data Vetor numerico correspondente a uma coluna preditora
-  #'
-  #' @return Marcador textual do tipo numerico inferido
-  #' @noRd
-  sby_infer_one <- function(sby_column_data){
-    # Obtem valores unicos ordenados para classificar colunas binarias
-    sby_unique_values <- sort(
-      x = unique(sby_column_data)
-    )
+  # Mantem a semantica do tipo original da coluna. Uma coluna originalmente
+  # integer deve voltar como integer; uma coluna originalmente double deve
+  # voltar como double mesmo quando seus valores observados parecem inteiros.
+  sby_data_frame <- as.data.frame(
+    x = sby_data_frame,
+    stringsAsFactors = FALSE
+  )
 
-    # Identifica coluna binaria codificada numericamente
-    if(length(sby_unique_values) <= 2L && all(sby_unique_values %in% c(0, 1))){
+  sby_inferred_type <- vapply(
+    X = sby_data_frame,
+    FUN = function(sby_column_data){
+      if(is.integer(sby_column_data)){
+        return("integer")
+      }
+      return("double")
+    },
+    FUN.VALUE = character(1L)
+  )
 
-      # Retorna marcador de tipo binario
-      return("binary")
-    }
+  sby_integer_min <- vapply(
+    X = sby_data_frame,
+    FUN = function(sby_column_data){
+      if(is.integer(sby_column_data)){
+        return(min(sby_column_data, na.rm = TRUE))
+      }
+      return(NA_real_)
+    },
+    FUN.VALUE = numeric(1L)
+  )
 
-    # Verifica se todos os valores sao equivalentes a inteiros
-    sby_is_integer_like <- all(abs(sby_column_data - round(sby_column_data)) < sqrt(.Machine$double.eps))
+  sby_integer_max <- vapply(
+    X = sby_data_frame,
+    FUN = function(sby_column_data){
+      if(is.integer(sby_column_data)){
+        return(max(sby_column_data, na.rm = TRUE))
+      }
+      return(NA_real_)
+    },
+    FUN.VALUE = numeric(1L)
+  )
 
-    # Identifica coluna numerica com semantica inteira
-    if(sby_is_integer_like){
-
-      # Retorna marcador de tipo inteiro
-      return("integer")
-    }
-
-    # Retorna marcador de tipo numerico continuo
-    return("double")
-  }
-
-  # Retorna metadados de tipos inferidos por coluna
+  # Retorna metadados de tipos inferidos por coluna, incluindo os limites
+  # originais necessarios para truncar linhas sinteticas inteiras apos a
+  # reversao do z-score.
   return(data.frame(
     sby_column_name = sby_column_names,
-    sby_inferred_type = vapply(
-      X = seq_len(collapse::fncol(sby_x_matrix)),
-      FUN = function(j){
-        # Infere o tipo da coluna corrente da matriz numerica
-        return(sby_infer_one(
-          sby_column_data = sby_x_matrix[, j]
-        ))
-      },
-      FUN.VALUE = character(1L)
-    ),
+    sby_inferred_type = unname(sby_inferred_type),
+    sby_integer_min = unname(sby_integer_min),
+    sby_integer_max = unname(sby_integer_max),
     stringsAsFactors = FALSE
   ))
 }
