@@ -170,6 +170,7 @@ static double euclidean_d2_with_rescue(
 //' @title Verificação de interrupção do usuário
 //' @description Encaminha a checagem cooperativa de interrupção para a API do R.
 //' @return Valor nulo do R.
+// [[Rcpp::export]]
 extern "C" SEXP check_user_interrupt_c(void){
   R_CheckUserInterrupt();
   return R_NilValue;
@@ -199,6 +200,7 @@ static void require_real_vector_length(SEXP x, R_xlen_t expected_length, const c
 //' @description Calcula médias e desvios-padrão amostrais por coluna com aceleração vetorial quando disponível.
 //' @param x_matrix Matriz double de entrada.
 //' @return Lista com centros e escalas.
+// [[Rcpp::export]]
 extern "C" SEXP compute_z_score_params_c(SEXP x_matrix){
   require_real_matrix(x_matrix, "x_matrix");
 
@@ -279,6 +281,7 @@ extern "C" SEXP compute_z_score_params_c(SEXP x_matrix){
 //' @param scales Vetor double de desvios-padrão.
 //' @param reverse Indicador lógico de reversão.
 //' @return Matriz double transformada.
+// [[Rcpp::export]]
 extern "C" SEXP apply_z_score_c(SEXP x_matrix, SEXP centers, SEXP scales, SEXP reverse){
   require_real_matrix(x_matrix, "x_matrix");
 
@@ -367,6 +370,7 @@ extern "C" SEXP apply_z_score_c(SEXP x_matrix, SEXP centers, SEXP scales, SEXP r
 //' @title Síntese ADASYN nativa por linha
 //' @description Gera observações sintéticas a partir da interpolação entre instâncias minoritárias e seus vizinhos.
 //' @return Matriz double sintética.
+// [[Rcpp::export]]
 extern "C" SEXP generate_synthetic_adasyn_c(SEXP minority_matrix, SEXP minority_neighbor_index, SEXP synthetic_per_row){
   require_real_matrix(minority_matrix, "minority_matrix");
 
@@ -455,6 +459,7 @@ extern "C" SEXP generate_synthetic_adasyn_c(SEXP minority_matrix, SEXP minority_
 //' @title Seleção NearMiss acelerada
 //' @description Seleciona exemplos majoritários por médias de distância usando ordenação parcial oneDPL quando habilitada.
 //' @return Vetor inteiro de índices retidos.
+// [[Rcpp::export]]
 extern "C" SEXP select_nearmiss_majority_c(SEXP nn_dist, SEXP majority_index, SEXP retained_majority_count){
   require_real_matrix(nn_dist, "nn_dist");
 
@@ -518,6 +523,7 @@ extern "C" SEXP select_nearmiss_majority_c(SEXP nn_dist, SEXP majority_index, SE
 //' @title Síntese ADASYN nativa por coluna
 //' @description Gera observações sintéticas em layout favorável à localidade de colunas.
 //' @return Matriz double sintética.
+// [[Rcpp::export]]
 extern "C" SEXP generate_synthetic_adasyn_col_c(SEXP minority_matrix, SEXP minority_neighbor_index, SEXP synthetic_per_row){
   require_real_matrix(minority_matrix, "minority_matrix");
 
@@ -617,6 +623,7 @@ extern "C" SEXP generate_synthetic_adasyn_col_c(SEXP minority_matrix, SEXP minor
 //' @title Remoção do próprio vizinho
 //' @description Remove o índice da própria observação de uma matriz KNN registrada.
 //' @return Matriz inteira de vizinhos filtrados.
+// [[Rcpp::export]]
 extern "C" SEXP drop_self_neighbor_c(SEXP nbr, SEXP self_index, SEXP desired_k){
   if(!isInteger(nbr) || !isMatrix(nbr)){
     error("'nbr' deve ser uma matrix integer");
@@ -844,6 +851,7 @@ static SEXP brute_force_knn_impl(SEXP data, SEXP query, SEXP k_value,
 //' @title KNN bruto nativo
 //' @description Executa KNN euclidiano exato com distância vetorizada e ordenação parcial.
 //' @return Lista com índices e distâncias.
+// [[Rcpp::export]]
 extern "C" SEXP brute_force_knn_c(SEXP data, SEXP query, SEXP k_value){
   return brute_force_knn_impl(data, query, k_value, 1, 1);
 }
@@ -851,6 +859,7 @@ extern "C" SEXP brute_force_knn_c(SEXP data, SEXP query, SEXP k_value){
 //' @title Índices KNN brutos nativos
 //' @description Executa KNN euclidiano exato retornando apenas índices.
 //' @return Lista com matriz de índices.
+// [[Rcpp::export]]
 extern "C" SEXP brute_force_knn_index_c(SEXP data, SEXP query, SEXP k_value){
   return brute_force_knn_impl(data, query, k_value, 1, 0);
 }
@@ -858,6 +867,7 @@ extern "C" SEXP brute_force_knn_index_c(SEXP data, SEXP query, SEXP k_value){
 //' @title Distâncias KNN brutas nativas
 //' @description Executa KNN euclidiano exato retornando apenas distâncias.
 //' @return Lista com matriz de distâncias.
+// [[Rcpp::export]]
 extern "C" SEXP brute_force_knn_dist_c(SEXP data, SEXP query, SEXP k_value){
   return brute_force_knn_impl(data, query, k_value, 0, 1);
 }
@@ -865,6 +875,7 @@ extern "C" SEXP brute_force_knn_dist_c(SEXP data, SEXP query, SEXP k_value){
 //' @title KNN bruto nativo parametrizado
 //' @description Executa KNN euclidiano exato interno com controle de retorno e self-neighbor.
 //' @return Lista com matrizes KNN solicitadas.
+// [[Rcpp::export]]
 extern "C" SEXP brute_force_knn_native_c(SEXP data, SEXP query, SEXP k_value,
                                            SEXP return_code, SEXP query_is_data_value,
                                            SEXP exclude_self_value, SEXP query_offset_value){
@@ -890,6 +901,7 @@ extern "C" SEXP brute_force_knn_native_c(SEXP data, SEXP query, SEXP k_value,
 //' @title NearMiss bruto fundido
 //' @description Calcula distâncias KNN e seleciona exemplos majoritários sem materializar a matriz intermediária no R.
 //' @return Vetor inteiro de índices retidos.
+// [[Rcpp::export]]
 extern "C" SEXP nearmiss_brute_select_c(SEXP minority_data, SEXP majority_query,
                                          SEXP majority_index, SEXP k_value,
                                          SEXP retained_majority_count){
@@ -1020,6 +1032,7 @@ extern "C" SEXP nearmiss_brute_select_c(SEXP minority_data, SEXP majority_query,
 //' @title Concatenação nativa de matrizes double
 //' @description Empilha duas matrizes double por linhas preservando nomes de colunas quando disponíveis.
 //' @return Matriz double concatenada.
+// [[Rcpp::export]]
 extern "C" SEXP rbind_double_matrix_c(SEXP first_matrix, SEXP second_matrix){
   require_real_matrix(first_matrix,  "first_matrix");
   require_real_matrix(second_matrix, "second_matrix");
@@ -1091,6 +1104,7 @@ extern "C" {
 //' @description Calcula media e desvio padrao populacionais via motor Fortran AVX-512.
 //' @param x_matrix Matriz double em layout R n x p.
 //' @return Lista com vetores means e sds.
+// [[Rcpp::export]]
 extern "C" SEXP compute_zscore_population_fortran_c(SEXP x_matrix){
   require_real_matrix(x_matrix, "x_matrix");
   SEXP dims   = getAttrib(x_matrix, R_DimSymbol);
@@ -1127,6 +1141,7 @@ extern "C" SEXP compute_zscore_population_fortran_c(SEXP x_matrix){
 //' @param means Vetor double de medias.
 //' @param sds Vetor double de desvios padrao.
 //' @return Matriz double padronizada.
+// [[Rcpp::export]]
 extern "C" SEXP apply_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
   require_real_matrix(x_matrix, "x_matrix");
   SEXP dims   = getAttrib(x_matrix, R_DimSymbol);
@@ -1154,6 +1169,7 @@ extern "C" SEXP apply_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
 //' @param means Vetor double de medias.
 //' @param sds Vetor double de desvios padrao.
 //' @return Matriz double na escala original.
+// [[Rcpp::export]]
 extern "C" SEXP revert_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
   require_real_matrix(x_matrix, "x_matrix");
   SEXP dims   = getAttrib(x_matrix, R_DimSymbol);
@@ -1180,6 +1196,7 @@ extern "C" SEXP revert_zscore_fortran_c(SEXP x_matrix, SEXP means, SEXP sds){
 //' @param a_matrix Primeira matriz double (N1 x P).
 //' @param b_matrix Segunda matriz double (N2 x P).
 //' @return Matriz double ((N1+N2) x P).
+// [[Rcpp::export]]
 extern "C" SEXP rbind_matrix_fortran_c(SEXP a_matrix, SEXP b_matrix){
   require_real_matrix(a_matrix, "a_matrix");
   require_real_matrix(b_matrix, "b_matrix");
