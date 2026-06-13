@@ -1,1 +1,1 @@
-${cpp_new}
+placeholder_will_be_replaced
