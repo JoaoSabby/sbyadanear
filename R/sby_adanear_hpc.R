@@ -23,9 +23,9 @@
 #' a rota classica equivalente com `sby_knn_engine = "native"`, garantindo que
 #' tudo continue funcionando.
 #'
-#' O ambiente de execucao e isolado: as variaveis NUMA e MKL sao capturadas com
-#' `Sys.getenv(..., unset = NA)`, injetadas dinamicamente e restauradas por um
-#' bloco `on.exit()` inflexivel que remove as variaveis que nao existiam.
+#' A execucao controla temporariamente apenas `MKL_NUM_THREADS` e
+#' `OMP_NUM_THREADS`, restaurando os valores originais por um bloco `on.exit()`
+#' inflexivel que remove as variaveis que nao existiam.
 #'
 #' @param .data Data frame, tibble ou matriz com a coluna de desfecho e os
 #'   preditores numericos referenciados em `formula`.
@@ -70,7 +70,7 @@ sby_adanear_hpc <- function(
   on.exit(sby_hpc_restore_env(sby_previous_env), add = TRUE)
 
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
-  sby_hpc_apply_env(sby_total_threads = sby_total_threads, sby_affinity = "scatter")
+  sby_hpc_apply_env(sby_total_threads = sby_total_threads)
 
   # Extrai preditores numericos e alvo binario pelo mesmo contrato da API publica
   sby_formula_data <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)

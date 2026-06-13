@@ -290,7 +290,8 @@ sby_generate_adasyn_samples <- function(
 
   # Consolida a matriz expandida por kernel nativo quando possivel.
   if(sby_knn_engine == "native" && sby_native_symbol_available("rbind_matrix_fortran_c")){
-    sby_configure_blas_threads(sby_workers = 1L)
+    sby_previous_blas_env <- sby_configure_blas_threads(sby_workers = 1L)
+    on.exit(sby_restore_blas_threads(sby_previous_blas_env), add = TRUE)
     storage.mode(sby_x_scaled) <- "double"
     storage.mode(sby_synthetic_matrix) <- "double"
     sby_expanded_x <- sby_call_native(

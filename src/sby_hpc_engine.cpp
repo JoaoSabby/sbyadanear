@@ -22,6 +22,11 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <string>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 // Interfaces dos kernels Fortran do motor HPC
 extern "C" {
@@ -133,25 +138,39 @@ static void sby_knn_topk_against_reference(
   for(int i = 0; i < n_query; ++i){
     std::vector<int> order(n_ref);
     std::iota(order.begin(), order.end(), 0);
-    const double* drow = dist2.data() + (size_t) i * (size_t) n_ref;
-    int take = effective_k;
+
+    // d_out vem do Fortran/cblas como column major (n_query x n_ref).
+    // Para uma linha de consulta fixa i, a coluna de referencia r fica em
+    // dist2[r * n_query + i], nao em um bloco row major contiguo.
+    auto dist_at = [&](int ref_idx) -> double {
+      return dist2[(size_t) ref_idx * (size_t) n_query + (size_t) i];
+    };
+
+    int take = effective_k + (drop_self ? 1 : 0);
+    if(take > n_ref){
+      take = n_ref;
+    }
     if(take < (int) order.size()){
       std::partial_sort(order.begin(), order.begin() + take, order.end(),
         [&](int a, int b){
-          if(drow[a] != drow[b]) return drow[a] < drow[b];
+          double da = dist_at(a);
+          double db = dist_at(b);
+          if(da != db) return da < db;
           return a < b;
         });
     } else {
       std::sort(order.begin(), order.end(),
         [&](int a, int b){
-          if(drow[a] != drow[b]) return drow[a] < drow[b];
+          double da = dist_at(a);
+          double db = dist_at(b);
+          if(da != db) return da < db;
           return a < b;
         });
     }
 
     std::vector<int>& dst = out_index[i];
-    dst.reserve(take);
-    for(int t = 0; t < take && (int) dst.size() < take; ++t){
+    dst.reserve(effective_k);
+    for(int t = 0; t < take && (int) dst.size() < effective_k; ++t){
       int cand = order[t];
       if(drop_self && cand == i){
         continue;
@@ -391,23 +410,36 @@ static std::vector<int> sby_run_nearmiss_stage(
     effective_k = 1;
   }
 
-  // Score NearMiss-1: media dos k menores quadrados de distancia minoritaria
+  // Score NearMiss-1: media dos k menores quadrados de distancia minoritaria.
+  // dist2 tambem esta em column major (n_maj x n_min), entao a linha m e
+  // estrided. Reusamos um unico scratch por linha para eliminar alocacoes
+  // repetidas e usamos nth_element, suficiente porque so precisamos da soma
+  // dos k menores, nao da ordenacao completa de cada linha.
   std::vector< std::pair<double,int> > scores(n_maj);
+  std::vector<double> row((size_t) n_min);
   for(int m = 0; m < n_maj; ++m){
-    const double* drow = dist2.data() + (size_t) m * (size_t) n_min;
-    std::vector<double> row(drow, drow + n_min);
-    std::partial_sort(row.begin(), row.begin() + effective_k, row.end());
+    for(int c = 0; c < n_min; ++c){
+      row[c] = dist2[(size_t) c * (size_t) n_maj + (size_t) m];
+    }
+    if(effective_k < n_min){
+      std::nth_element(row.begin(), row.begin() + effective_k, row.end());
+    }
     double acc = 0.0;
     for(int t = 0; t < effective_k; ++t){
       acc += row[t];
     }
     scores[m] = std::make_pair(acc / (double) effective_k, majority_index[m]);
   }
-  std::sort(scores.begin(), scores.end(),
-    [](const std::pair<double,int>& a, const std::pair<double,int>& b){
-      if(a.first != b.first) return a.first < b.first;
-      return a.second < b.second;
-    });
+
+  auto score_less = [](const std::pair<double,int>& a, const std::pair<double,int>& b){
+    if(a.first != b.first) return a.first < b.first;
+    return a.second < b.second;
+  };
+  if(retained_majority < n_maj){
+    std::partial_sort(scores.begin(), scores.begin() + retained_majority, scores.end(), score_less);
+  } else {
+    std::sort(scores.begin(), scores.end(), score_less);
+  }
 
   std::vector<int> retained;
   retained.reserve(n_min + retained_majority);
@@ -428,6 +460,73 @@ static std::vector<int> sby_run_nearmiss_stage(
 static Rcpp::IntegerVector sby_extract_factor_codes(SEXP y){
   Rcpp::IntegerVector codes(y);
   return codes;
+}
+
+//' @title Relatorio de compilacao do motor HPC
+//' @description Retorna macros de compilacao usadas para validar AVX-512, AVX2, FMA e OpenMP.
+// [[Rcpp::export]]
+extern "C" SEXP sby_hpc_compile_report_cpp(){
+  Rcpp::List out;
+
+#if defined(SBYADANEAR_CASCADELAKE_NATIVE)
+  out["cascade_lake_native"] = true;
+#else
+  out["cascade_lake_native"] = false;
+#endif
+
+#if defined(__AVX512F__)
+  out["avx512f"] = true;
+#else
+  out["avx512f"] = false;
+#endif
+
+#if defined(__AVX512CD__)
+  out["avx512cd"] = true;
+#else
+  out["avx512cd"] = false;
+#endif
+
+#if defined(__AVX512BW__)
+  out["avx512bw"] = true;
+#else
+  out["avx512bw"] = false;
+#endif
+
+#if defined(__AVX512DQ__)
+  out["avx512dq"] = true;
+#else
+  out["avx512dq"] = false;
+#endif
+
+#if defined(__AVX512VL__)
+  out["avx512vl"] = true;
+#else
+  out["avx512vl"] = false;
+#endif
+
+#if defined(__AVX2__)
+  out["avx2"] = true;
+#else
+  out["avx2"] = false;
+#endif
+
+#if defined(__FMA__)
+  out["fma"] = true;
+#else
+  out["fma"] = false;
+#endif
+
+#ifdef _OPENMP
+  out["openmp"] = true;
+  out["openmp_version"] = _OPENMP;
+  out["openmp_max_threads"] = omp_get_max_threads();
+#else
+  out["openmp"] = false;
+  out["openmp_version"] = NA_INTEGER;
+  out["openmp_max_threads"] = NA_INTEGER;
+#endif
+
+  return out;
 }
 
 //' @title Motor HPC consolidado do pipeline ADASYN mais NearMiss-1

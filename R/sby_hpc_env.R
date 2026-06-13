@@ -1,11 +1,11 @@
-#' Capturar, injetar e restaurar o ambiente NUMA e MKL para a rota HPC
+#' Capturar, injetar e restaurar threads MKL e OpenMP para a rota HPC
 #'
 #' @details
 #' A funcao implementa uma unidade interna do fluxo de balanceamento com contrato
-#' de entrada explicito e retorno controlado. As rotinas abaixo isolam as variaveis
-#' de ambiente que controlam a distribuicao NUMA e o comportamento do MKL antes de
-#' acionar o motor HPC, e fornecem um plano de restauro inflexivel para devolver o
-#' ambiente ao estado anterior, removendo o que nao existia.
+#' de entrada explicito e retorno controlado. As rotinas abaixo isolam somente
+#' `MKL_NUM_THREADS` e `OMP_NUM_THREADS` antes de acionar o motor HPC, e fornecem
+#' um plano de restauro inflexivel para devolver o ambiente ao estado anterior,
+#' removendo as variaveis que nao existiam.
 #'
 #' @return Lista com o estado anterior das variaveis modificadas.
 #' @noRd
@@ -13,10 +13,6 @@
 # Lista canonica das variaveis de ambiente controladas pela rota HPC
 sby_hpc_env_keys <- function(){
   c(
-    "KMP_AFFINITY",
-    "MKL_NUM_STRIPES",
-    "MKL_DISABLE_FAST_MM",
-    "MKL_DYNAMIC",
     "MKL_NUM_THREADS",
     "OMP_NUM_THREADS"
   )
@@ -53,22 +49,13 @@ sby_hpc_capture_env <- function(){
   return(sby_previous)
 }
 
-# Injeta as variaveis NUMA e MKL para distribuir o uso das FMA de forma simetrica
+# Injeta somente o numero de threads MKL e OpenMP para a rotina atual
 sby_hpc_apply_env <- function(
-  sby_total_threads,
-  sby_affinity = c("scatter", "balanced")
+  sby_total_threads
 ){
-  sby_affinity <- match.arg(sby_affinity)
   sby_total_threads <- max(1L, as.integer(sby_total_threads))
 
-  # MKL_NUM_STRIPES segue a heuristica numero total de threads dividido por 4
-  sby_num_stripes <- max(1L, as.integer(floor(sby_total_threads / 4L)))
-
   Sys.setenv(
-    KMP_AFFINITY = paste0("granularity=fine,", sby_affinity),
-    MKL_NUM_STRIPES = as.character(sby_num_stripes),
-    MKL_DISABLE_FAST_MM = "1",
-    MKL_DYNAMIC = "FALSE",
     MKL_NUM_THREADS = as.character(sby_total_threads),
     OMP_NUM_THREADS = as.character(sby_total_threads)
   )

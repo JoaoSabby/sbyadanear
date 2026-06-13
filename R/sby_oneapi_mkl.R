@@ -25,13 +25,14 @@ sby_resolve_oneapi_mkl <- function(){
 #' Apply BLAS/MKL thread hints
 #'
 #' @param sby_workers Number of KNN workers in R.
-#' @return Invisible TRUE when completed successfully.
+#' @return Previous MKL_NUM_THREADS and OMP_NUM_THREADS values.
 #' @noRd
 sby_configure_blas_threads <- function(sby_workers){
   sby_cfg <- sby_resolve_oneapi_mkl()
+  sby_previous <- sby_hpc_capture_env()
 
   if(!isTRUE(sby_cfg$enabled)){
-    return(invisible(TRUE))
+    return(sby_previous)
   }
 
   sby_target_threads <- if(isTRUE(sby_workers > 1L)) 1L else
@@ -39,11 +40,14 @@ sby_configure_blas_threads <- function(sby_workers){
 
   Sys.setenv(
     MKL_NUM_THREADS = as.character(sby_target_threads),
-    OMP_NUM_THREADS = as.character(sby_target_threads),
-    MKL_DYNAMIC = "FALSE"
+    OMP_NUM_THREADS = as.character(sby_target_threads)
   )
 
-  invisible(TRUE)
+  return(sby_previous)
+}
+
+sby_restore_blas_threads <- function(sby_previous){
+  sby_hpc_restore_env(sby_previous)
 }
 
 `%||%` <- function(x, y) if(is.null(x) || is.na(x)) y else x

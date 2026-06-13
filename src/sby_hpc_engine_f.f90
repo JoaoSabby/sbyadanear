@@ -44,6 +44,26 @@ module sby_hpc_engine_mod
 contains
 
   ! -------------------------------------------------------------------
+  ! sby_next_mkl_ld
+  ! Ajusta leading dimension double precision para as recomendacoes oneMKL:
+  ! multiplo de 64 bytes (8 doubles) e evita multiplos exatos de grandes
+  ! potencias de 2 em bytes, acrescentando uma cache line quando necessario.
+  ! -------------------------------------------------------------------
+  integer(c_int) function sby_next_mkl_ld(n) result(ld)
+    integer(c_int), intent(in) :: n
+    integer(c_int) :: rounded
+    integer(kind=8) :: bytes
+
+    rounded = max(1_c_int, ((n + 7_c_int) / 8_c_int) * 8_c_int)
+    bytes = int(rounded, kind=8) * 8_8
+    if (bytes >= 4096_8 .and. iand(bytes, bytes - 1_8) == 0_8) then
+      rounded = rounded + 8_c_int
+    end if
+    ld = rounded
+  end function sby_next_mkl_ld
+
+
+  ! -------------------------------------------------------------------
   ! sby_zscore_population_vsl_f
   ! Computa media e variancia populacionais usando a Vector Statistics
   ! Library. O kernel calcula media e segundo momento central por coluna e
@@ -193,13 +213,17 @@ contains
     integer(c_int), intent(in), value :: n_a
     integer(c_int), intent(in), value :: n_b
     integer(c_int), intent(in), value :: p
-    real(c_double), intent(in)  :: a(n_a, p)
-    real(c_double), intent(in)  :: b(n_b, p)
+    real(c_double), intent(in), target :: a(n_a, p)
+    real(c_double), intent(in), target :: b(n_b, p)
     real(c_double), intent(out) :: d_out(n_a, n_b)
     integer(c_int), intent(out) :: status
 
     integer :: i, j, k
+    integer(c_int) :: lda_opt, ldb_opt, ldc_opt, c_lda
+    logical :: pad_a, pad_b, pad_c
     real(c_double), allocatable :: norm_a(:), norm_b(:)
+    real(c_double), allocatable, target :: a_work(:, :), b_work(:, :), c_work(:, :)
+    real(c_double), pointer :: a_gemm(:, :), b_gemm(:, :)
     real(c_double) :: acc, val
 
     ! Constantes cblas: CblasColMajor = 102, CblasNoTrans = 111, CblasTrans = 112
@@ -213,7 +237,54 @@ contains
       return
     end if
 
+    lda_opt = sby_next_mkl_ld(n_a)
+    ldb_opt = sby_next_mkl_ld(n_b)
+    ldc_opt = sby_next_mkl_ld(n_a)
+    pad_a = lda_opt /= n_a
+    pad_b = ldb_opt /= n_b
+    ! Evita duplicar matrizes de distancia gigantes: o padding de C e aplicado
+    ! quando o overhead maximo fica limitado; A/B continuam alinhados sempre.
+    pad_c = (ldc_opt /= n_a) .and. (int(n_a, kind=8) * int(n_b, kind=8) <= 500000000_8)
+
     allocate(norm_a(n_a), norm_b(n_b))
+    if (pad_a) allocate(a_work(lda_opt, p))
+    if (pad_b) allocate(b_work(ldb_opt, p))
+    if (pad_c) allocate(c_work(ldc_opt, n_b))
+
+    if (pad_a) then
+      a_work = 0.0d0
+      !$omp parallel do default(none) shared(a, a_work, n_a, p) private(i, j) schedule(static)
+      do j = 1, p
+        !$omp simd
+        do i = 1, n_a
+          a_work(i, j) = a(i, j)
+        end do
+      end do
+      !$omp end parallel do
+    end if
+
+    if (pad_b) then
+      b_work = 0.0d0
+      !$omp parallel do default(none) shared(b, b_work, n_b, p) private(i, j) schedule(static)
+      do j = 1, p
+        !$omp simd
+        do i = 1, n_b
+          b_work(i, j) = b(i, j)
+        end do
+      end do
+      !$omp end parallel do
+    end if
+
+    if (pad_a) then
+      a_gemm => a_work
+    else
+      a_gemm => a
+    end if
+    if (pad_b) then
+      b_gemm => b_work
+    else
+      b_gemm => b
+    end if
 
     ! Normas ao quadrado por linha de cada bloco
     !$omp parallel do default(none) shared(a, norm_a, n_a, p) private(i, k, acc) schedule(static)
@@ -238,24 +309,50 @@ contains
     end do
     !$omp end parallel do
 
-    ! Produto central A B^T direto em d_out via dgemm bloqueada.
-    ! Com layout column major: C(n_a x n_b) = A(n_a x p) * B(n_b x p)^T.
-    call cblas_dgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
-                     n_a, n_b, p, -2.0d0, a, n_a, b, n_b, 0.0d0, d_out, n_a)
+    ! Produto central A B^T via dgemm. As entradas usam leading dimensions
+    ! alinhadas a 64 bytes quando necessario; a saida tambem usa ldc acolchoado
+    ! para problemas que nao duplicam uma matriz de distancia gigante.
+    if (pad_c) then
+      call cblas_dgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
+                       n_a, n_b, p, -2.0d0, a_gemm, lda_opt, b_gemm, ldb_opt, &
+                       0.0d0, c_work, ldc_opt)
+    else
+      c_lda = n_a
+      call cblas_dgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
+                       n_a, n_b, p, -2.0d0, a_gemm, lda_opt, b_gemm, ldb_opt, &
+                       0.0d0, d_out, c_lda)
+    end if
 
     ! Soma das normas para completar a identidade euclidiana
-    !$omp parallel do default(none) shared(d_out, norm_a, norm_b, n_a, n_b) &
-    !$omp& private(i, j, val) schedule(static)
-    do j = 1, n_b
-      !$omp simd private(val)
-      do i = 1, n_a
-        val = d_out(i, j) + norm_a(i) + norm_b(j)
-        if (val < 0.0d0) val = 0.0d0
-        d_out(i, j) = val
+    if (pad_c) then
+      !$omp parallel do default(none) shared(d_out, c_work, norm_a, norm_b, n_a, n_b) &
+      !$omp& private(i, j, val) schedule(static)
+      do j = 1, n_b
+        !$omp simd private(val)
+        do i = 1, n_a
+          val = c_work(i, j) + norm_a(i) + norm_b(j)
+          if (val < 0.0d0) val = 0.0d0
+          d_out(i, j) = val
+        end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    else
+      !$omp parallel do default(none) shared(d_out, norm_a, norm_b, n_a, n_b) &
+      !$omp& private(i, j, val) schedule(static)
+      do j = 1, n_b
+        !$omp simd private(val)
+        do i = 1, n_a
+          val = d_out(i, j) + norm_a(i) + norm_b(j)
+          if (val < 0.0d0) val = 0.0d0
+          d_out(i, j) = val
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
+    if (pad_c) deallocate(c_work)
+    if (pad_b) deallocate(b_work)
+    if (pad_a) deallocate(a_work)
     deallocate(norm_a, norm_b)
   end subroutine sby_pairwise_sqdist_dgemm_f
 

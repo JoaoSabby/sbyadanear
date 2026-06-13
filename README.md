@@ -138,9 +138,9 @@ O kernel `RcppParallel` do `sbyadanear` não contém regiões OpenMP internas. A
 assim, duplo paralelismo pode ocorrer se o usuário envolver a chamada em outro
 backend paralelo ou se uma biblioteca numérica externa abrir threads ao mesmo
 tempo. Em servidores com Intel oneAPI/MKL, o pacote mitiga esse cenário
-reduzindo `OMP_NUM_THREADS` e `MKL_NUM_THREADS` para `1` quando
-`sby_knn_workers > 1L` e fixa `MKL_DYNAMIC = "FALSE"`; em pipelines já
-paralelos, prefira `sby_knn_workers = 1L` por tarefa externa.
+reduzindo temporariamente `OMP_NUM_THREADS` e `MKL_NUM_THREADS` para `1` quando
+`sby_knn_workers > 1L`; em pipelines já paralelos, prefira
+`sby_knn_workers = 1L` por tarefa externa.
 
 Para HNSW com maior proximidade em relação ao resultado exato, aumente `M` e
 `ef`. A configuração abaixo prioriza fidelidade sobre velocidade e memória:
@@ -447,7 +447,6 @@ Para diagnostico dentro do container:
 ```r
 Sys.getenv("OMP_NUM_THREADS")
 Sys.getenv("MKL_NUM_THREADS")
-Sys.getenv("MKL_DYNAMIC")
 ```
 
 Se `RhpcBLASctl` estiver instalado no ambiente:
@@ -465,8 +464,7 @@ normalmente reduz oversubscription:
 ```r
 Sys.setenv(
   OMP_NUM_THREADS = "1",
-  MKL_NUM_THREADS = "1",
-  MKL_DYNAMIC = "FALSE"
+  MKL_NUM_THREADS = "1"
 )
 ```
 

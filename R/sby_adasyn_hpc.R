@@ -13,8 +13,9 @@
 #' Esta funcao substitui internamente a rota denominada "native" como caminho
 #' rapido do ADASYN. Quando o motor HPC consolidado nao esta disponivel, recorre
 #' de forma transparente a `sby_adasyn()` com `sby_knn_engine = "native"` para
-#' garantir que tudo continue funcionando. O ambiente NUMA e MKL e isolado e
-#' restaurado por um bloco `on.exit()` inflexivel.
+#' garantir que tudo continue funcionando. Apenas `MKL_NUM_THREADS` e
+#' `OMP_NUM_THREADS` sao controladas temporariamente e restauradas por um bloco
+#' `on.exit()` inflexivel.
 #'
 #' @param .data Data frame, tibble ou matriz com a coluna de desfecho e os
 #'   preditores numericos referenciados em `formula`.
@@ -41,7 +42,7 @@ sby_adasyn_hpc <- function(
   on.exit(sby_hpc_restore_env(sby_previous_env), add = TRUE)
 
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
-  sby_hpc_apply_env(sby_total_threads = sby_total_threads, sby_affinity = "scatter")
+  sby_hpc_apply_env(sby_total_threads = sby_total_threads)
 
   sby_formula_data <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
   sby_predictor_data <- sby_formula_data$sby_predictor_data
