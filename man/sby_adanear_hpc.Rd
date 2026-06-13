@@ -4,7 +4,8 @@
 \usage{
 sby_adanear_hpc(.data, formula, sby_k_neighbor_adanear = 3,
   sby_k_neighbor_nearmiss = 7, sby_config_max_threads = -1,
-  sby_over_ratio = 0.2, sby_under_ratio = 0.5)
+  sby_seed = sample.int(10L^5L, 1L), sby_over_ratio = 0.2,
+  sby_under_ratio = 0.5)
 }
 \arguments{
 \item{.data}{Data frame, tibble ou matriz com a coluna de desfecho e os preditores numericos.}
@@ -12,6 +13,7 @@ sby_adanear_hpc(.data, formula, sby_k_neighbor_adanear = 3,
 \item{sby_k_neighbor_adanear}{Numero inteiro positivo de vizinhos da etapa ADASYN. O padrao e 3.}
 \item{sby_k_neighbor_nearmiss}{Numero inteiro positivo de vizinhos da etapa NearMiss-1. O padrao e 7.}
 \item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. O padrao -1 detecta os nucleos fisicos disponiveis.}
+\item{sby_seed}{Valor numerico inteiro utilizado para inicializar o gerador de numeros pseudoaleatorios da etapa ADASYN no motor HPC. O padrao e \code{sample.int(10L^5L, 1L)}, gerando uma semente aleatoria quando o usuario nao informa valor. Informe uma semente fixa para tornar reproduziveis as escolhas de vizinhos sinteticos e pesos de interpolacao.}
 \item{sby_over_ratio}{Fator relativo de expansao da classe minoritaria pela etapa ADASYN. O padrao e 0.2.}
 \item{sby_under_ratio}{Razao minima desejada entre minoria e maioria apos o NearMiss-1. O padrao e 0.5.}
 }

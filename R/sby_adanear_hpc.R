@@ -37,6 +37,11 @@
 #'   etapa NearMiss-1. O padrao e `7`.
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. O padrao
 #'   `-1` deixa a funcao detectar os nucleos fisicos disponiveis.
+#' @param sby_seed Valor numerico inteiro utilizado para inicializar o gerador de
+#'   numeros pseudoaleatorios da etapa ADASYN no motor HPC. O padrao e
+#'   `sample.int(10L^5L, 1L)`, gerando uma semente aleatoria quando o usuario nao
+#'   informa valor. Informe uma semente fixa para tornar reproduziveis as escolhas
+#'   de vizinhos sinteticos e pesos de interpolacao.
 #' @param sby_over_ratio Fator relativo de expansao da classe minoritaria pela
 #'   etapa ADASYN. O padrao e `0.2`.
 #' @param sby_under_ratio Razao minima desejada entre minoria e maioria apos o
@@ -50,6 +55,7 @@ sby_adanear_hpc <- function(
   sby_k_neighbor_adanear = 3,
   sby_k_neighbor_nearmiss = 7,
   sby_config_max_threads = -1,
+  sby_seed = sample.int(10L^5L, 1L),
   sby_over_ratio = 0.2,
   sby_under_ratio = 0.5
 ){
@@ -72,7 +78,9 @@ sby_adanear_hpc <- function(
   sby_original_predictor_data <- sby_predictor_data
   sby_target_vector <- sby_formula_data$sby_target_vector
 
-  sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed = 1L)
+  sby_seed <- sby_validate_seed(sby_seed = sby_seed)
+
+  sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed = sby_seed)
   sby_x_matrix <- sby_adanear_as_numeric_matrix(sby_predictor_data)
   sby_column_names <- sby_adanear_get_column_names(sby_predictor_data)
   colnames(sby_x_matrix) <- sby_column_names
@@ -91,6 +99,7 @@ sby_adanear_hpc <- function(
 
   # Caminho rapido: motor HPC consolidado com montagem zero-copy do tibble
   if(sby_adanear_hpc_available()){
+    set.seed(sby_seed)
     sby_hpc_result <- sby_call_native(
       "sby_adanear_hpc_result_cpp",
       sby_x_matrix,
@@ -137,6 +146,7 @@ sby_adanear_hpc <- function(
     sby_under_ratio = sby_under_ratio,
     sby_knn_over_k = sby_k_neighbor_adanear,
     sby_knn_under_k = sby_k_neighbor_nearmiss,
+    sby_seed = sby_seed,
     sby_audit = FALSE,
     sby_restore_types = TRUE,
     sby_knn_engine = "native",
