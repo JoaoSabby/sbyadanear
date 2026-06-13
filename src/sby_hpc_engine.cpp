@@ -1,18 +1,33 @@
 /*
  * sby_hpc_engine.cpp
  *
- * Motor HPC consolidado do pacote sbyadanear. Este wrapper orquestra o
- * pipeline ADASYN + NearMiss-1 estritamente no espaco padronizado por z-score
- * e monta o tibble final por zero-copy diretamente em C++, sem passar por
- * as.data.frame() ou rbind() da camada R.
+ * Motor HPC consolidado do pacote sbyadanear.
  *
  * Decisoes de desempenho:
- *   - estatisticas iniciais da populacao via Vector Statistics Library (Fortran).
+ *   - estatisticas populacionais via Vector Statistics Library (Fortran).
  *   - matriz de distancias por D^2 = ||A||^2 + ||B||^2 - 2 A B^T com cblas_sgemm.
  *   - interpolacao lambda do ADASYN com vdrnguniform no espaco padronizado.
- *   - reversao do z-score por FMA AVX-512 durante a copia para os vetores finais.
+ *   - despadronizacao das sinteticas por FMA AVX-512 inteiramente no C++.
+ *   - NearMiss processa a minoria em blocos (GEMM particionado) sem materializar
+ *     a matriz ampliada (minoria + sinteticas).
+ *   - reconstrucao final do tibble ocorre na camada R.
  *
- * Toda a nomenclatura segue snake_case. Nenhum caractere de travessao e usado.
+ * Contrato de retorno:
+ *   sby_adanear_hpc_result_cpp -> List(
+ *     sby_synthetic_rows        = NumericMatrix  (double, despadronizado),
+ *     sby_retained_majority_idx = IntegerVector  (1-based),
+ *     sby_target_synthetic      = IntegerVector  (codigos de nivel),
+ *     sby_scaling_info          = List(centers, scales)
+ *   )
+ *   sby_adasyn_hpc_cpp -> List(
+ *     sby_synthetic_rows   = NumericMatrix  (double, despadronizado),
+ *     sby_target_synthetic = IntegerVector  (codigos de nivel),
+ *     sby_scaling_info     = List(centers, scales)
+ *   )
+ *   sby_nearmiss_hpc_cpp -> List(
+ *     sby_retained_majority_idx = IntegerVector (1-based),
+ *     sby_scaling_info          = List(centers, scales)
+ *   )
  *
  * Autor: Joao Batista Goncalves de Brito
  */
@@ -39,8 +54,6 @@
 
 // -------------------------------------------------------------------
 // Alocador alinhado a 64 bytes para buffers numericos quentes.
-// A documentacao Intel oneMKL recomenda alinhamento em fronteiras de 64 bytes
-// para melhor desempenho em kernels vetorizados e chamadas BLAS.
 // -------------------------------------------------------------------
 template <typename T, std::size_t Alignment>
 class sby_aligned_allocator {
@@ -107,7 +120,7 @@ bool operator!=(const sby_aligned_allocator<T, Alignment>&,
                 const sby_aligned_allocator<U, Alignment>&) noexcept { return false; }
 
 using sby_double_buffer = std::vector<double, sby_aligned_allocator<double, 64> >;
-using sby_float_buffer = std::vector<float, sby_aligned_allocator<float, 64> >;
+using sby_float_buffer  = std::vector<float,  sby_aligned_allocator<float,  64> >;
 
 template <typename Buffer>
 static void sby_resize_first_touch(Buffer& buffer, size_t n, typename Buffer::value_type value){
@@ -136,20 +149,12 @@ static int sby_resolve_gemm_ref_block(int n_query, int n_ref, int p){
   const size_t target_bytes = (size_t) 256 * (size_t) 1024 * (size_t) 1024;
   size_t row_count = (size_t) std::max(1, n_query);
   size_t by_dist = target_bytes / (sizeof(float) * row_count);
-  if(by_dist < 1){
-    by_dist = 1;
-  }
+  if(by_dist < 1) by_dist = 1;
   size_t by_copy = target_bytes / (sizeof(float) * (size_t) std::max(1, p));
-  if(by_copy < 1){
-    by_copy = 1;
-  }
+  if(by_copy < 1) by_copy = 1;
   size_t block = std::min(by_dist, by_copy);
-  if(block > (size_t) n_ref){
-    block = (size_t) n_ref;
-  }
-  if(block < 1){
-    block = 1;
-  }
+  if(block > (size_t) n_ref) block = (size_t) n_ref;
+  if(block < 1) block = 1;
   return (int) block;
 }
 
@@ -216,8 +221,6 @@ extern "C" {
 
 // -------------------------------------------------------------------
 // sby_resolve_minority_role
-// Determina o codigo do nivel minoritario de um fator binario com base nas
-// contagens. Retorna o codigo 1-based do nivel menos frequente.
 // -------------------------------------------------------------------
 static int sby_resolve_minority_role(const Rcpp::IntegerVector& y_codes, int n_levels){
   std::vector<long> counts(n_levels + 1, 0L);
@@ -240,7 +243,6 @@ static int sby_resolve_minority_role(const Rcpp::IntegerVector& y_codes, int n_l
 
 // -------------------------------------------------------------------
 // sby_zscore_population
-// Computa centros e escalas populacionais chamando o kernel Fortran VSL.
 // -------------------------------------------------------------------
 static void sby_zscore_population(const double* x, int n, int p,
                                   sby_double_buffer& means,
@@ -252,7 +254,6 @@ static void sby_zscore_population(const double* x, int n, int p,
   if(status != 0){
     Rcpp::stop("Falha no calculo de z-score populacional (status=%d)", status);
   }
-  // Protege contra escalas nulas para nao destruir a reversao posterior
   for(int j = 0; j < p; ++j){
     if(!(sds[j] > 0.0) || !std::isfinite(sds[j])){
       sds[j] = 1.0;
@@ -262,7 +263,6 @@ static void sby_zscore_population(const double* x, int n, int p,
 
 // -------------------------------------------------------------------
 // sby_apply_zscore
-// Aplica o z-score por kernel Fortran SIMD sobre a matriz n x p.
 // -------------------------------------------------------------------
 static void sby_apply_zscore(const double* x, int n, int p,
                              const sby_double_buffer& means,
@@ -277,11 +277,40 @@ static void sby_apply_zscore(const double* x, int n, int p,
 }
 
 // -------------------------------------------------------------------
+// sby_destandarize_synthetic
+// Reverte o z-score das linhas sinteticas (float32) e escreve o
+// resultado como double no NumericMatrix de saida. Executado inteiramente
+// no C++; a camada R recebe os dados ja nas unidades originais.
+// -------------------------------------------------------------------
+static void sby_destandarize_synthetic(
+    const sby_float_buffer& syn_scaled,   // column major n_syn x p
+    int n_syn, int p,
+    const sby_double_buffer& means,
+    const sby_double_buffer& sds,
+    Rcpp::NumericMatrix& out){
+
+  sby_double_buffer tmp;
+  sby_resize_first_touch(tmp, (size_t) n_syn * (size_t) p, 0.0);
+  int status = 0;
+  sby_revert_zscore_fma_f(syn_scaled.data(), n_syn, p,
+                          means.data(), sds.data(), tmp.data(), &status);
+  if(status != 0){
+    Rcpp::stop("Falha na despadronizacao das sinteticas (status=%d)", status);
+  }
+  // Copia column major -> NumericMatrix (column major identico)
+  double* dst = out.begin();
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for(int j = 0; j < p; ++j){
+    const double* src_col = tmp.data() + (size_t) j * (size_t) n_syn;
+    double*       dst_col = dst         + (size_t) j * (size_t) n_syn;
+    sby_parallel_copy(src_col, dst_col, (size_t) n_syn);
+  }
+}
+
+// -------------------------------------------------------------------
 // sby_knn_topk_against_reference
-// Calcula a matriz de distancias ao quadrado de uma matriz de consulta contra
-// uma matriz de referencia usando cblas_sgemm e devolve os k vizinhos mais
-// proximos (indices 1-based) por linha de consulta. Ambas as matrizes estao em
-// layout column major n x p no espaco padronizado.
 // -------------------------------------------------------------------
 static void sby_knn_topk_against_reference(
     const sby_float_buffer& query, int n_query,
@@ -290,17 +319,11 @@ static void sby_knn_topk_against_reference(
     std::vector< std::vector<int> >& out_index){
   out_index.assign(n_query, std::vector<int>());
   int effective_k = k;
-  if(effective_k > n_ref){
-    effective_k = n_ref;
-  }
-  if(effective_k < 1 || n_query < 1 || n_ref < 1){
-    return;
-  }
+  if(effective_k > n_ref) effective_k = n_ref;
+  if(effective_k < 1 || n_query < 1 || n_ref < 1) return;
 
   int keep_k = effective_k + (drop_self ? 1 : 0);
-  if(keep_k > n_ref){
-    keep_k = n_ref;
-  }
+  if(keep_k > n_ref) keep_k = n_ref;
 
   sby_double_buffer top_dist;
   sby_resize_first_touch(top_dist, (size_t) n_query * (size_t) keep_k,
@@ -331,9 +354,7 @@ static void sby_knn_topk_against_reference(
       const float* col = dist_block.data() + (size_t) b * (size_t) n_query;
       for(int i = 0; i < n_query; ++i){
         float candidate = col[i];
-        if(candidate >= worst_val[i]){
-          continue;
-        }
+        if(candidate >= worst_val[i]) continue;
         size_t row_offset = (size_t) i * (size_t) keep_k;
         int pos = worst_pos[i];
         top_dist[row_offset + (size_t) pos] = (double) candidate;
@@ -371,16 +392,10 @@ static void sby_knn_topk_against_reference(
     dst.reserve(effective_k);
     for(int pos : order){
       int cand = top_index[row_offset + (size_t) pos];
-      if(cand < 0){
-        continue;
-      }
-      if(drop_self && cand == i){
-        continue;
-      }
+      if(cand < 0) continue;
+      if(drop_self && cand == i) continue;
       dst.push_back(cand + 1);
-      if((int) dst.size() >= effective_k){
-        break;
-      }
+      if((int) dst.size() >= effective_k) break;
     }
     if(dst.empty() && n_ref > 0){
       dst.push_back(1);
@@ -389,93 +404,22 @@ static void sby_knn_topk_against_reference(
 }
 
 // -------------------------------------------------------------------
-// sby_assemble_tibble_zero_copy
-// Monta o tibble final diretamente em C++. Recebe um buffer consolidado no
-// espaco padronizado (linhas finais x p, column major), os parametros de
-// z-score, os codigos do alvo e os metadados de nomes. Aloca uma Rcpp::List
-// com p + 1 colunas, cada uma um NumericVector pre-alocado ao numero exato de
-// linhas finais, e reverte o z-score por FMA durante a copia.
-// -------------------------------------------------------------------
-static SEXP sby_assemble_tibble_zero_copy(
-    const sby_float_buffer& final_scaled, int n_final, int p,
-    const sby_double_buffer& means, const sby_double_buffer& sds,
-    const std::vector<int>& y_codes_final,
-    const Rcpp::CharacterVector& column_names,
-    const std::string& target_name,
-    const Rcpp::CharacterVector& target_levels){
-
-  // Reversao do z-score por FMA diretamente no buffer column major final.
-  sby_double_buffer final_original;
-  sby_resize_first_touch(final_original, (size_t) n_final * (size_t) p, 0.0);
-  int status = 0;
-  sby_revert_zscore_fma_f(final_scaled.data(), n_final, p,
-                          means.data(), sds.data(), final_original.data(), &status);
-  if(status != 0){
-    Rcpp::stop("Falha na reversao de z-score por FMA (status=%d)", status);
-  }
-
-  // Aloca a lista com tamanho exato de colunas (p preditores + 1 alvo).
-  Rcpp::List out(p + 1);
-
-  // Cada coluna preditora e um NumericVector pre-alocado ao numero exato de
-  // linhas finais. A copia e column major contigua, portanto zero-copy logico.
-  std::vector<double*> column_ptrs(p);
-  for(int j = 0; j < p; ++j){
-    Rcpp::NumericVector col(n_final);
-    column_ptrs[j] = col.begin();
-    out[j] = col;
-  }
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for(int j = 0; j < p; ++j){
-    const double* src = final_original.data() + (size_t) j * (size_t) n_final;
-    sby_parallel_copy(src, column_ptrs[j], (size_t) n_final);
-  }
-
-  // Coluna do alvo reconstruida como fator preservando os niveis originais.
-  Rcpp::IntegerVector target(n_final);
-  for(int i = 0; i < n_final; ++i){
-    target[i] = y_codes_final[i];
-  }
-  target.attr("levels") = target_levels;
-  target.attr("class") = "factor";
-  out[p] = target;
-
-  // Nomes das colunas: preditores seguidos do nome do alvo.
-  Rcpp::CharacterVector out_names(p + 1);
-  for(int j = 0; j < p; ++j){
-    out_names[j] = column_names[j];
-  }
-  out_names[p] = target_name;
-  out.attr("names") = out_names;
-
-  // Atributo de classe que entrega o objeto pronto como tibble a camada R.
-  out.attr("class") = Rcpp::CharacterVector::create("tbl_df", "tbl", "data.frame");
-
-  // row.names compacto no formato interno do R.
-  Rcpp::IntegerVector row_names = Rcpp::IntegerVector::create(NA_INTEGER, -n_final);
-  out.attr("row.names") = row_names;
-
-  return out;
-}
-
-// -------------------------------------------------------------------
 // sby_run_adasyn_stage
-// Executa o ADASYN no espaco padronizado. Anexa as linhas sinteticas ao final
-// do buffer escalado e atualiza os codigos do alvo. Devolve o numero de linhas
-// apos a expansao.
+// Retorna o buffer de sinteticas em float32 (column major) e os codigos
+// de nivel correspondentes. NAO anexa as sinteticas ao buffer original
+// (o NearMiss opera apenas sobre os originais).
 // -------------------------------------------------------------------
 static int sby_run_adasyn_stage(
-    sby_float_buffer& x_scaled, int n, int p,
-    std::vector<int>& y_codes, int minority_code,
-    int k_neighbor, double over_ratio){
+    const sby_float_buffer& x_scaled_orig, int n, int p,
+    const std::vector<int>& y_codes_orig, int minority_code,
+    int k_neighbor, double over_ratio,
+    sby_float_buffer& syn_scaled_out,
+    std::vector<int>& syn_codes_out){
 
-  // Indices minoritarios 1-based no conjunto completo
   std::vector<int> minority_index;
   minority_index.reserve(n);
   for(int i = 0; i < n; ++i){
-    if(y_codes[i] == minority_code){
+    if(y_codes_orig[i] == minority_code){
       minority_index.push_back(i);
     }
   }
@@ -484,101 +428,71 @@ static int sby_run_adasyn_stage(
     Rcpp::stop("ADASYN exige ao menos 2 observacoes minoritarias");
   }
 
-  // Matriz minoritaria em layout column major n_min x p
   sby_float_buffer minority;
   sby_resize_first_touch(minority, (size_t) n_min * (size_t) p, 0.0f);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
   for(int j = 0; j < p; ++j){
-    const float* col = x_scaled.data() + (size_t) j * (size_t) n;
+    const float* col = x_scaled_orig.data() + (size_t) j * (size_t) n;
     float* dst = minority.data() + (size_t) j * (size_t) n_min;
     for(int r = 0; r < n_min; ++r){
       dst[r] = col[minority_index[r]];
     }
   }
 
-  // Quantidade sintetica seguindo a regra floor(min_count * over_ratio), min 1
-  int synthetic_count = (int) std::floor((double) n_min * over_ratio);
-  if(synthetic_count < 1){
-    synthetic_count = 1;
-  }
+  // Numero de sinteticas: ceil(n_min * over_ratio), minimo 1
+  int synthetic_count = (int) std::ceil((double) n_min * over_ratio);
+  if(synthetic_count < 1) synthetic_count = 1;
 
-  // Vizinhos minoritarios para interpolacao (sgemm + topk, removendo self)
   int effective_k = k_neighbor;
-  if(effective_k > n_min - 1){
-    effective_k = n_min - 1;
-  }
-  if(effective_k < 1){
-    effective_k = 1;
-  }
+  if(effective_k > n_min - 1) effective_k = n_min - 1;
+  if(effective_k < 1) effective_k = 1;
+
   std::vector< std::vector<int> > minority_neighbors;
   sby_knn_topk_against_reference(minority, n_min, minority, n_min, p,
                                  effective_k, true, minority_neighbors);
 
-  // Distribuicao uniforme das linhas sinteticas entre as bases minoritarias
   std::vector<int> base_idx(synthetic_count);
   std::vector<int> nbr_idx(synthetic_count);
   sby_float_buffer lambda;
   lambda.resize((size_t) synthetic_count);
 
   Rcpp::NumericVector unif_lambda = Rcpp::runif(synthetic_count);
-  Rcpp::NumericVector unif_pick = Rcpp::runif(synthetic_count);
+  Rcpp::NumericVector unif_pick   = Rcpp::runif(synthetic_count);
   for(int s = 0; s < synthetic_count; ++s){
-    int base = s % n_min;            // 0-based base minoritaria
-    base_idx[s] = base + 1;          // 1-based para o Fortran
+    int base = s % n_min;
+    base_idx[s] = base + 1;
     const std::vector<int>& nbrs = minority_neighbors[base];
     int pick = (int) std::floor(unif_pick[s] * (double) nbrs.size());
     if(pick < 0) pick = 0;
     if(pick >= (int) nbrs.size()) pick = (int) nbrs.size() - 1;
-    nbr_idx[s] = nbrs[pick];         // ja 1-based
-    lambda[s] = (float) unif_lambda[s];
+    nbr_idx[s] = nbrs[pick];
+    lambda[s]  = (float) unif_lambda[s];
   }
 
-  // Geracao sintetica por interpolacao FMA no espaco padronizado
-  sby_float_buffer syn_out;
-  sby_resize_first_touch(syn_out, (size_t) synthetic_count * (size_t) p, 0.0f);
+  sby_resize_first_touch(syn_scaled_out, (size_t) synthetic_count * (size_t) p, 0.0f);
   int status = 0;
   sby_adasyn_interp_uniform_f(minority.data(), n_min, p,
                               base_idx.data(), nbr_idx.data(), lambda.data(),
-                              synthetic_count, syn_out.data(), &status);
+                              synthetic_count, syn_scaled_out.data(), &status);
   if(status != 0){
     Rcpp::stop("Falha na interpolacao sintetica ADASYN (status=%d)", status);
   }
 
-  // Anexa as linhas sinteticas ao buffer escalado, preservando column major.
-  int n_new = n + synthetic_count;
-  sby_float_buffer expanded;
-  sby_resize_first_touch(expanded, (size_t) n_new * (size_t) p, 0.0f);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for(int j = 0; j < p; ++j){
-    const float* src_col = x_scaled.data() + (size_t) j * (size_t) n;
-    const float* syn_col = syn_out.data() + (size_t) j * (size_t) synthetic_count;
-    float* dst_col = expanded.data() + (size_t) j * (size_t) n_new;
-    sby_parallel_copy(src_col, dst_col, (size_t) n);
-    sby_parallel_copy(syn_col, dst_col + n, (size_t) synthetic_count);
-  }
-  x_scaled.swap(expanded);
-
-  y_codes.reserve(n_new);
-  for(int s = 0; s < synthetic_count; ++s){
-    y_codes.push_back(minority_code);
-  }
-  return n_new;
+  syn_codes_out.assign(synthetic_count, minority_code);
+  return synthetic_count;
 }
 
 // -------------------------------------------------------------------
 // sby_run_nearmiss_stage
-// Executa o NearMiss-1 no espaco padronizado. Retem todas as linhas
-// minoritarias e seleciona as linhas majoritarias com menor distancia media
-// aos k vizinhos minoritarios mais proximos. Devolve os indices retidos
-// 0-based ordenados.
+// Recebe apenas os originais (sem sinteticas). Retorna os indices 0-based
+// das linhas majoritarias retidas (dentro de x_scaled_orig).
+// GEMM particionado sobre a minoria original: sem materializar concatenacao.
 // -------------------------------------------------------------------
 static std::vector<int> sby_run_nearmiss_stage(
-    const sby_float_buffer& x_scaled, int n, int p,
-    const std::vector<int>& y_codes, int minority_code,
+    const sby_float_buffer& x_scaled_orig, int n, int p,
+    const std::vector<int>& y_codes_orig, int minority_code,
     int k_neighbor, double under_ratio){
 
   std::vector<int> minority_index;
@@ -586,7 +500,7 @@ static std::vector<int> sby_run_nearmiss_stage(
   minority_index.reserve(n);
   majority_index.reserve(n);
   for(int i = 0; i < n; ++i){
-    if(y_codes[i] == minority_code){
+    if(y_codes_orig[i] == minority_code){
       minority_index.push_back(i);
     } else {
       majority_index.push_back(i);
@@ -595,16 +509,10 @@ static std::vector<int> sby_run_nearmiss_stage(
   int n_min = (int) minority_index.size();
   int n_maj = (int) majority_index.size();
 
-  // Quantidade majoritaria retida: floor(n_min / under_ratio), limitada por n_maj
   int retained_majority = (int) std::floor((double) n_min / under_ratio);
-  if(retained_majority > n_maj){
-    retained_majority = n_maj;
-  }
-  if(retained_majority < 0){
-    retained_majority = 0;
-  }
+  if(retained_majority > n_maj) retained_majority = n_maj;
+  if(retained_majority < 0)    retained_majority = 0;
 
-  // Matrizes column major das classes
   sby_float_buffer majority;
   sby_float_buffer minority;
   sby_resize_first_touch(majority, (size_t) n_maj * (size_t) p, 0.0f);
@@ -613,7 +521,7 @@ static std::vector<int> sby_run_nearmiss_stage(
 #pragma omp parallel for schedule(static)
 #endif
   for(int j = 0; j < p; ++j){
-    const float* col = x_scaled.data() + (size_t) j * (size_t) n;
+    const float* col = x_scaled_orig.data() + (size_t) j * (size_t) n;
     float* mdst = majority.data() + (size_t) j * (size_t) n_maj;
     float* ndst = minority.data() + (size_t) j * (size_t) n_min;
     for(int r = 0; r < n_maj; ++r){ mdst[r] = col[majority_index[r]]; }
@@ -621,16 +529,10 @@ static std::vector<int> sby_run_nearmiss_stage(
   }
 
   int effective_k = k_neighbor;
-  if(effective_k > n_min){
-    effective_k = n_min;
-  }
-  if(effective_k < 1){
-    effective_k = 1;
-  }
+  if(effective_k > n_min) effective_k = n_min;
+  if(effective_k < 1)     effective_k = 1;
 
-  // Score NearMiss-1 em streaming: processa blocos da minoria por SGEMM e
-  // atualiza os k menores valores por linha majoritaria sem materializar a
-  // matriz completa n_maj x n_min.
+  // Score NearMiss-1 em streaming sobre a minoria ORIGINAL (sem sinteticas)
   std::vector< std::pair<double,int> > scores(n_maj);
   sby_double_buffer score_acc;
   sby_resize_first_touch(score_acc, (size_t) n_maj, 0.0);
@@ -676,9 +578,7 @@ static std::vector<int> sby_run_nearmiss_stage(
         const float* col = dist_block.data() + (size_t) c * (size_t) n_maj;
         for(int m = 0; m < n_maj; ++m){
           float candidate = col[m];
-          if(candidate >= worst_val[m]){
-            continue;
-          }
+          if(candidate >= worst_val[m]) continue;
           double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
           row_topk[worst_pos[m]] = candidate;
 
@@ -725,179 +625,112 @@ static std::vector<int> sby_run_nearmiss_stage(
     std::sort(scores.begin(), scores.end(), score_less);
   }
 
-  std::vector<int> retained;
-  retained.reserve(n_min + retained_majority);
-  for(int i = 0; i < n_min; ++i){
-    retained.push_back(minority_index[i]);
-  }
+  std::vector<int> retained_maj_0based;
+  retained_maj_0based.reserve(retained_majority);
   for(int t = 0; t < retained_majority; ++t){
-    retained.push_back(scores[t].second);
+    retained_maj_0based.push_back(scores[t].second);
   }
-  std::sort(retained.begin(), retained.end());
-  return retained;
+  return retained_maj_0based;
 }
 
-// -------------------------------------------------------------------
-// sby_extract_factor_codes
-// Extrai os codigos inteiros 1-based de um fator R.
-// -------------------------------------------------------------------
 static Rcpp::IntegerVector sby_extract_factor_codes(SEXP y){
-  Rcpp::IntegerVector codes(y);
-  return codes;
+  return Rcpp::IntegerVector(y);
 }
+
+static Rcpp::List sby_build_scaling_info(const sby_double_buffer& means,
+                                         const sby_double_buffer& sds,
+                                         int p){
+  Rcpp::NumericVector centers(p), scales(p);
+  for(int j = 0; j < p; ++j){
+    centers[j] = means[j];
+    scales[j]  = sds[j];
+  }
+  return Rcpp::List::create(
+    Rcpp::Named("centers") = centers,
+    Rcpp::Named("scales")  = scales
+  );
+}
+
 
 //' @title Relatorio de compilacao do motor HPC
-//' @description Retorna macros de compilacao usadas para validar AVX-512, AVX2, FMA e OpenMP.
 // [[Rcpp::export]]
 extern "C" SEXP sby_hpc_compile_report_cpp(){
   Rcpp::List out;
-
 #if defined(SBYADANEAR_CASCADELAKE_NATIVE)
   out["cascade_lake_native"] = true;
 #else
   out["cascade_lake_native"] = false;
 #endif
-
 #if defined(__AVX512F__)
   out["avx512f"] = true;
 #else
   out["avx512f"] = false;
 #endif
-
 #if defined(__AVX512CD__)
   out["avx512cd"] = true;
 #else
   out["avx512cd"] = false;
 #endif
-
 #if defined(__AVX512BW__)
   out["avx512bw"] = true;
 #else
   out["avx512bw"] = false;
 #endif
-
 #if defined(__AVX512DQ__)
   out["avx512dq"] = true;
 #else
   out["avx512dq"] = false;
 #endif
-
 #if defined(__AVX512VL__)
   out["avx512vl"] = true;
 #else
   out["avx512vl"] = false;
 #endif
-
 #if defined(__AVX2__)
   out["avx2"] = true;
 #else
   out["avx2"] = false;
 #endif
-
 #if defined(__FMA__)
   out["fma"] = true;
 #else
   out["fma"] = false;
 #endif
-
 #ifdef _OPENMP
-  out["openmp"] = true;
-  out["openmp_version"] = _OPENMP;
+  out["openmp"]          = true;
+  out["openmp_version"]  = _OPENMP;
   out["openmp_max_threads"] = omp_get_max_threads();
 #else
-  out["openmp"] = false;
-  out["openmp_version"] = NA_INTEGER;
+  out["openmp"]             = false;
+  out["openmp_version"]     = NA_INTEGER;
   out["openmp_max_threads"] = NA_INTEGER;
 #endif
-
   return out;
 }
 
-//' @title Motor HPC consolidado do pipeline ADASYN mais NearMiss-1
-//' @description Executa todo o pipeline no espaco padronizado e monta o tibble por zero-copy.
+
+//' @title Pipeline ADASYN + NearMiss-1 HPC
+//' @description Retorna lista com sinteticas despadronizadas, indices da maioria
+//'   retida e metadados de escala. Tibble montado na camada R.
 // [[Rcpp::export]]
-extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
-                                    SEXP k_adanear, SEXP k_nearmiss,
-                                    SEXP over_ratio, SEXP under_ratio,
-                                    SEXP max_threads, SEXP column_names,
-                                    SEXP target_name, SEXP target_levels){
+extern "C" SEXP sby_adanear_hpc_result_cpp(
+    SEXP x_matrix, SEXP y_factor,
+    SEXP k_adanear, SEXP k_nearmiss,
+    SEXP over_ratio, SEXP under_ratio,
+    SEXP max_threads, SEXP column_names,
+    SEXP target_levels){
+
   sby_apply_native_threads(max_threads);
 
   Rcpp::NumericMatrix x(x_matrix);
-  int n = x.nrow();
-  int p = x.ncol();
+  int n = x.nrow(), p = x.ncol();
   Rcpp::IntegerVector y_codes_in = sby_extract_factor_codes(y_factor);
   Rcpp::CharacterVector levels(target_levels);
-  int n_levels = levels.size();
-  int k_over = Rcpp::as<int>(k_adanear);
-  int k_under = Rcpp::as<int>(k_nearmiss);
-  double ratio_over = Rcpp::as<double>(over_ratio);
-  double ratio_under = Rcpp::as<double>(under_ratio);
-
-  int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
-
-  // 1. Estatisticas populacionais e padronizacao (espaco z unico para tudo)
-  sby_double_buffer means, sds;
-  sby_zscore_population(x.begin(), n, p, means, sds);
-  sby_float_buffer x_scaled;
-  sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
-
-  std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
-
-  // 2. ADASYN no espaco padronizado (expande o buffer e os codigos do alvo)
-  int n_after_over = sby_run_adasyn_stage(x_scaled, n, p, y_codes,
-                                          minority_code, k_over, ratio_over);
-
-  // 3. NearMiss-1 no espaco padronizado sobre o conjunto expandido
-  std::vector<int> retained = sby_run_nearmiss_stage(x_scaled, n_after_over, p,
-                                                     y_codes, minority_code,
-                                                     k_under, ratio_under);
-  int n_final = (int) retained.size();
-
-  // 4. Consolida o buffer final column major e os codigos finais do alvo
-  sby_float_buffer final_scaled;
-  sby_resize_first_touch(final_scaled, (size_t) n_final * (size_t) p, 0.0f);
-  std::vector<int> y_final(n_final);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for(int j = 0; j < p; ++j){
-    const float* src = x_scaled.data() + (size_t) j * (size_t) n_after_over;
-    float* dst = final_scaled.data() + (size_t) j * (size_t) n_final;
-    for(int r = 0; r < n_final; ++r){
-      dst[r] = src[retained[r]];
-    }
-  }
-  for(int r = 0; r < n_final; ++r){
-    y_final[r] = y_codes[retained[r]];
-  }
-
-  // 5. Montagem zero-copy do tibble com reversao FMA do z-score
-  return sby_assemble_tibble_zero_copy(final_scaled, n_final, p, means, sds,
-                                       y_final, Rcpp::CharacterVector(column_names),
-                                       Rcpp::as<std::string>(target_name), levels);
-}
-
-//' @title Motor HPC consolidado do pipeline ADASYN mais NearMiss-1 com metadados
-//' @description Executa o pipeline no espaco padronizado e retorna matriz final escalada, indices retidos, alvo e parametros de z-score.
-// [[Rcpp::export]]
-extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP x_matrix, SEXP y_factor,
-                                           SEXP k_adanear, SEXP k_nearmiss,
-                                           SEXP over_ratio, SEXP under_ratio,
-                                           SEXP max_threads, SEXP column_names,
-                                           SEXP target_levels){
-  sby_apply_native_threads(max_threads);
-
-  Rcpp::NumericMatrix x(x_matrix);
-  int n = x.nrow();
-  int p = x.ncol();
-  Rcpp::IntegerVector y_codes_in = sby_extract_factor_codes(y_factor);
-  Rcpp::CharacterVector levels(target_levels);
-  int n_levels = levels.size();
-  int k_over = Rcpp::as<int>(k_adanear);
-  int k_under = Rcpp::as<int>(k_nearmiss);
-  double ratio_over = Rcpp::as<double>(over_ratio);
-  double ratio_under = Rcpp::as<double>(under_ratio);
+  int n_levels   = levels.size();
+  int k_over     = Rcpp::as<int>(k_adanear);
+  int k_under    = Rcpp::as<int>(k_nearmiss);
+  double r_over  = Rcpp::as<double>(over_ratio);
+  double r_under = Rcpp::as<double>(under_ratio);
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
@@ -907,72 +740,66 @@ extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP x_matrix, SEXP y_factor,
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
-  int n_after_over = sby_run_adasyn_stage(x_scaled, n, p, y_codes,
-                                          minority_code, k_over, ratio_over);
 
-  std::vector<int> retained = sby_run_nearmiss_stage(x_scaled, n_after_over, p,
-                                                     y_codes, minority_code,
-                                                     k_under, ratio_under);
-  int n_final = (int) retained.size();
+  // ADASYN sobre os originais — sinteticas ficam em buffer separado
+  sby_float_buffer syn_scaled;
+  std::vector<int> syn_codes;
+  int n_syn = sby_run_adasyn_stage(x_scaled, n, p, y_codes, minority_code,
+                                   k_over, r_over, syn_scaled, syn_codes);
 
-  Rcpp::NumericMatrix final_scaled(n_final, p);
-  double* final_scaled_ptr = final_scaled.begin();
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for(int j = 0; j < p; ++j){
-    const float* src = x_scaled.data() + (size_t) j * (size_t) n_after_over;
-    double* dst = final_scaled_ptr + (size_t) j * (size_t) n_final;
-    for(int r = 0; r < n_final; ++r){
-      dst[r] = (double) src[retained[r]];
-    }
+  // NearMiss sobre os originais apenas (sem sinteticas)
+  std::vector<int> retained_maj_0based = sby_run_nearmiss_stage(
+    x_scaled, n, p, y_codes, minority_code, k_under, r_under
+  );
+  int n_ret_maj = (int) retained_maj_0based.size();
+
+  // Despadronizacao das sinteticas no C++
+  Rcpp::NumericMatrix syn_out(n_syn, p);
+  syn_out.attr("dimnames") = Rcpp::List::create(R_NilValue, column_names);
+  if(n_syn > 0){
+    sby_destandarize_synthetic(syn_scaled, n_syn, p, means, sds, syn_out);
   }
-  final_scaled.attr("dimnames") = Rcpp::List::create(R_NilValue, column_names);
 
-  Rcpp::IntegerVector y_final(n_final);
-  Rcpp::IntegerVector retained_index(n_final);
-  for(int r = 0; r < n_final; ++r){
-    y_final[r] = y_codes[retained[r]];
-    retained_index[r] = retained[r] + 1;
+  // Codigos de nivel das sinteticas
+  Rcpp::IntegerVector target_synthetic(n_syn);
+  for(int s = 0; s < n_syn; ++s){
+    target_synthetic[s] = syn_codes[s];
   }
-  y_final.attr("levels") = levels;
-  y_final.attr("class") = "factor";
 
-  Rcpp::NumericVector centers(p);
-  Rcpp::NumericVector scales(p);
-  for(int j = 0; j < p; ++j){
-    centers[j] = means[j];
-    scales[j] = sds[j];
+  // Indices 1-based da maioria retida
+  Rcpp::IntegerVector retained_majority_idx(n_ret_maj);
+  for(int r = 0; r < n_ret_maj; ++r){
+    retained_majority_idx[r] = retained_maj_0based[r] + 1;
   }
 
   return Rcpp::List::create(
-    Rcpp::Named("sby_final_scaled") = final_scaled,
-    Rcpp::Named("sby_y_vector") = y_final,
-    Rcpp::Named("sby_retained_index") = retained_index,
-    Rcpp::Named("sby_scaling_info") = Rcpp::List::create(
-      Rcpp::Named("centers") = centers,
-      Rcpp::Named("scales") = scales
-    )
+    Rcpp::Named("sby_synthetic_rows")        = syn_out,
+    Rcpp::Named("sby_retained_majority_idx") = retained_majority_idx,
+    Rcpp::Named("sby_target_synthetic")      = target_synthetic,
+    Rcpp::Named("sby_scaling_info")          = sby_build_scaling_info(means, sds, p)
   );
 }
 
-//' @title Motor HPC consolidado do oversampling ADASYN
-//' @description Executa apenas o ADASYN no espaco padronizado e monta o tibble por zero-copy.
+
+//' @title ADASYN HPC
+//' @description Retorna sinteticas despadronizadas e metadados de escala.
+//   Tibble montado na camada R.
 // [[Rcpp::export]]
-extern "C" SEXP sby_adasyn_hpc_cpp(SEXP x_matrix, SEXP y_factor,
-                                   SEXP k_adanear, SEXP over_ratio,
-                                   SEXP max_threads, SEXP column_names,
-                                   SEXP target_name, SEXP target_levels){
+extern "C" SEXP sby_adasyn_hpc_cpp(
+    SEXP x_matrix, SEXP y_factor,
+    SEXP k_adanear, SEXP over_ratio,
+    SEXP max_threads, SEXP column_names,
+    SEXP target_levels){
+
   sby_apply_native_threads(max_threads);
 
   Rcpp::NumericMatrix x(x_matrix);
-  int n = x.nrow();
-  int p = x.ncol();
+  int n = x.nrow(), p = x.ncol();
   Rcpp::IntegerVector y_codes_in = sby_extract_factor_codes(y_factor);
   Rcpp::CharacterVector levels(target_levels);
   int n_levels = levels.size();
-  int k_over = Rcpp::as<int>(k_adanear);
-  double ratio = Rcpp::as<double>(over_ratio);
+  int k_over   = Rcpp::as<int>(k_adanear);
+  double r_over = Rcpp::as<double>(over_ratio);
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
@@ -982,31 +809,50 @@ extern "C" SEXP sby_adasyn_hpc_cpp(SEXP x_matrix, SEXP y_factor,
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
-  int n_after_over = sby_run_adasyn_stage(x_scaled, n, p, y_codes,
-                                          minority_code, k_over, ratio);
 
-  return sby_assemble_tibble_zero_copy(x_scaled, n_after_over, p, means, sds,
-                                       y_codes, Rcpp::CharacterVector(column_names),
-                                       Rcpp::as<std::string>(target_name), levels);
+  sby_float_buffer syn_scaled;
+  std::vector<int> syn_codes;
+  int n_syn = sby_run_adasyn_stage(x_scaled, n, p, y_codes, minority_code,
+                                   k_over, r_over, syn_scaled, syn_codes);
+
+  Rcpp::NumericMatrix syn_out(n_syn, p);
+  syn_out.attr("dimnames") = Rcpp::List::create(R_NilValue, column_names);
+  if(n_syn > 0){
+    sby_destandarize_synthetic(syn_scaled, n_syn, p, means, sds, syn_out);
+  }
+
+  Rcpp::IntegerVector target_synthetic(n_syn);
+  for(int s = 0; s < n_syn; ++s){
+    target_synthetic[s] = syn_codes[s];
+  }
+
+  return Rcpp::List::create(
+    Rcpp::Named("sby_synthetic_rows")   = syn_out,
+    Rcpp::Named("sby_target_synthetic") = target_synthetic,
+    Rcpp::Named("sby_scaling_info")     = sby_build_scaling_info(means, sds, p)
+  );
 }
 
-//' @title Motor HPC consolidado do undersampling NearMiss-1
-//' @description Executa apenas o NearMiss-1 no espaco padronizado e monta o tibble por zero-copy.
+
+//' @title NearMiss-1 HPC
+//' @description Retorna indices 1-based da maioria retida e metadados de escala.
+//   Tibble montado na camada R.
 // [[Rcpp::export]]
-extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP x_matrix, SEXP y_factor,
-                                     SEXP k_nearmiss, SEXP under_ratio,
-                                     SEXP max_threads, SEXP column_names,
-                                     SEXP target_name, SEXP target_levels){
+extern "C" SEXP sby_nearmiss_hpc_cpp(
+    SEXP x_matrix, SEXP y_factor,
+    SEXP k_nearmiss, SEXP under_ratio,
+    SEXP max_threads, SEXP column_names,
+    SEXP target_levels){
+
   sby_apply_native_threads(max_threads);
 
   Rcpp::NumericMatrix x(x_matrix);
-  int n = x.nrow();
-  int p = x.ncol();
+  int n = x.nrow(), p = x.ncol();
   Rcpp::IntegerVector y_codes_in = sby_extract_factor_codes(y_factor);
   Rcpp::CharacterVector levels(target_levels);
-  int n_levels = levels.size();
-  int k_under = Rcpp::as<int>(k_nearmiss);
-  double ratio = Rcpp::as<double>(under_ratio);
+  int n_levels  = levels.size();
+  int k_under   = Rcpp::as<int>(k_nearmiss);
+  double r_under = Rcpp::as<double>(under_ratio);
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
@@ -1016,28 +862,19 @@ extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP x_matrix, SEXP y_factor,
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
-  std::vector<int> retained = sby_run_nearmiss_stage(x_scaled, n, p, y_codes,
-                                                     minority_code, k_under, ratio);
-  int n_final = (int) retained.size();
 
-  sby_float_buffer final_scaled;
-  sby_resize_first_touch(final_scaled, (size_t) n_final * (size_t) p, 0.0f);
-  std::vector<int> y_final(n_final);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for(int j = 0; j < p; ++j){
-    const float* src = x_scaled.data() + (size_t) j * (size_t) n;
-    float* dst = final_scaled.data() + (size_t) j * (size_t) n_final;
-    for(int r = 0; r < n_final; ++r){
-      dst[r] = src[retained[r]];
-    }
-  }
-  for(int r = 0; r < n_final; ++r){
-    y_final[r] = y_codes[retained[r]];
+  std::vector<int> retained_maj_0based = sby_run_nearmiss_stage(
+    x_scaled, n, p, y_codes, minority_code, k_under, r_under
+  );
+  int n_ret_maj = (int) retained_maj_0based.size();
+
+  Rcpp::IntegerVector retained_majority_idx(n_ret_maj);
+  for(int r = 0; r < n_ret_maj; ++r){
+    retained_majority_idx[r] = retained_maj_0based[r] + 1;
   }
 
-  return sby_assemble_tibble_zero_copy(final_scaled, n_final, p, means, sds,
-                                       y_final, Rcpp::CharacterVector(column_names),
-                                       Rcpp::as<std::string>(target_name), levels);
+  return Rcpp::List::create(
+    Rcpp::Named("sby_retained_majority_idx") = retained_majority_idx,
+    Rcpp::Named("sby_scaling_info")          = sby_build_scaling_info(means, sds, p)
+  );
 }
