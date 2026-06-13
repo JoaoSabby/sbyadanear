@@ -16,26 +16,29 @@ test_that("mkl env vars are readable and config object is valid", {
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "2")
 })
 
-test_that("hpc env control is limited to thread counts and restores originals", {
+test_that("hpc env control restores threading and stripe variables", {
   withr::local_envvar(c(
     MKL_NUM_THREADS = "3",
     OMP_NUM_THREADS = "4",
+    MKL_NUM_STRIPES = "7",
     KMP_AFFINITY = "server-value"
   ))
 
   expect_identical(
     sbyadanear:::sby_hpc_env_keys(),
-    c("MKL_NUM_THREADS", "OMP_NUM_THREADS")
+    c("MKL_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_STRIPES", "OMP_PROC_BIND", "OMP_PLACES")
   )
 
   previous <- sbyadanear:::sby_hpc_capture_env()
   sbyadanear:::sby_hpc_apply_env(sby_total_threads = 2L)
   expect_identical(Sys.getenv("MKL_NUM_THREADS"), "2")
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "2")
+  expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "1")
   expect_identical(Sys.getenv("KMP_AFFINITY"), "server-value")
 
   sbyadanear:::sby_hpc_restore_env(previous)
   expect_identical(Sys.getenv("MKL_NUM_THREADS"), "3")
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "4")
+  expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "7")
   expect_identical(Sys.getenv("KMP_AFFINITY"), "server-value")
 })

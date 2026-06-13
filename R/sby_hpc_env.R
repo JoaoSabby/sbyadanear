@@ -2,10 +2,10 @@
 #'
 #' @details
 #' A funcao implementa uma unidade interna do fluxo de balanceamento com contrato
-#' de entrada explicito e retorno controlado. As rotinas abaixo isolam somente
-#' `MKL_NUM_THREADS` e `OMP_NUM_THREADS` antes de acionar o motor HPC, e fornecem
-#' um plano de restauro inflexivel para devolver o ambiente ao estado anterior,
-#' removendo as variaveis que nao existiam.
+#' de entrada explicito e retorno controlado. As rotinas abaixo isolam as
+#' variaveis de paralelismo antes de acionar o motor HPC, e fornecem um plano de
+#' restauro inflexivel para devolver o ambiente ao estado anterior, removendo as
+#' variaveis que nao existiam.
 #'
 #' @return Lista com o estado anterior das variaveis modificadas.
 #' @noRd
@@ -15,6 +15,7 @@ sby_hpc_env_keys <- function(){
   c(
     "MKL_NUM_THREADS",
     "OMP_NUM_THREADS",
+    "MKL_NUM_STRIPES",
     "OMP_PROC_BIND",
     "OMP_PLACES"
   )
@@ -41,6 +42,36 @@ sby_hpc_resolve_threads <- function(sby_config_max_threads = -1L){
   return(sby_detected)
 }
 
+# Resolve uma sugestao conservadora para MKL_NUM_STRIPES em GEMM column-major.
+sby_hpc_resolve_mkl_num_stripes <- function(
+  sby_total_threads,
+  sby_majority_count = NA_integer_,
+  sby_minority_count = NA_integer_
+){
+  sby_total_threads <- max(1L, suppressWarnings(as.integer(sby_total_threads)))
+  if(sby_total_threads < 2L){
+    return(1L)
+  }
+
+  sby_majority_count <- suppressWarnings(as.integer(sby_majority_count))
+  sby_minority_count <- suppressWarnings(as.integer(sby_minority_count))
+
+  if(length(sby_majority_count) == 1L && length(sby_minority_count) == 1L &&
+     !is.na(sby_majority_count) && !is.na(sby_minority_count) &&
+     sby_majority_count > 0L && sby_minority_count > 0L){
+    sby_shape_ratio <- sby_majority_count / sby_minority_count
+    if(sby_shape_ratio >= 2){
+      return(max(1L, as.integer(ceiling(sby_total_threads / 2))))
+    }
+    if(sby_shape_ratio <= 0.5){
+      return(1L)
+    }
+  }
+
+  sby_2d_limit <- max(1L, as.integer(floor((sby_total_threads - 1L) / 2L)))
+  max(1L, min(sby_2d_limit, as.integer(ceiling(sqrt(sby_total_threads)))))
+}
+
 # Captura o estado anterior das variaveis controladas usando unset = NA
 sby_hpc_capture_env <- function(){
   sby_keys <- sby_hpc_env_keys()
@@ -51,15 +82,23 @@ sby_hpc_capture_env <- function(){
   return(sby_previous)
 }
 
-# Injeta somente o numero de threads MKL e OpenMP para a rotina atual
+# Injeta numero de threads MKL/OpenMP, afinidade e uma sugestao de stripes para GEMM
 sby_hpc_apply_env <- function(
-  sby_total_threads
+  sby_total_threads,
+  sby_majority_count = NA_integer_,
+  sby_minority_count = NA_integer_
 ){
   sby_total_threads <- max(1L, as.integer(sby_total_threads))
+  sby_num_stripes <- sby_hpc_resolve_mkl_num_stripes(
+    sby_total_threads = sby_total_threads,
+    sby_majority_count = sby_majority_count,
+    sby_minority_count = sby_minority_count
+  )
 
   Sys.setenv(
     MKL_NUM_THREADS = as.character(sby_total_threads),
     OMP_NUM_THREADS = as.character(sby_total_threads),
+    MKL_NUM_STRIPES = as.character(sby_num_stripes),
     OMP_PROC_BIND = "spread",
     OMP_PLACES = "cores"
   )
