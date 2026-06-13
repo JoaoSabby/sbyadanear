@@ -23,10 +23,102 @@
 #include <numeric>
 #include <cmath>
 #include <string>
+#include <limits>
+#include <cstdlib>
+#include <new>
+#if defined(_MSC_VER)
+#include <malloc.h>
+#endif
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+
+
+// -------------------------------------------------------------------
+// Alocador alinhado a 64 bytes para buffers numericos quentes.
+// A documentacao Intel oneMKL recomenda alinhamento em fronteiras de 64 bytes
+// para melhor desempenho em kernels vetorizados e chamadas BLAS.
+// -------------------------------------------------------------------
+template <typename T, std::size_t Alignment>
+class sby_aligned_allocator {
+public:
+  using value_type = T;
+
+  sby_aligned_allocator() noexcept = default;
+  template <class U>
+  sby_aligned_allocator(const sby_aligned_allocator<U, Alignment>&) noexcept {}
+
+  T* allocate(std::size_t n){
+    if(n > std::numeric_limits<std::size_t>::max() / sizeof(T)){
+      throw std::bad_array_new_length();
+    }
+    if(n == 0){
+      return nullptr;
+    }
+    void* ptr = nullptr;
+#if defined(_MSC_VER)
+    ptr = _aligned_malloc(n * sizeof(T), Alignment);
+    if(ptr == nullptr){
+      throw std::bad_alloc();
+    }
+#else
+    if(posix_memalign(&ptr, Alignment, n * sizeof(T)) != 0){
+      throw std::bad_alloc();
+    }
+#endif
+    return static_cast<T*>(ptr);
+  }
+
+  void deallocate(T* p, std::size_t) noexcept{
+#if defined(_MSC_VER)
+    _aligned_free(p);
+#else
+    free(p);
+#endif
+  }
+
+  template <class U>
+  struct rebind { using other = sby_aligned_allocator<U, Alignment>; };
+};
+
+template <class T, class U, std::size_t Alignment>
+bool operator==(const sby_aligned_allocator<T, Alignment>&,
+                const sby_aligned_allocator<U, Alignment>&) noexcept { return true; }
+
+template <class T, class U, std::size_t Alignment>
+bool operator!=(const sby_aligned_allocator<T, Alignment>&,
+                const sby_aligned_allocator<U, Alignment>&) noexcept { return false; }
+
+using sby_double_buffer = std::vector<double, sby_aligned_allocator<double, 64> >;
+
+static int sby_resolve_native_threads(SEXP max_threads){
+  int requested = Rf_asInteger(max_threads);
+  if(requested == NA_INTEGER || requested < 1){
+    return -1;
+  }
+#ifdef _OPENMP
+  int max_available = omp_get_num_procs();
+  if(max_available < 1){
+    max_available = omp_get_max_threads();
+  }
+  if(max_available > 0 && requested > max_available){
+    requested = max_available;
+  }
+#endif
+  return requested;
+}
+
+static void sby_apply_native_threads(SEXP max_threads){
+#ifdef _OPENMP
+  int requested = sby_resolve_native_threads(max_threads);
+  if(requested > 0){
+    omp_set_num_threads(requested);
+  }
+#else
+  (void) max_threads;
+#endif
+}
 
 // Interfaces dos kernels Fortran do motor HPC
 extern "C" {
@@ -76,8 +168,8 @@ static int sby_resolve_minority_role(const Rcpp::IntegerVector& y_codes, int n_l
 // Computa centros e escalas populacionais chamando o kernel Fortran VSL.
 // -------------------------------------------------------------------
 static void sby_zscore_population(const double* x, int n, int p,
-                                  std::vector<double>& means,
-                                  std::vector<double>& sds){
+                                  sby_double_buffer& means,
+                                  sby_double_buffer& sds){
   means.assign(p, 0.0);
   sds.assign(p, 0.0);
   int status = 0;
@@ -98,9 +190,9 @@ static void sby_zscore_population(const double* x, int n, int p,
 // Aplica o z-score por kernel Fortran SIMD sobre a matriz n x p.
 // -------------------------------------------------------------------
 static void sby_apply_zscore(const double* x, int n, int p,
-                             const std::vector<double>& means,
-                             const std::vector<double>& sds,
-                             std::vector<double>& x_scaled){
+                             const sby_double_buffer& means,
+                             const sby_double_buffer& sds,
+                             sby_double_buffer& x_scaled){
   x_scaled.assign((size_t) n * (size_t) p, 0.0);
   int status = 0;
   sby_apply_zscore_simd_f(x, n, p, means.data(), sds.data(), x_scaled.data(), &status);
@@ -117,11 +209,11 @@ static void sby_apply_zscore(const double* x, int n, int p,
 // layout column major n x p no espaco padronizado.
 // -------------------------------------------------------------------
 static void sby_knn_topk_against_reference(
-    const std::vector<double>& query, int n_query,
-    const std::vector<double>& reference, int n_ref, int p,
+    const sby_double_buffer& query, int n_query,
+    const sby_double_buffer& reference, int n_ref, int p,
     int k, bool drop_self,
     std::vector< std::vector<int> >& out_index){
-  std::vector<double> dist2((size_t) n_query * (size_t) n_ref, 0.0);
+  sby_double_buffer dist2((size_t) n_query * (size_t) n_ref, 0.0);
   int status = 0;
   sby_pairwise_sqdist_dgemm_f(query.data(), n_query, reference.data(), n_ref, p,
                               dist2.data(), &status);
@@ -193,15 +285,15 @@ static void sby_knn_topk_against_reference(
 // linhas finais, e reverte o z-score por FMA durante a copia.
 // -------------------------------------------------------------------
 static SEXP sby_assemble_tibble_zero_copy(
-    const std::vector<double>& final_scaled, int n_final, int p,
-    const std::vector<double>& means, const std::vector<double>& sds,
+    const sby_double_buffer& final_scaled, int n_final, int p,
+    const sby_double_buffer& means, const sby_double_buffer& sds,
     const std::vector<int>& y_codes_final,
     const Rcpp::CharacterVector& column_names,
     const std::string& target_name,
     const Rcpp::CharacterVector& target_levels){
 
   // Reversao do z-score por FMA diretamente no buffer column major final.
-  std::vector<double> final_original((size_t) n_final * (size_t) p, 0.0);
+  sby_double_buffer final_original((size_t) n_final * (size_t) p, 0.0);
   int status = 0;
   sby_revert_zscore_fma_f(final_scaled.data(), n_final, p,
                           means.data(), sds.data(), final_original.data(), &status);
@@ -255,7 +347,7 @@ static SEXP sby_assemble_tibble_zero_copy(
 // apos a expansao.
 // -------------------------------------------------------------------
 static int sby_run_adasyn_stage(
-    std::vector<double>& x_scaled, int n, int p,
+    sby_double_buffer& x_scaled, int n, int p,
     std::vector<int>& y_codes, int minority_code,
     int k_neighbor, double over_ratio){
 
@@ -273,7 +365,7 @@ static int sby_run_adasyn_stage(
   }
 
   // Matriz minoritaria em layout column major n_min x p
-  std::vector<double> minority((size_t) n_min * (size_t) p, 0.0);
+  sby_double_buffer minority((size_t) n_min * (size_t) p, 0.0);
   for(int j = 0; j < p; ++j){
     const double* col = x_scaled.data() + (size_t) j * (size_t) n;
     double* dst = minority.data() + (size_t) j * (size_t) n_min;
@@ -303,7 +395,7 @@ static int sby_run_adasyn_stage(
   // Distribuicao uniforme das linhas sinteticas entre as bases minoritarias
   std::vector<int> base_idx(synthetic_count);
   std::vector<int> nbr_idx(synthetic_count);
-  std::vector<double> lambda(synthetic_count);
+  sby_double_buffer lambda(synthetic_count);
 
   Rcpp::NumericVector unif_lambda = Rcpp::runif(synthetic_count);
   Rcpp::NumericVector unif_pick = Rcpp::runif(synthetic_count);
@@ -319,7 +411,7 @@ static int sby_run_adasyn_stage(
   }
 
   // Geracao sintetica por interpolacao FMA no espaco padronizado
-  std::vector<double> syn_out((size_t) synthetic_count * (size_t) p, 0.0);
+  sby_double_buffer syn_out((size_t) synthetic_count * (size_t) p, 0.0);
   int status = 0;
   sby_adasyn_interp_uniform_f(minority.data(), n_min, p,
                               base_idx.data(), nbr_idx.data(), lambda.data(),
@@ -330,7 +422,7 @@ static int sby_run_adasyn_stage(
 
   // Anexa as linhas sinteticas ao buffer escalado, preservando column major.
   int n_new = n + synthetic_count;
-  std::vector<double> expanded((size_t) n_new * (size_t) p, 0.0);
+  sby_double_buffer expanded((size_t) n_new * (size_t) p, 0.0);
   for(int j = 0; j < p; ++j){
     const double* src_col = x_scaled.data() + (size_t) j * (size_t) n;
     const double* syn_col = syn_out.data() + (size_t) j * (size_t) synthetic_count;
@@ -355,7 +447,7 @@ static int sby_run_adasyn_stage(
 // 0-based ordenados.
 // -------------------------------------------------------------------
 static std::vector<int> sby_run_nearmiss_stage(
-    const std::vector<double>& x_scaled, int n, int p,
+    const sby_double_buffer& x_scaled, int n, int p,
     const std::vector<int>& y_codes, int minority_code,
     int k_neighbor, double under_ratio){
 
@@ -383,8 +475,8 @@ static std::vector<int> sby_run_nearmiss_stage(
   }
 
   // Matrizes column major das classes
-  std::vector<double> majority((size_t) n_maj * (size_t) p, 0.0);
-  std::vector<double> minority((size_t) n_min * (size_t) p, 0.0);
+  sby_double_buffer majority((size_t) n_maj * (size_t) p, 0.0);
+  sby_double_buffer minority((size_t) n_min * (size_t) p, 0.0);
   for(int j = 0; j < p; ++j){
     const double* col = x_scaled.data() + (size_t) j * (size_t) n;
     double* mdst = majority.data() + (size_t) j * (size_t) n_maj;
@@ -394,7 +486,7 @@ static std::vector<int> sby_run_nearmiss_stage(
   }
 
   // Distancias majoritaria contra minoritaria por dgemm
-  std::vector<double> dist2((size_t) n_maj * (size_t) n_min, 0.0);
+  sby_double_buffer dist2((size_t) n_maj * (size_t) n_min, 0.0);
   int status = 0;
   sby_pairwise_sqdist_dgemm_f(majority.data(), n_maj, minority.data(), n_min, p,
                               dist2.data(), &status);
@@ -411,24 +503,68 @@ static std::vector<int> sby_run_nearmiss_stage(
   }
 
   // Score NearMiss-1: media dos k menores quadrados de distancia minoritaria.
-  // dist2 tambem esta em column major (n_maj x n_min), entao a linha m e
-  // estrided. Reusamos um unico scratch por linha para eliminar alocacoes
-  // repetidas e usamos nth_element, suficiente porque so precisamos da soma
-  // dos k menores, nao da ordenacao completa de cada linha.
+  // A matriz dist2 vem em column major (n_maj x n_min). Em vez de varrer uma
+  // linha estrided por candidato majoritario, percorremos cada coluna contigua
+  // uma unica vez e mantemos os k menores valores por linha. Isso troca cache
+  // misses constantes por acesso unit-stride, preservando a mesma metrica.
   std::vector< std::pair<double,int> > scores(n_maj);
-  std::vector<double> row((size_t) n_min);
-  for(int m = 0; m < n_maj; ++m){
+  sby_double_buffer score_acc((size_t) n_maj, 0.0);
+
+  if(effective_k == n_min){
     for(int c = 0; c < n_min; ++c){
-      row[c] = dist2[(size_t) c * (size_t) n_maj + (size_t) m];
+      const double* col = dist2.data() + (size_t) c * (size_t) n_maj;
+#ifdef _OPENMP
+#pragma omp simd
+#endif
+      for(int m = 0; m < n_maj; ++m){
+        score_acc[m] += col[m];
+      }
     }
-    if(effective_k < n_min){
-      std::nth_element(row.begin(), row.begin() + effective_k, row.end());
+  } else {
+    sby_double_buffer topk((size_t) n_maj * (size_t) effective_k,
+                           std::numeric_limits<double>::infinity());
+    std::vector<int> worst_pos(n_maj, 0);
+    sby_double_buffer worst_val((size_t) n_maj,
+                                std::numeric_limits<double>::infinity());
+
+    for(int c = 0; c < n_min; ++c){
+      const double* col = dist2.data() + (size_t) c * (size_t) n_maj;
+      for(int m = 0; m < n_maj; ++m){
+        double candidate = col[m];
+        if(candidate >= worst_val[m]){
+          continue;
+        }
+        double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
+        row_topk[worst_pos[m]] = candidate;
+
+        int new_worst_pos = 0;
+        double new_worst_val = row_topk[0];
+        for(int t = 1; t < effective_k; ++t){
+          if(row_topk[t] > new_worst_val){
+            new_worst_val = row_topk[t];
+            new_worst_pos = t;
+          }
+        }
+        worst_pos[m] = new_worst_pos;
+        worst_val[m] = new_worst_val;
+      }
     }
-    double acc = 0.0;
-    for(int t = 0; t < effective_k; ++t){
-      acc += row[t];
+
+    for(int m = 0; m < n_maj; ++m){
+      const double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
+      double acc = 0.0;
+#ifdef _OPENMP
+#pragma omp simd reduction(+:acc)
+#endif
+      for(int t = 0; t < effective_k; ++t){
+        acc += row_topk[t];
+      }
+      score_acc[m] = acc;
     }
-    scores[m] = std::make_pair(acc / (double) effective_k, majority_index[m]);
+  }
+
+  for(int m = 0; m < n_maj; ++m){
+    scores[m] = std::make_pair(score_acc[m] / (double) effective_k, majority_index[m]);
   }
 
   auto score_less = [](const std::pair<double,int>& a, const std::pair<double,int>& b){
@@ -537,6 +673,8 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
                                     SEXP over_ratio, SEXP under_ratio,
                                     SEXP max_threads, SEXP column_names,
                                     SEXP target_name, SEXP target_levels){
+  sby_apply_native_threads(max_threads);
+
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow();
   int p = x.ncol();
@@ -551,9 +689,9 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
   // 1. Estatisticas populacionais e padronizacao (espaco z unico para tudo)
-  std::vector<double> means, sds;
+  sby_double_buffer means, sds;
   sby_zscore_population(x.begin(), n, p, means, sds);
-  std::vector<double> x_scaled;
+  sby_double_buffer x_scaled;
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
@@ -569,7 +707,7 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP x_matrix, SEXP y_factor,
   int n_final = (int) retained.size();
 
   // 4. Consolida o buffer final column major e os codigos finais do alvo
-  std::vector<double> final_scaled((size_t) n_final * (size_t) p, 0.0);
+  sby_double_buffer final_scaled((size_t) n_final * (size_t) p, 0.0);
   std::vector<int> y_final(n_final);
   for(int j = 0; j < p; ++j){
     const double* src = x_scaled.data() + (size_t) j * (size_t) n_after_over;
@@ -596,6 +734,8 @@ extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP x_matrix, SEXP y_factor,
                                            SEXP over_ratio, SEXP under_ratio,
                                            SEXP max_threads, SEXP column_names,
                                            SEXP target_levels){
+  sby_apply_native_threads(max_threads);
+
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow();
   int p = x.ncol();
@@ -609,9 +749,9 @@ extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP x_matrix, SEXP y_factor,
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
-  std::vector<double> means, sds;
+  sby_double_buffer means, sds;
   sby_zscore_population(x.begin(), n, p, means, sds);
-  std::vector<double> x_scaled;
+  sby_double_buffer x_scaled;
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
@@ -666,6 +806,8 @@ extern "C" SEXP sby_adasyn_hpc_cpp(SEXP x_matrix, SEXP y_factor,
                                    SEXP k_adanear, SEXP over_ratio,
                                    SEXP max_threads, SEXP column_names,
                                    SEXP target_name, SEXP target_levels){
+  sby_apply_native_threads(max_threads);
+
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow();
   int p = x.ncol();
@@ -677,9 +819,9 @@ extern "C" SEXP sby_adasyn_hpc_cpp(SEXP x_matrix, SEXP y_factor,
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
-  std::vector<double> means, sds;
+  sby_double_buffer means, sds;
   sby_zscore_population(x.begin(), n, p, means, sds);
-  std::vector<double> x_scaled;
+  sby_double_buffer x_scaled;
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
@@ -698,6 +840,8 @@ extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP x_matrix, SEXP y_factor,
                                      SEXP k_nearmiss, SEXP under_ratio,
                                      SEXP max_threads, SEXP column_names,
                                      SEXP target_name, SEXP target_levels){
+  sby_apply_native_threads(max_threads);
+
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow();
   int p = x.ncol();
@@ -709,9 +853,9 @@ extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP x_matrix, SEXP y_factor,
 
   int minority_code = sby_resolve_minority_role(y_codes_in, n_levels);
 
-  std::vector<double> means, sds;
+  sby_double_buffer means, sds;
   sby_zscore_population(x.begin(), n, p, means, sds);
-  std::vector<double> x_scaled;
+  sby_double_buffer x_scaled;
   sby_apply_zscore(x.begin(), n, p, means, sds, x_scaled);
 
   std::vector<int> y_codes(y_codes_in.begin(), y_codes_in.end());
@@ -719,7 +863,7 @@ extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP x_matrix, SEXP y_factor,
                                                      minority_code, k_under, ratio);
   int n_final = (int) retained.size();
 
-  std::vector<double> final_scaled((size_t) n_final * (size_t) p, 0.0);
+  sby_double_buffer final_scaled((size_t) n_final * (size_t) p, 0.0);
   std::vector<int> y_final(n_final);
   for(int j = 0; j < p; ++j){
     const double* src = x_scaled.data() + (size_t) j * (size_t) n;

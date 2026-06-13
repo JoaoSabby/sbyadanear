@@ -70,7 +70,6 @@ sby_adanear_hpc <- function(
   on.exit(sby_hpc_restore_env(sby_previous_env), add = TRUE)
 
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
-  sby_hpc_apply_env(sby_total_threads = sby_total_threads)
 
   # Extrai preditores numericos e alvo binario pelo mesmo contrato da API publica
   sby_formula_data <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
@@ -85,6 +84,12 @@ sby_adanear_hpc <- function(
   sby_column_names <- sby_adanear_get_column_names(sby_predictor_data)
   colnames(sby_x_matrix) <- sby_column_names
   sby_target_factor <- as.factor(sby_target_vector)
+  sby_class_counts <- sby_binary_class_counts_fast(sby_target_factor)
+  sby_hpc_apply_env(
+    sby_total_threads = sby_total_threads,
+    sby_majority_count = sby_class_counts$sby_majority_count,
+    sby_minority_count = sby_class_counts$sby_minority_count
+  )
   sby_target_name <- sby_formula_data$sby_target_name
   sby_type_info <- sby_infer_numeric_column_types(sby_original_predictor_data)
 
