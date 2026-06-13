@@ -81,3 +81,27 @@ test_that("sby_adanear_hpc restores original scale and integer predictor types",
   expect_true(any(out$dbl_col > 1))
   expect_false(all(abs(out$dbl_col) < 4))
 })
+
+test_that("sby_adanear_hpc honors fixed seeds", {
+  set.seed(456)
+  dat <- data.frame(
+    x1 = c(rnorm(5, -2), rnorm(15, 2)),
+    x2 = c(rnorm(5, -2), rnorm(15, 2)),
+    y = factor(c(rep("min", 5), rep("maj", 15)), levels = c("min", "maj"))
+  )
+
+  out1 <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
+                          sby_k_neighbor_nearmiss = 3,
+                          sby_seed = 99L,
+                          sby_over_ratio = 1,
+                          sby_under_ratio = 0.5)
+  out2 <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
+                          sby_k_neighbor_nearmiss = 3,
+                          sby_seed = 99L,
+                          sby_over_ratio = 1,
+                          sby_under_ratio = 0.5)
+
+  expect_identical(out1, out2)
+  expect_error(sby_adanear_hpc(dat, y ~ ., sby_seed = 1.5),
+               regexp = "sby_seed")
+})
