@@ -8,9 +8,9 @@
 !
 ! Decisoes de desempenho:
 !   - estatisticas iniciais via Vector Statistics Library (vslsscompute).
-!   - matriz de distancias por D^2 = ||A||^2 + ||B||^2 - 2 A B^T com cblas_dgemm.
+!   - matriz de distancias por D^2 = ||A||^2 + ||B||^2 - 2 A B^T com cblas_sgemm.
 !   - interpolacao lambda do ADASYN com vdrnguniform no espaco padronizado.
-!   - reversao do z-score por laco SIMD explicito forcando vfmadd213pd.
+!   - reversao do z-score por laco SIMD explicito forcando vfmadd213ps.
 !
 ! Toda a nomenclatura segue snake_case. Nenhum caractere de travessao e usado.
 ! =====================================================================
@@ -22,7 +22,7 @@ module sby_hpc_engine_mod
   public :: sby_zscore_population_vsl_f
   public :: sby_apply_zscore_simd_f
   public :: sby_revert_zscore_fma_f
-  public :: sby_pairwise_sqdist_dgemm_f
+  public :: sby_pairwise_sqdist_sgemm_f
   public :: sby_adasyn_interp_uniform_f
 
   ! Constantes de controle da Vector Statistics Library e do RNG MKL
@@ -30,15 +30,15 @@ module sby_hpc_engine_mod
   integer(c_int), parameter :: sby_vsl_ss_ed_2c_mom    = int(z'00000002', c_int)
 
   interface
-    ! cblas_dgemm para a matriz central A B^T da expansao euclidiana algebrica
-    subroutine cblas_dgemm(layout, transa, transb, m, n, k, alpha, &
-                           a, lda, b, ldb, beta, c, ldc) bind(C, name="cblas_dgemm")
-      import :: c_int, c_double
+    ! cblas_sgemm para a matriz central A B^T da expansao euclidiana algebrica
+    subroutine cblas_sgemm(layout, transa, transb, m, n, k, alpha, &
+                           a, lda, b, ldb, beta, c, ldc) bind(C, name="cblas_sgemm")
+      import :: c_int, c_float
       integer(c_int), value :: layout, transa, transb, m, n, k, lda, ldb, ldc
-      real(c_double), value :: alpha, beta
-      real(c_double), intent(in)    :: a(*), b(*)
-      real(c_double), intent(inout) :: c(*)
-    end subroutine cblas_dgemm
+      real(c_float), value :: alpha, beta
+      real(c_float), intent(in)    :: a(*), b(*)
+      real(c_float), intent(inout) :: c(*)
+    end subroutine cblas_sgemm
   end interface
 
 contains
@@ -61,6 +61,24 @@ contains
     end if
     ld = rounded
   end function sby_next_mkl_ld
+
+  ! -------------------------------------------------------------------
+  ! sby_next_mkl_ld_f32
+  ! Ajusta leading dimension single precision para multiplos de 64 bytes
+  ! (16 floats) e evita conflitos de cache em potencias de 2.
+  ! -------------------------------------------------------------------
+  integer(c_int) function sby_next_mkl_ld_f32(n) result(ld)
+    integer(c_int), intent(in) :: n
+    integer(c_int) :: rounded
+    integer(kind=8) :: bytes
+
+    rounded = max(1_c_int, ((n + 15_c_int) / 16_c_int) * 16_c_int)
+    bytes = int(rounded, kind=8) * 4_8
+    if (bytes >= 4096_8 .and. iand(bytes, bytes - 1_8) == 0_8) then
+      rounded = rounded + 16_c_int
+    end if
+    ld = rounded
+  end function sby_next_mkl_ld_f32
 
 
   ! -------------------------------------------------------------------
@@ -94,21 +112,21 @@ contains
     !$omp parallel do default(none) shared(x, means, sds, n, p, inv_n) &
     !$omp& private(j, i, acc_mean, acc_var, mean_val, var_val, diff) schedule(static)
     do j = 1, p
-      acc_mean = 0.0d0
+      acc_mean = 0.0
       !$omp simd reduction(+:acc_mean)
       do i = 1, n
         acc_mean = acc_mean + x(i, j)
       end do
       mean_val = acc_mean * inv_n
 
-      acc_var = 0.0d0
+      acc_var = 0.0
       !$omp simd reduction(+:acc_var) private(diff)
       do i = 1, n
         diff = x(i, j) - mean_val
         acc_var = acc_var + diff * diff
       end do
       var_val = acc_var * inv_n
-      if (var_val < 0.0d0) var_val = 0.0d0
+      if (var_val < 0.0) var_val = 0.0
 
       means(j) = mean_val
       sds(j)   = sqrt(var_val)
@@ -128,7 +146,7 @@ contains
     real(c_double), intent(in)  :: x(n, p)
     real(c_double), intent(in)  :: means(p)
     real(c_double), intent(in)  :: sds(p)
-    real(c_double), intent(out) :: x_out(n, p)
+    real(c_float), intent(out) :: x_out(n, p)
     integer(c_int), intent(out) :: status
 
     integer :: j, i
@@ -144,14 +162,14 @@ contains
     !$omp& private(j, i, mu, inv_sd) schedule(static)
     do j = 1, p
       mu = means(j)
-      if (sds(j) > 0.0d0) then
+      if (sds(j) > 0.0) then
         inv_sd = 1.0d0 / sds(j)
       else
         inv_sd = 1.0d0
       end if
       !$omp simd
       do i = 1, n
-        x_out(i, j) = (x(i, j) - mu) * inv_sd
+        x_out(i, j) = real((x(i, j) - mu) * inv_sd, c_float)
       end do
     end do
     !$omp end parallel do
@@ -162,13 +180,13 @@ contains
   ! Reverte o z-score diretamente na consolidacao final. O laco aninhado
   ! por colunas e instruido com !$OMP SIMD para forcar as 4 unidades FMA do
   ! hardware, executando multiplicacao pelo desvio padrao e soma da media na
-  ! mesma instrucao vfmadd213pd. Nao usa dscal nem daxpy.
+  ! mesma instrucao vfmadd213ps. Nao usa dscal nem daxpy.
   ! -------------------------------------------------------------------
   subroutine sby_revert_zscore_fma_f(x, n, p, means, sds, x_out, status) &
       bind(c, name="sby_revert_zscore_fma_f")
     integer(c_int), intent(in), value :: n
     integer(c_int), intent(in), value :: p
-    real(c_double), intent(in)  :: x(n, p)
+    real(c_float), intent(in)   :: x(n, p)
     real(c_double), intent(in)  :: means(p)
     real(c_double), intent(in)  :: sds(p)
     real(c_double), intent(out) :: x_out(n, p)
@@ -191,40 +209,40 @@ contains
       ! Reversao: x_out = x * sd + mu  (fused multiply add por elemento).
       ! A diretiva OpenMP SIMD portavel forca a vetorizacao do laco; combinada
       ! com -fp-model=fast o compilador funde a multiplicacao e a soma em uma
-      ! unica instrucao vfmadd213pd nas unidades FMA do AVX-512.
+      ! unica instrucao vfmadd213ps nas unidades FMA do AVX-512.
       !$omp simd
       do i = 1, n
-        x_out(i, j) = x(i, j) * sd + mu
+        x_out(i, j) = dble(x(i, j)) * sd + mu
       end do
     end do
     !$omp end parallel do
   end subroutine sby_revert_zscore_fma_f
 
   ! -------------------------------------------------------------------
-  ! sby_pairwise_sqdist_dgemm_f
+  ! sby_pairwise_sqdist_sgemm_f
   ! Matriz de distancias ao quadrado por expansao euclidiana algebrica:
   !   D^2 = ||A||^2 + ||B||^2 - 2 A B^T
-  ! A matriz central A B^T e entregue ao cblas_dgemm com layout column major.
+  ! A matriz central A B^T e entregue ao cblas_sgemm com layout column major.
   !   a tem dimensao (n_a x p) e b tem dimensao (n_b x p)
   !   d_out tem dimensao (n_a x n_b) com d_out(i, j) = ||a_i - b_j||^2
   ! -------------------------------------------------------------------
-  subroutine sby_pairwise_sqdist_dgemm_f(a, n_a, b, n_b, p, d_out, status) &
-      bind(c, name="sby_pairwise_sqdist_dgemm_f")
+  subroutine sby_pairwise_sqdist_sgemm_f(a, n_a, b, n_b, p, d_out, status) &
+      bind(c, name="sby_pairwise_sqdist_sgemm_f")
     integer(c_int), intent(in), value :: n_a
     integer(c_int), intent(in), value :: n_b
     integer(c_int), intent(in), value :: p
-    real(c_double), intent(in), target :: a(n_a, p)
-    real(c_double), intent(in), target :: b(n_b, p)
-    real(c_double), intent(out) :: d_out(n_a, n_b)
+    real(c_float), intent(in), target :: a(n_a, p)
+    real(c_float), intent(in), target :: b(n_b, p)
+    real(c_float), intent(out) :: d_out(n_a, n_b)
     integer(c_int), intent(out) :: status
 
     integer :: i, j, k
     integer(c_int) :: lda_opt, ldb_opt, ldc_opt, c_lda
     logical :: pad_a, pad_b, pad_c
-    real(c_double), allocatable :: norm_a(:), norm_b(:)
-    real(c_double), allocatable, target :: a_work(:, :), b_work(:, :), c_work(:, :)
-    real(c_double), pointer :: a_gemm(:, :), b_gemm(:, :)
-    real(c_double) :: acc, val
+    real(c_float), allocatable :: norm_a(:), norm_b(:)
+    real(c_float), allocatable, target :: a_work(:, :), b_work(:, :), c_work(:, :)
+    real(c_float), pointer :: a_gemm(:, :), b_gemm(:, :)
+    real(c_float) :: acc, val
 
     ! Constantes cblas: CblasColMajor = 102, CblasNoTrans = 111, CblasTrans = 112
     integer(c_int), parameter :: cblas_col_major = 102
@@ -237,9 +255,9 @@ contains
       return
     end if
 
-    lda_opt = sby_next_mkl_ld(n_a)
-    ldb_opt = sby_next_mkl_ld(n_b)
-    ldc_opt = sby_next_mkl_ld(n_a)
+    lda_opt = sby_next_mkl_ld_f32(n_a)
+    ldb_opt = sby_next_mkl_ld_f32(n_b)
+    ldc_opt = sby_next_mkl_ld_f32(n_a)
     pad_a = lda_opt /= n_a
     pad_b = ldb_opt /= n_b
     ! Evita duplicar matrizes de distancia gigantes: o padding de C e aplicado
@@ -252,7 +270,7 @@ contains
     if (pad_c) allocate(c_work(ldc_opt, n_b))
 
     if (pad_a) then
-      a_work = 0.0d0
+      a_work = 0.0
       !$omp parallel do default(none) shared(a, a_work, n_a, p) private(i, j) schedule(static)
       do j = 1, p
         !$omp simd
@@ -264,7 +282,7 @@ contains
     end if
 
     if (pad_b) then
-      b_work = 0.0d0
+      b_work = 0.0
       !$omp parallel do default(none) shared(b, b_work, n_b, p) private(i, j) schedule(static)
       do j = 1, p
         !$omp simd
@@ -289,7 +307,7 @@ contains
     ! Normas ao quadrado por linha de cada bloco
     !$omp parallel do default(none) shared(a, norm_a, n_a, p) private(i, k, acc) schedule(static)
     do i = 1, n_a
-      acc = 0.0d0
+      acc = 0.0
       !$omp simd reduction(+:acc)
       do k = 1, p
         acc = acc + a(i, k) * a(i, k)
@@ -300,7 +318,7 @@ contains
 
     !$omp parallel do default(none) shared(b, norm_b, n_b, p) private(j, k, acc) schedule(static)
     do j = 1, n_b
-      acc = 0.0d0
+      acc = 0.0
       !$omp simd reduction(+:acc)
       do k = 1, p
         acc = acc + b(j, k) * b(j, k)
@@ -309,18 +327,18 @@ contains
     end do
     !$omp end parallel do
 
-    ! Produto central A B^T via dgemm. As entradas usam leading dimensions
+    ! Produto central A B^T via sgemm. As entradas usam leading dimensions
     ! alinhadas a 64 bytes quando necessario; a saida tambem usa ldc acolchoado
     ! para problemas que nao duplicam uma matriz de distancia gigante.
     if (pad_c) then
-      call cblas_dgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
-                       n_a, n_b, p, -2.0d0, a_gemm, lda_opt, b_gemm, ldb_opt, &
-                       0.0d0, c_work, ldc_opt)
+      call cblas_sgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
+                       n_a, n_b, p, -2.0, a_gemm, lda_opt, b_gemm, ldb_opt, &
+                       0.0, c_work, ldc_opt)
     else
       c_lda = n_a
-      call cblas_dgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
-                       n_a, n_b, p, -2.0d0, a_gemm, lda_opt, b_gemm, ldb_opt, &
-                       0.0d0, d_out, c_lda)
+      call cblas_sgemm(cblas_col_major, cblas_no_trans, cblas_trans, &
+                       n_a, n_b, p, -2.0, a_gemm, lda_opt, b_gemm, ldb_opt, &
+                       0.0, d_out, c_lda)
     end if
 
     ! Soma das normas para completar a identidade euclidiana
@@ -331,7 +349,7 @@ contains
         !$omp simd private(val)
         do i = 1, n_a
           val = c_work(i, j) + norm_a(i) + norm_b(j)
-          if (val < 0.0d0) val = 0.0d0
+          if (val < 0.0) val = 0.0
           d_out(i, j) = val
         end do
       end do
@@ -343,7 +361,7 @@ contains
         !$omp simd private(val)
         do i = 1, n_a
           val = d_out(i, j) + norm_a(i) + norm_b(j)
-          if (val < 0.0d0) val = 0.0d0
+          if (val < 0.0) val = 0.0
           d_out(i, j) = val
         end do
       end do
@@ -354,7 +372,7 @@ contains
     if (pad_b) deallocate(b_work)
     if (pad_a) deallocate(a_work)
     deallocate(norm_a, norm_b)
-  end subroutine sby_pairwise_sqdist_dgemm_f
+  end subroutine sby_pairwise_sqdist_sgemm_f
 
   ! -------------------------------------------------------------------
   ! sby_adasyn_interp_uniform_f
@@ -371,15 +389,15 @@ contains
     integer(c_int), intent(in), value :: n_min
     integer(c_int), intent(in), value :: p
     integer(c_int), intent(in), value :: n_syn
-    real(c_double), intent(in)  :: minority(n_min, p)
+    real(c_float), intent(in)   :: minority(n_min, p)
     integer(c_int), intent(in)  :: base_idx(n_syn)
     integer(c_int), intent(in)  :: nbr_idx(n_syn)
-    real(c_double), intent(in)  :: lambda(n_syn)
-    real(c_double), intent(out) :: syn_out(n_syn, p)
+    real(c_float), intent(in)   :: lambda(n_syn)
+    real(c_float), intent(out)  :: syn_out(n_syn, p)
     integer(c_int), intent(out) :: status
 
     integer :: s, j, bi, ni
-    real(c_double) :: lam, base_val, nbr_val
+    real(c_float) :: lam, base_val, nbr_val
 
     status = 0
     if (n_min < 1 .or. p < 1 .or. n_syn < 0) then
@@ -398,7 +416,7 @@ contains
       if (ni < 1 .or. ni > n_min) ni = 1
       ! syn = base + lambda * (neighbor - base) por elemento. A diretiva OpenMP
       ! SIMD portavel forca a vetorizacao e, com -fp-model=fast, o compilador
-      ! funde a multiplicacao e a soma na instrucao vfmadd213pd das unidades FMA.
+      ! funde a multiplicacao e a soma na instrucao vfmadd213ps das unidades FMA.
       !$omp simd private(base_val, nbr_val)
       do j = 1, p
         base_val = minority(bi, j)

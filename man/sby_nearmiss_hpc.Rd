@@ -20,7 +20,7 @@ por zero-copy diretamente em C++.
 \details{
 A funcao substitui internamente a rota denominada "native" como caminho rapido do
 NearMiss-1. Quando o motor HPC consolidado nao esta disponivel, recorre de forma
-transparente a \code{sby_nearmiss()} com \code{sby_knn_engine = "native"}. Apenas \code{MKL_NUM_THREADS} e \code{OMP_NUM_THREADS} sao controladas
+transparente a \code{sby_nearmiss()} com \code{sby_knn_engine = "native"}. Apenas \code{MKL_NUM_THREADS}, \code{OMP_NUM_THREADS} e \code{MKL_NUM_STRIPES} sao controladas
 temporariamente e restauradas por um bloco \code{on.exit()} inflexivel.
 }
 \value{Tibble balanceado com classe \code{c("tbl_df", "tbl", "data.frame")}.}

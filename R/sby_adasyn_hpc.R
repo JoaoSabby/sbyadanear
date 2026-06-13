@@ -4,7 +4,7 @@
 #' `sby_adasyn_hpc()` e o atalho de alto desempenho do oversampling ADASYN. Ele
 #' gera as linhas sinteticas estritamente no espaco padronizado por z-score,
 #' aproveitando a Vector Statistics Library para as estatisticas iniciais, o
-#' cblas_dgemm para a matriz de distancias e a interpolacao lambda com
+#' cblas_sgemm para a matriz de distancias e a interpolacao lambda com
 #' vdrnguniform. A reversao final do z-score usa as unidades FMA do hardware
 #' durante a montagem zero-copy do tibble no C++. A funcao representa um atalho:
 #' a rotina original `sby_adasyn()` continua disponivel.
@@ -13,8 +13,8 @@
 #' Esta funcao substitui internamente a rota denominada "native" como caminho
 #' rapido do ADASYN. Quando o motor HPC consolidado nao esta disponivel, recorre
 #' de forma transparente a `sby_adasyn()` com `sby_knn_engine = "native"` para
-#' garantir que tudo continue funcionando. Apenas `MKL_NUM_THREADS` e
-#' `OMP_NUM_THREADS` sao controladas temporariamente e restauradas por um bloco
+#' garantir que tudo continue funcionando. Apenas `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e
+#' `MKL_NUM_STRIPES` sao controladas temporariamente e restauradas por um bloco
 #' `on.exit()` inflexivel.
 #'
 #' @param .data Data frame, tibble ou matriz com a coluna de desfecho e os
