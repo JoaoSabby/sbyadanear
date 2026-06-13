@@ -14,7 +14,9 @@
 sby_hpc_env_keys <- function(){
   c(
     "MKL_NUM_THREADS",
-    "OMP_NUM_THREADS"
+    "OMP_NUM_THREADS",
+    "OMP_PROC_BIND",
+    "OMP_PLACES"
   )
 }
 
@@ -57,7 +59,9 @@ sby_hpc_apply_env <- function(
 
   Sys.setenv(
     MKL_NUM_THREADS = as.character(sby_total_threads),
-    OMP_NUM_THREADS = as.character(sby_total_threads)
+    OMP_NUM_THREADS = as.character(sby_total_threads),
+    OMP_PROC_BIND = "spread",
+    OMP_PLACES = "cores"
   )
 
   invisible(TRUE)
