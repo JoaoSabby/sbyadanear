@@ -68,13 +68,23 @@ sby_adanear_hpc <- function(
   sby_target_vector        <- sby_formula_data$sby_target_vector
   sby_target_name          <- sby_formula_data$sby_target_name
 
+  # Captura os levels originais ANTES de qualquer as.factor() para preservar
+  # a classe, a ordem e os labels exatos do factor de entrada.
+  # c(factor, character) destruiria o factor retornando codigos numericos.
+  sby_original_levels <- if (is.factor(sby_target_vector)) {
+    levels(sby_target_vector)
+  } else {
+    unique(as.character(sby_target_vector))
+  }
+
   sby_seed <- sby_validate_seed(sby_seed = sby_seed)
   sby_validate_sampling_inputs(sby_original_predictor_data, sby_target_vector, sby_seed = sby_seed)
 
   sby_x_matrix     <- sby_adanear_as_numeric_matrix(sby_original_predictor_data)
   sby_column_names <- sby_adanear_get_column_names(sby_original_predictor_data)
 
-  sby_target_factor  <- as.factor(sby_target_vector)
+  # Usa os levels originais para nao reordenar alfabeticamente
+  sby_target_factor  <- factor(sby_target_vector, levels = sby_original_levels)
   sby_class_counts   <- sby_binary_class_counts_fast(sby_target_factor)
 
   # Configura env ANTES do primeiro kernel MKL
@@ -154,12 +164,21 @@ sby_adanear_hpc <- function(
   sby_final_predictors <- rbind(sby_maj_rows, sby_min_rows, sby_syn_df)
   rownames(sby_final_predictors) <- NULL
 
-  # Reconstroi vetor alvo: labels das sinteticas ja chegam como IntegerVector
-  # com atributo levels — converte para character para parear com sby_target_vector
-  sby_syn_target_labels <- levels(sby_target_factor)[
+  # Reconstroi vetor alvo: labels das sinteticas via levels originais.
+  # O factor e reconstituido com os levels originais para preservar a classe,
+  # a ordem e os labels exatos — evitando que c(factor, character) retorne
+  # codigos numericos como character.
+  sby_syn_target_labels <- sby_original_levels[
     sby_hpc_result$sby_target_synthetic
   ]
-  sby_final_target <- c(sby_maj_target, sby_min_target, sby_syn_target_labels)
+  sby_final_target <- factor(
+    c(
+      as.character(sby_maj_target),
+      as.character(sby_min_target),
+      sby_syn_target_labels
+    ),
+    levels = sby_original_levels
+  )
 
   sby_balanced_data <- sby_build_balanced_tibble(
     sby_predictor_data = sby_final_predictors,
