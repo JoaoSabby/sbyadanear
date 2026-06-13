@@ -1102,14 +1102,9 @@ extern "C" SEXP rcpp_parallel_uses_tbb_c(void);
 /* Motor HPC consolidado (sby_hpc_engine.cpp). O atalho HPC substitui a rota
  * "native" como caminho rapido, montando o tibble por zero-copy diretamente em
  * C++ e revertendo o z-score por FMA. As tres entradas seguem snake_case. */
-
+extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP sby_adasyn_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
-
-
-extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
-extern "C" SEXP sby_adasyn_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
-extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP sby_hpc_compile_report_cpp(void);
 
 extern "C" {
@@ -1272,11 +1267,9 @@ static const R_CallMethodDef call_entries[] = {
   {"apply_zscore_fortran_c",              (DL_FUNC) &apply_zscore_fortran_c,              3},
   {"revert_zscore_fortran_c",             (DL_FUNC) &revert_zscore_fortran_c,             3},
   {"rbind_matrix_fortran_c",              (DL_FUNC) &rbind_matrix_fortran_c,              2},
+  {"sby_adanear_hpc_result_cpp",          (DL_FUNC) &sby_adanear_hpc_result_cpp,          9},
   {"sby_adasyn_hpc_cpp",                  (DL_FUNC) &sby_adasyn_hpc_cpp,                  7},
   {"sby_nearmiss_hpc_cpp",                (DL_FUNC) &sby_nearmiss_hpc_cpp,                7},
-  {"sby_adanear_hpc_result_cpp",          (DL_FUNC) &sby_adanear_hpc_result_cpp,          9},
-  {"sby_adasyn_hpc_cpp",                  (DL_FUNC) &sby_adasyn_hpc_cpp,                  8},
-  {"sby_nearmiss_hpc_cpp",                (DL_FUNC) &sby_nearmiss_hpc_cpp,                8},
   {"sby_hpc_compile_report_cpp",          (DL_FUNC) &sby_hpc_compile_report_cpp,          0},
   {NULL, NULL, 0}
 };
