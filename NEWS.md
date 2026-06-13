@@ -7,11 +7,14 @@
   fluxo estritamente no espaco padronizado, eliminando a dupla normalizacao, e
   monta o tibble final por zero-copy diretamente em C++ via `Rcpp::List`.
 * O motor HPC consolidado usa a Vector Statistics Library para as estatisticas
-  iniciais, `cblas_dgemm` para a matriz de distancias
+  iniciais, `cblas_sgemm` para a matriz de distancias
   (`D^2 = ||A||^2 + ||B||^2 - 2 A B^T`), `vdrnguniform` para a interpolacao do
-  ADASYN e laco SIMD com FMA (`vfmadd213pd`) para a reversao do z-score.
-* As tres funcoes controlam temporariamente apenas `MKL_NUM_THREADS` e
-  `OMP_NUM_THREADS`, restaurando os valores originais por um bloco `on.exit()`
+  ADASYN e laco SIMD com FMA (`vfmadd213ps`) para a reversao do z-score.
+* As consultas KNN internas e o NearMiss usam blocagem/streaming de SGEMM
+  com top-k incremental para evitar materializar matrizes de distancia completas
+  quando os blocos excedem o orcamento interno de memoria.
+* As tres funcoes controlam temporariamente apenas `MKL_NUM_THREADS`,
+  `OMP_NUM_THREADS` e `MKL_NUM_STRIPES`, restaurando os valores originais por um bloco `on.exit()`
   inflexivel. As demais variaveis de ambiente ficam sob controle do servidor.
 * O atalho HPC substitui internamente a rota `sby_knn_engine = "native"` como
   caminho rapido quando o motor consolidado esta compilado e carregado. As
@@ -54,7 +57,7 @@
   `sby_exclude_self = TRUE`, passando o offset global da query para o kernel C++
   para remover self-neighbors corretamente sem forcar uma consulta unica gigante.
 * Em ambientes Intel oneAPI/MKL, a configuracao temporaria de threads agora
-  atua somente sobre `MKL_NUM_THREADS` e `OMP_NUM_THREADS`.
+  atua somente sobre `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e `MKL_NUM_STRIPES`.
 
 * `sby_adasyn_matrix()`, `sby_nearmiss_matrix()` e `sby_nearmiss_index()`
   agora rejeitam classes minoritarias com menos de duas observacoes,

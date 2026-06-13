@@ -14,7 +14,7 @@
 #' processamento ocorre estritamente sobre a matriz padronizada por z-score, sem
 #' dupla normalizacao. As estatisticas iniciais da populacao majoritaria sao
 #' calculadas pela Vector Statistics Library, a matriz de distancias usa a
-#' identidade D^2 = ||A||^2 + ||B||^2 - 2 A B^T entregue ao cblas_dgemm, a
+#' identidade D^2 = ||A||^2 + ||B||^2 - 2 A B^T entregue ao cblas_sgemm, a
 #' interpolacao lambda do ADASYN usa vdrnguniform e a reversao final do z-score
 #' aproveita as unidades FMA do hardware durante a copia para os vetores da lista
 #' final. O tibble e montado diretamente no C++ por zero-copy.
@@ -23,8 +23,8 @@
 #' a rota classica equivalente com `sby_knn_engine = "native"`, garantindo que
 #' tudo continue funcionando.
 #'
-#' A execucao controla temporariamente apenas `MKL_NUM_THREADS` e
-#' `OMP_NUM_THREADS`, restaurando os valores originais por um bloco `on.exit()`
+#' A execucao controla temporariamente apenas `MKL_NUM_THREADS`,
+#' `OMP_NUM_THREADS` e `MKL_NUM_STRIPES`, restaurando os valores originais por um bloco `on.exit()`
 #' inflexivel que remove as variaveis que nao existiam.
 #'
 #' @param .data Data frame, tibble ou matriz com a coluna de desfecho e os

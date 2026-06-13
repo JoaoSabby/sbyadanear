@@ -4,7 +4,7 @@
 #' `sby_nearmiss_hpc()` e o atalho de alto desempenho do undersampling NearMiss-1.
 #' Ele rankeia e retem as linhas majoritarias estritamente no espaco padronizado
 #' por z-score, usando a Vector Statistics Library para as estatisticas iniciais e
-#' o cblas_dgemm para a matriz de distancias. A reversao final do z-score usa as
+#' o cblas_sgemm para a matriz de distancias. A reversao final do z-score usa as
 #' unidades FMA do hardware durante a montagem zero-copy do tibble no C++. A funcao
 #' representa um atalho: a rotina original `sby_nearmiss()` continua disponivel.
 #'
@@ -13,7 +13,7 @@
 #' rapido do NearMiss-1. Quando o motor HPC consolidado nao esta disponivel,
 #' recorre de forma transparente a `sby_nearmiss()` com
 #' `sby_knn_engine = "native"` para garantir que tudo continue funcionando. Apenas
-#' `MKL_NUM_THREADS` e `OMP_NUM_THREADS` sao controladas temporariamente e
+#' `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e `MKL_NUM_STRIPES` sao controladas temporariamente e
 #' restauradas por um bloco `on.exit()` inflexivel.
 #'
 #' @param .data Data frame, tibble ou matriz com a coluna de desfecho e os

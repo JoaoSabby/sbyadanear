@@ -15,9 +15,7 @@ sby_hpc_env_keys <- function(){
   c(
     "MKL_NUM_THREADS",
     "OMP_NUM_THREADS",
-    "MKL_NUM_STRIPES",
-    "OMP_PROC_BIND",
-    "OMP_PLACES"
+    "MKL_NUM_STRIPES"
   )
 }
 
@@ -82,7 +80,7 @@ sby_hpc_capture_env <- function(){
   return(sby_previous)
 }
 
-# Injeta numero de threads MKL/OpenMP, afinidade e uma sugestao de stripes para GEMM
+# Injeta numero de threads MKL/OpenMP e uma sugestao de stripes para GEMM
 sby_hpc_apply_env <- function(
   sby_total_threads,
   sby_majority_count = NA_integer_,
@@ -95,15 +93,20 @@ sby_hpc_apply_env <- function(
     sby_minority_count = sby_minority_count
   )
 
-  Sys.setenv(
+  sby_temporary_env <- c(
     MKL_NUM_THREADS = as.character(sby_total_threads),
     OMP_NUM_THREADS = as.character(sby_total_threads),
-    MKL_NUM_STRIPES = as.character(sby_num_stripes),
-    OMP_PROC_BIND = "spread",
-    OMP_PLACES = "cores"
+    MKL_NUM_STRIPES = as.character(sby_num_stripes)
   )
 
-  invisible(TRUE)
+  do.call(Sys.setenv, as.list(sby_temporary_env))
+
+  message(
+    "sbyadanear HPC: variaveis de ambiente temporarias: ",
+    paste(names(sby_temporary_env), sby_temporary_env, sep = "=", collapse = ", ")
+  )
+
+  invisible(sby_temporary_env)
 }
 
 # Restaura o ambiente original, removendo as variaveis que nao existiam antes
@@ -111,16 +114,23 @@ sby_hpc_restore_env <- function(sby_previous){
   if(is.null(sby_previous)){
     return(invisible(TRUE))
   }
+  sby_restored_env <- character()
   for(sby_key in names(sby_previous)){
     sby_value <- sby_previous[[sby_key]]
     if(is.na(sby_value)){
       Sys.unsetenv(sby_key)
+      sby_restored_env[[sby_key]] <- "<unset>"
     }else{
       sby_args <- stats::setNames(list(sby_value), sby_key)
       do.call(Sys.setenv, sby_args)
+      sby_restored_env[[sby_key]] <- sby_value
     }
   }
-  invisible(TRUE)
+  message(
+    "sbyadanear HPC: variaveis de ambiente restauradas: ",
+    paste(names(sby_restored_env), sby_restored_env, sep = "=", collapse = ", ")
+  )
+  invisible(sby_restored_env)
 }
 ####
 ## Fim
