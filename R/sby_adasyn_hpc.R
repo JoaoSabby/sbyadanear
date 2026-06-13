@@ -56,7 +56,8 @@ sby_adasyn_hpc <- function(
   sby_hpc_apply_env(
     sby_total_threads = sby_total_threads,
     sby_majority_count = sby_class_counts$sby_majority_count,
-    sby_minority_count = sby_class_counts$sby_minority_count
+    sby_minority_count = sby_class_counts$sby_minority_count,
+    sby_column_count = ncol(sby_x_matrix)
   )
   sby_target_name <- sby_formula_data$sby_target_name
 

@@ -40,25 +40,45 @@ sby_hpc_resolve_threads <- function(sby_config_max_threads = -1L){
   return(sby_detected)
 }
 
-# Resolve uma sugestao conservadora para MKL_NUM_STRIPES em GEMM column-major.
+# Resolve uma sugestao adaptativa para MKL_NUM_STRIPES em GEMM column-major.
 sby_hpc_resolve_mkl_num_stripes <- function(
   sby_total_threads,
   sby_majority_count = NA_integer_,
-  sby_minority_count = NA_integer_
+  sby_minority_count = NA_integer_,
+  sby_column_count = NA_integer_
 ){
-  sby_total_threads <- max(1L, suppressWarnings(as.integer(sby_total_threads)))
+  sby_total_threads <- suppressWarnings(as.integer(sby_total_threads)[1L])
+  if(is.na(sby_total_threads) || sby_total_threads < 1L){
+    sby_total_threads <- 1L
+  }
   if(sby_total_threads < 2L){
     return(1L)
   }
 
-  sby_majority_count <- suppressWarnings(as.integer(sby_majority_count))
-  sby_minority_count <- suppressWarnings(as.integer(sby_minority_count))
+  sby_majority_count <- suppressWarnings(as.integer(sby_majority_count)[1L])
+  sby_minority_count <- suppressWarnings(as.integer(sby_minority_count)[1L])
+  sby_column_count <- suppressWarnings(as.integer(sby_column_count)[1L])
 
-  if(length(sby_majority_count) == 1L && length(sby_minority_count) == 1L &&
-     !is.na(sby_majority_count) && !is.na(sby_minority_count) &&
+  # Limite 2D seguro para matrizes sem informacao de forma: distribui o
+  # paralelismo sem criar stripes demais em cargas pequenas ou balanceadas.
+  sby_default_stripes <- max(1L, as.integer(ceiling(sqrt(sby_total_threads))))
+
+  if(!is.na(sby_majority_count) && !is.na(sby_minority_count) &&
      sby_majority_count > 0L && sby_minority_count > 0L){
     sby_shape_ratio <- sby_majority_count / sby_minority_count
+
+    # Heuristica conservadora para detectar matrizes FP32 que tendem a exceder
+    # uma cache L3 compartilhada aproximada de 35 MB em topologias duplas.
+    sby_is_large_matrix <- FALSE
+    if(!is.na(sby_column_count) && sby_column_count > 0L){
+      sby_matrix_bytes <- as.double(sby_majority_count) * as.double(sby_column_count) * 4
+      sby_is_large_matrix <- sby_matrix_bytes > 35000000
+    }
+
     if(sby_shape_ratio >= 2){
+      if(sby_is_large_matrix || sby_shape_ratio > 100){
+        return(sby_total_threads)
+      }
       return(max(1L, as.integer(ceiling(sby_total_threads / 2))))
     }
     if(sby_shape_ratio <= 0.5){
@@ -66,8 +86,7 @@ sby_hpc_resolve_mkl_num_stripes <- function(
     }
   }
 
-  sby_2d_limit <- max(1L, as.integer(floor((sby_total_threads - 1L) / 2L)))
-  max(1L, min(sby_2d_limit, as.integer(ceiling(sqrt(sby_total_threads)))))
+  sby_default_stripes
 }
 
 # Captura o estado anterior das variaveis controladas usando unset = NA
@@ -84,13 +103,18 @@ sby_hpc_capture_env <- function(){
 sby_hpc_apply_env <- function(
   sby_total_threads,
   sby_majority_count = NA_integer_,
-  sby_minority_count = NA_integer_
+  sby_minority_count = NA_integer_,
+  sby_column_count = NA_integer_
 ){
-  sby_total_threads <- max(1L, as.integer(sby_total_threads))
+  sby_total_threads <- suppressWarnings(as.integer(sby_total_threads)[1L])
+  if(is.na(sby_total_threads) || sby_total_threads < 1L){
+    sby_total_threads <- 1L
+  }
   sby_num_stripes <- sby_hpc_resolve_mkl_num_stripes(
     sby_total_threads = sby_total_threads,
     sby_majority_count = sby_majority_count,
-    sby_minority_count = sby_minority_count
+    sby_minority_count = sby_minority_count,
+    sby_column_count = sby_column_count
   )
 
   sby_temporary_env <- c(

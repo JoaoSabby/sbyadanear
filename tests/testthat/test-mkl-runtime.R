@@ -26,14 +26,14 @@ test_that("hpc env control restores threading and stripe variables", {
 
   expect_identical(
     sbyadanear:::sby_hpc_env_keys(),
-    c("MKL_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_STRIPES", "OMP_PROC_BIND", "OMP_PLACES")
+    c("MKL_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_STRIPES")
   )
 
   previous <- sbyadanear:::sby_hpc_capture_env()
   sbyadanear:::sby_hpc_apply_env(sby_total_threads = 2L)
   expect_identical(Sys.getenv("MKL_NUM_THREADS"), "2")
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "2")
-  expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "1")
+  expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "2")
   expect_identical(Sys.getenv("KMP_AFFINITY"), "server-value")
 
   sbyadanear:::sby_hpc_restore_env(previous)
@@ -41,4 +41,24 @@ test_that("hpc env control restores threading and stripe variables", {
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "4")
   expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "7")
   expect_identical(Sys.getenv("KMP_AFFINITY"), "server-value")
+})
+
+
+test_that("mkl stripe resolver adapts to class shape and matrix size", {
+  expect_identical(
+    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L),
+    4L
+  )
+  expect_identical(
+    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L, 200L, 100L, 10L),
+    8L
+  )
+  expect_identical(
+    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L, 1000000L, 100L, 10L),
+    16L
+  )
+  expect_identical(
+    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L, 100L, 250L, 10L),
+    1L
+  )
 })
