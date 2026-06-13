@@ -1,6 +1,6 @@
 # sbyadanear 0.4.0 (em desenvolvimento)
 
-## Atalho HPC (oneAPI, AVX-512, NUMA)
+## Atalho HPC (oneAPI, AVX-512)
 
 * Novas funcoes exportadas `sby_adanear_hpc()`, `sby_adasyn_hpc()` e
   `sby_nearmiss_hpc()`. Cada uma e um atalho de alto desempenho que executa o
@@ -10,9 +10,9 @@
   iniciais, `cblas_dgemm` para a matriz de distancias
   (`D^2 = ||A||^2 + ||B||^2 - 2 A B^T`), `vdrnguniform` para a interpolacao do
   ADASYN e laco SIMD com FMA (`vfmadd213pd`) para a reversao do z-score.
-* As tres funcoes isolam o ambiente NUMA e MKL (`KMP_AFFINITY=scatter`,
-  `MKL_NUM_STRIPES`, `MKL_DISABLE_FAST_MM`, `MKL_DYNAMIC`) e restauram o estado
-  anterior por um bloco `on.exit()` inflexivel.
+* As tres funcoes controlam temporariamente apenas `MKL_NUM_THREADS` e
+  `OMP_NUM_THREADS`, restaurando os valores originais por um bloco `on.exit()`
+  inflexivel. As demais variaveis de ambiente ficam sob controle do servidor.
 * O atalho HPC substitui internamente a rota `sby_knn_engine = "native"` como
   caminho rapido quando o motor consolidado esta compilado e carregado. As
   funcoes originais `sby_adanear()`, `sby_adasyn()` e `sby_nearmiss()` continuam
@@ -53,8 +53,8 @@
 * A engine `native` agora preserva `sby_knn_query_chunk_size` mesmo quando
   `sby_exclude_self = TRUE`, passando o offset global da query para o kernel C++
   para remover self-neighbors corretamente sem forcar uma consulta unica gigante.
-* Em ambientes Intel oneAPI/MKL, a configuracao de threads tambem fixa
-  `MKL_DYNAMIC = "FALSE"` e a documentacao deixou de assumir OpenBLAS.
+* Em ambientes Intel oneAPI/MKL, a configuracao temporaria de threads agora
+  atua somente sobre `MKL_NUM_THREADS` e `OMP_NUM_THREADS`.
 
 * `sby_adasyn_matrix()`, `sby_nearmiss_matrix()` e `sby_nearmiss_index()`
   agora rejeitam classes minoritarias com menos de duas observacoes,

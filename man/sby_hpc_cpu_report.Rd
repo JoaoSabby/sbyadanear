@@ -15,6 +15,6 @@ TRUE. A varredura do binario por zmm/vfmadd via objdump e uma evidencia adiciona
 quando objdump esta instalado.
 }
 \value{
-Lista com indicadores logicos e evidencias de runtime, compilacao, ambiente
-NUMA/MKL e varredura opcional do binario nativo.
+Lista com indicadores logicos e evidencias de runtime, compilacao, threads
+MKL/OpenMP e varredura opcional do binario nativo.
 }

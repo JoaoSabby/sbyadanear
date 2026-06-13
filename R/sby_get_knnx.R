@@ -43,8 +43,9 @@ sby_get_knnx <- function(
     sby_knn_parallel_backend = sby_knn_parallel_backend
   )
 
-  # Apply MKL/BLAS thread hints when enabled.
-  sby_configure_blas_threads(sby_workers = sby_knn_workers)
+  # Apply MKL/BLAS thread hints when enabled and restore them on exit.
+  sby_previous_blas_env <- sby_configure_blas_threads(sby_workers = sby_knn_workers)
+  on.exit(sby_restore_blas_threads(sby_previous_blas_env), add = TRUE)
 
   # Resolve quais componentes KNN devem permanecer no objeto retornado
   sby_knn_return <- match.arg(sby_knn_return)

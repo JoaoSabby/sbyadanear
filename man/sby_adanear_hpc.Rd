@@ -25,8 +25,8 @@ normalizacao e montando o tibble final por zero-copy diretamente em C++.
 \details{
 A funcao substitui internamente a rota denominada "native" como caminho rapido.
 Quando o motor HPC consolidado nao esta disponivel, recorre de forma transparente
-a \code{sby_adanear()} com \code{sby_knn_engine = "native"}. As variaveis NUMA e MKL
-sao isoladas e restauradas por um bloco \code{on.exit()} inflexivel. As estatisticas
+a \code{sby_adanear()} com \code{sby_knn_engine = "native"}. Apenas \code{MKL_NUM_THREADS} e \code{OMP_NUM_THREADS}
+sao controladas temporariamente e restauradas por um bloco \code{on.exit()} inflexivel. As estatisticas
 iniciais usam a Vector Statistics Library, a matriz de distancias usa
 \code{cblas_dgemm} e a reversao final do z-score aproveita as unidades FMA do hardware.
 }

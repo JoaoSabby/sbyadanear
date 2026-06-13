@@ -18,7 +18,7 @@
 #' `NA` em ambientes sem `objdump`.
 #'
 #' @return Lista com indicadores logicos e evidencias de runtime, compilacao,
-#' ambiente NUMA/MKL e varredura opcional do binario nativo.
+#' threads MKL/OpenMP e varredura opcional do binario nativo.
 #' @export
 sby_hpc_cpu_report <- function(){
   sby_flags <- character()
@@ -75,10 +75,7 @@ sby_hpc_cpu_report <- function(){
     )
   }
 
-  sby_env_keys <- c(
-    "OMP_NUM_THREADS", "MKL_NUM_THREADS", "MKL_DYNAMIC", "MKL_ENABLE_INSTRUCTIONS",
-    "MKL_NUM_STRIPES", "KMP_AFFINITY", "KMP_HW_SUBSET", "OMP_PROC_BIND", "OMP_PLACES"
-  )
+  sby_env_keys <- c("MKL_NUM_THREADS", "OMP_NUM_THREADS")
 
   list(
     runtime_ok = all(sby_runtime_flags),
