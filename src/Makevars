@@ -6,6 +6,14 @@ PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
 PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")
 PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
 
+# Build exclusivo para Intel Xeon Platinum 8260 (Cascade Lake) do cliente.
+# Essas flags habilitam AVX-512, AVX2, FMA e OpenMP nos kernels C++/Fortran.
+SBY_CASCADELAKE_FLAGS = -O3 -march=cascadelake -mtune=cascadelake -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mavx2 -mfma -ffast-math -fno-math-errno -fopenmp -DSBYADANEAR_CASCADELAKE_NATIVE=1
+PKG_CXXFLAGS += $(SBY_CASCADELAKE_FLAGS) $(SHLIB_OPENMP_CXXFLAGS)
+PKG_FFLAGS += -O3 -march=cascadelake -mtune=cascadelake -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mavx2 -mfma -ffast-math -fno-math-errno -fopenmp $(SHLIB_OPENMP_FFLAGS)
+PKG_FCFLAGS += -O3 -march=cascadelake -mtune=cascadelake -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mavx2 -mfma -ffast-math -fno-math-errno -fopenmp $(SHLIB_OPENMP_FCFLAGS)
+PKG_LIBS += $(SHLIB_OPENMP_CXXFLAGS)
+
 ifeq ($(SBY_USE_ONEMATH),1)
   ifneq ($(ONEAPI_ROOT),)
     ONEMATHROOT ?= $(ONEAPI_ROOT)/onemath/latest

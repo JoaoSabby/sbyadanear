@@ -1106,6 +1106,7 @@ extern "C" SEXP sby_adanear_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SE
 extern "C" SEXP sby_adanear_hpc_result_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP sby_adasyn_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern "C" SEXP sby_nearmiss_hpc_cpp(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+extern "C" SEXP sby_hpc_compile_report_cpp(void);
 
 extern "C" {
   void sby_compute_zscore_population_f(const double *x, int n, int p,
@@ -1271,6 +1272,7 @@ static const R_CallMethodDef call_entries[] = {
   {"sby_adanear_hpc_result_cpp",          (DL_FUNC) &sby_adanear_hpc_result_cpp,          9},
   {"sby_adasyn_hpc_cpp",                  (DL_FUNC) &sby_adasyn_hpc_cpp,                  8},
   {"sby_nearmiss_hpc_cpp",                (DL_FUNC) &sby_nearmiss_hpc_cpp,                8},
+  {"sby_hpc_compile_report_cpp",          (DL_FUNC) &sby_hpc_compile_report_cpp,          0},
   {NULL, NULL, 0}
 };
 

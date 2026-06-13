@@ -14,11 +14,16 @@
 sby_hpc_env_keys <- function(){
   c(
     "KMP_AFFINITY",
+    "KMP_BLOCKTIME",
+    "KMP_SETTINGS",
+    "MKL_ENABLE_INSTRUCTIONS",
     "MKL_NUM_STRIPES",
     "MKL_DISABLE_FAST_MM",
     "MKL_DYNAMIC",
     "MKL_NUM_THREADS",
-    "OMP_NUM_THREADS"
+    "OMP_NUM_THREADS",
+    "OMP_PROC_BIND",
+    "OMP_PLACES"
   )
 }
 
@@ -66,11 +71,16 @@ sby_hpc_apply_env <- function(
 
   Sys.setenv(
     KMP_AFFINITY = paste0("granularity=fine,", sby_affinity),
+    KMP_BLOCKTIME = "0",
+    KMP_SETTINGS = "FALSE",
+    MKL_ENABLE_INSTRUCTIONS = "AVX512",
     MKL_NUM_STRIPES = as.character(sby_num_stripes),
     MKL_DISABLE_FAST_MM = "1",
     MKL_DYNAMIC = "FALSE",
     MKL_NUM_THREADS = as.character(sby_total_threads),
-    OMP_NUM_THREADS = as.character(sby_total_threads)
+    OMP_NUM_THREADS = as.character(sby_total_threads),
+    OMP_PROC_BIND = "spread",
+    OMP_PLACES = "cores"
   )
 
   invisible(TRUE)
