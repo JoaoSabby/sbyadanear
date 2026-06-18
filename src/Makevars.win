@@ -1,50 +1,11 @@
-CXX_STD = CXX17
+CXX_STD = CXX23
+OBJECTS = sbyadanear.o sbyadanear_rcppparallel.o sby_native_engine.o sby_hpc_engine.o sby_hpc_engine_f.o
 
 PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
-PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")
-PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
+PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL=1
+PKG_CPPFLAGS += -DSBYADANEAR_CASCADELAKE_NATIVE=1
+PKG_CPPFLAGS += -DSBY_ASSUME_NO_NA=1
+PKG_CPPFLAGS += -DSBY_PREFERRED_FEATURES=100
 
-!IF "$(SBY_USE_ONEMATH)" == "1"
-!IFNDEF ONEMATHROOT
-!IFDEF ONEAPI_ROOT
-ONEMATHROOT=$(ONEAPI_ROOT)\onemath\latest
-MKLROOT=$(ONEAPI_ROOT)\mkl\latest
-!ENDIF
-!ENDIF
-!IFDEF ONEMATHROOT
-PKG_CPPFLAGS += -I"$(ONEMATHROOT)\include" -DSBYADANEAR_ONEAPI_MKL=1
-PKG_LIBS += -L"$(ONEMATHROOT)\lib" -lonemath -ltbb
-!ELSE
-!IFDEF MKLROOT
-PKG_CPPFLAGS += -I"$(MKLROOT)\include" -DSBYADANEAR_ONEAPI_MKL=1
-PKG_LIBS += -L"$(MKLROOT)\lib\intel64" -lmkl_rt
-!ENDIF
-!ENDIF
-!ENDIF
-
-!IF "$(SBY_USE_ONEAPI_MKL)" == "1"
-!IFNDEF MKLROOT
-!IFDEF ONEAPI_ROOT
-MKLROOT=$(ONEAPI_ROOT)\mkl\latest
-!ENDIF
-!ENDIF
-!IFDEF MKLROOT
-PKG_CPPFLAGS += -I"$(MKLROOT)\include" -DSBYADANEAR_ONEAPI_MKL=1
-PKG_LIBS += -L"$(MKLROOT)\lib\intel64" -lmkl_rt
-!ENDIF
-!ENDIF
-
-!IF "$(SBY_USE_ONEDPL)" == "1"
-!IFNDEF DPLROOT
-!IFDEF ONEAPI_ROOT
-DPLROOT=$(ONEAPI_ROOT)\dpl\latest
-!ENDIF
-!ENDIF
-!IFDEF DPLROOT
-PKG_CPPFLAGS += -I"$(DPLROOT)\include" -DSBYADANEAR_ONEDPL=1
-PKG_LIBS += -ltbb
-!ELSE
-PKG_CPPFLAGS += -DSBYADANEAR_ONEDPL=1
-PKG_LIBS += -ltbb
-!ENDIF
-!ENDIF
+PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::CxxFlags())")
+PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::RcppParallelLibs())")
