@@ -1,52 +1,11 @@
-CXX_STD = CXX17
-
+CXX_STD = CXX23
 OBJECTS = sbyadanear.o sbyadanear_rcppparallel.o sby_native_engine.o sby_hpc_engine.o sby_hpc_engine_f.o
 
 PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
-PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")
-PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
+PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL=1
+PKG_CPPFLAGS += -DSBYADANEAR_CASCADELAKE_NATIVE=1
+PKG_CPPFLAGS += -DSBY_ASSUME_NO_NA=1
+PKG_CPPFLAGS += -DSBY_PREFERRED_FEATURES=100
 
-# Build exclusivo para Intel Xeon Platinum 8260 (Cascade Lake) do cliente.
-# Essas flags habilitam AVX-512, AVX2, FMA e OpenMP nos kernels C++/Fortran.
-SBY_CASCADELAKE_FLAGS = -O3 -march=cascadelake -mtune=cascadelake -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mavx2 -mfma -ffast-math -fno-math-errno -fopenmp -DSBYADANEAR_CASCADELAKE_NATIVE=1
-PKG_CXXFLAGS += $(SBY_CASCADELAKE_FLAGS) $(SHLIB_OPENMP_CXXFLAGS)
-PKG_FFLAGS += -O3 -march=cascadelake -mtune=cascadelake -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mavx2 -mfma -ffast-math -fno-math-errno -fopenmp $(SHLIB_OPENMP_FFLAGS)
-PKG_FCFLAGS += -O3 -march=cascadelake -mtune=cascadelake -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl -mavx2 -mfma -ffast-math -fno-math-errno -fopenmp $(SHLIB_OPENMP_FCFLAGS)
-PKG_LIBS += $(SHLIB_OPENMP_CXXFLAGS)
-
-ifeq ($(SBY_USE_ONEMATH),1)
-  ifneq ($(ONEAPI_ROOT),)
-    ONEMATHROOT ?= $(ONEAPI_ROOT)/onemath/latest
-    MKLROOT ?= $(ONEAPI_ROOT)/mkl/latest
-  endif
-  ifneq ($(ONEMATHROOT),)
-    PKG_CPPFLAGS += -I$(ONEMATHROOT)/include -DSBYADANEAR_ONEAPI_MKL=1
-    PKG_LIBS += -L$(ONEMATHROOT)/lib -Wl,--no-as-needed -lonemath -ltbb -lpthread -lm -ldl
-  else ifneq ($(MKLROOT),)
-    PKG_CPPFLAGS += -I$(MKLROOT)/include -DSBYADANEAR_ONEAPI_MKL=1
-    PKG_LIBS += -L$(MKLROOT)/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl
-  endif
-endif
-
-ifeq ($(SBY_USE_ONEAPI_MKL),1)
-  ifneq ($(ONEAPI_ROOT),)
-    MKLROOT ?= $(ONEAPI_ROOT)/mkl/latest
-  endif
-  ifneq ($(MKLROOT),)
-    PKG_CPPFLAGS += -I$(MKLROOT)/include -DSBYADANEAR_ONEAPI_MKL=1
-    PKG_LIBS += -L$(MKLROOT)/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl
-  endif
-endif
-
-ifeq ($(SBY_USE_ONEDPL),1)
-  ifneq ($(ONEAPI_ROOT),)
-    DPLROOT ?= $(ONEAPI_ROOT)/dpl/latest
-  endif
-  ifneq ($(DPLROOT),)
-    PKG_CPPFLAGS += -I$(DPLROOT)/include -DSBYADANEAR_ONEDPL=1
-    PKG_LIBS += -ltbb -lpthread -ldl
-  else
-    PKG_CPPFLAGS += -DSBYADANEAR_ONEDPL=1
-    PKG_LIBS += -ltbb -lpthread -ldl
-  endif
-endif
+PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::CxxFlags())")
+PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::RcppParallelLibs())")
