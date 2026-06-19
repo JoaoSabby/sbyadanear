@@ -15,7 +15,7 @@
 #'   trained = FALSE,
 #'   columns = NULL,
 #'   sby_over_ratio = 0.2,
-#'   sby_under_ratio = 0.5,
+#'   sby_under_ratio = 1,
 #'   sby_knn_over_k = 5L,
 #'   sby_knn_under_k = 5L,
 #'   sby_seed = sample.int(10L^5L, 1L),
@@ -44,7 +44,7 @@
 #' @param trained Indicador lógico escalar que informa se a etapa já passou por `prep()`. O padrão é `FALSE`, estado adequado para a criação inicial da etapa. Esse valor é controlado internamente por `recipes`; defini-lo manualmente como `TRUE` sem os metadados correspondentes pode tornar a etapa inconsistente.
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`. O padrão é `NULL`, indicando que a seleção ainda não foi treinada. Esse metadado define qual variável será removida dos preditores e usada como alvo no momento do balanceamento.
 #' @param sby_over_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética antes da subamostragem. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
-#' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que representa a razão mínima desejada entre minoria e maioria após o NearMiss-1. O padrão `0.5` permite reter até duas observações majoritárias para cada minoritária; `1` reduz a maioria até igualar a minoria.
+#' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que representa a razão mínima desejada entre minoria e maioria após o NearMiss-1. O padrão `1` reduz a maioria até igualar a minoria; valores menores que `1` retêm mais observações majoritárias por minoritária.
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN para estimar dificuldade local e gerar amostras sintéticas. O padrão é `5L`. Essa escolha influencia onde a expansão minoritária será concentrada e o grau de suavização da avaliação local.
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos minoritários considerados pelo critério NearMiss-1 para ranquear observações majoritárias. O padrão é `5L`. Valores maiores suavizam o critério de proximidade por considerar uma vizinhança mais ampla; valores menores tornam a seleção mais sensível a fronteiras locais e possíveis ruídos.
 #' @param sby_seed Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é `sample.int(10L^5L, 1L)`, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para garantir reprodutibilidade dos empates, amostragens internas e índices retidos durante o balanceamento.
@@ -168,7 +168,7 @@ sby_step_adanear <- function(
   trained = FALSE,
   columns = NULL,
   sby_over_ratio = 0.2,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),

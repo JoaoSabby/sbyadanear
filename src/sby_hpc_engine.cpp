@@ -158,6 +158,21 @@ static int sby_resolve_gemm_ref_block(int n_query, int n_ref, int p){
   return (int) block;
 }
 
+static int sby_resolve_nearmiss_majority_block(int n_maj, int n_min, int p){
+  const size_t target_dist_bytes = (size_t) 128 * (size_t) 1024 * (size_t) 1024;
+  const size_t target_copy_bytes = (size_t) 64 * (size_t) 1024 * (size_t) 1024;
+  int min_block = sby_resolve_gemm_ref_block(std::max(1, std::min(n_maj, 65536)), n_min, p);
+  size_t by_dist = target_dist_bytes /
+    (sizeof(float) * (size_t) std::max(1, min_block));
+  size_t by_copy = target_copy_bytes /
+    (sizeof(float) * (size_t) std::max(1, p));
+  size_t block = std::min(by_dist, by_copy);
+  if(block < 1024) block = 1024;
+  if(block > (size_t) n_maj) block = (size_t) n_maj;
+  if(block < 1) block = 1;
+  return (int) block;
+}
+
 static void sby_copy_column_block(const sby_float_buffer& source, int n_source,
                                   int p, int col_start, int n_block,
                                   sby_float_buffer& block){
@@ -316,13 +331,18 @@ static void sby_knn_topk_against_reference(
     const sby_float_buffer& query, int n_query,
     const sby_float_buffer& reference, int n_ref, int p,
     int k, bool drop_self,
-    std::vector< std::vector<int> >& out_index){
-  out_index.assign(n_query, std::vector<int>());
-  int effective_k = k;
-  if(effective_k > n_ref) effective_k = n_ref;
-  if(effective_k < 1 || n_query < 1 || n_ref < 1) return;
+    std::vector<int>& out_index,
+    int& out_k){
+  out_k = k;
+  if(out_k > n_ref) out_k = n_ref;
+  if(out_k < 1 || n_query < 1 || n_ref < 1){
+    out_k = 0;
+    out_index.clear();
+    return;
+  }
+  out_index.assign((size_t) n_query * (size_t) out_k, 1);
 
-  int keep_k = effective_k + (drop_self ? 1 : 0);
+  int keep_k = out_k + (drop_self ? 1 : 0);
   if(keep_k > n_ref) keep_k = n_ref;
 
   sby_double_buffer top_dist;
@@ -375,8 +395,8 @@ static void sby_knn_topk_against_reference(
     }
   }
 
+  std::vector<int> order(keep_k);
   for(int i = 0; i < n_query; ++i){
-    std::vector<int> order(keep_k);
     std::iota(order.begin(), order.end(), 0);
     size_t row_offset = (size_t) i * (size_t) keep_k;
     std::sort(order.begin(), order.end(), [&](int a, int b){
@@ -388,17 +408,14 @@ static void sby_knn_topk_against_reference(
       return ia < ib;
     });
 
-    std::vector<int>& dst = out_index[i];
-    dst.reserve(effective_k);
+    int written = 0;
     for(int pos : order){
       int cand = top_index[row_offset + (size_t) pos];
       if(cand < 0) continue;
       if(drop_self && cand == i) continue;
-      dst.push_back(cand + 1);
-      if((int) dst.size() >= effective_k) break;
-    }
-    if(dst.empty() && n_ref > 0){
-      dst.push_back(1);
+      out_index[(size_t) i * (size_t) out_k + (size_t) written] = cand + 1;
+      ++written;
+      if(written >= out_k) break;
     }
   }
 }
@@ -441,17 +458,21 @@ static int sby_run_adasyn_stage(
     }
   }
 
-  // Numero de sinteticas: ceil(n_min * over_ratio), minimo 1
-  int synthetic_count = (int) std::ceil((double) n_min * over_ratio);
+  // Numero de sinteticas: floor(n_min * over_ratio), minimo 1.
+  // Mantem a semantica historica de expandir a minoria sem reduzir
+  // observacoes raras originais.
+  int synthetic_count = (int) std::floor((double) n_min * over_ratio);
   if(synthetic_count < 1) synthetic_count = 1;
 
   int effective_k = k_neighbor;
   if(effective_k > n_min - 1) effective_k = n_min - 1;
   if(effective_k < 1) effective_k = 1;
 
-  std::vector< std::vector<int> > minority_neighbors;
+  std::vector<int> minority_neighbors;
+  int minority_neighbor_k = 0;
   sby_knn_topk_against_reference(minority, n_min, minority, n_min, p,
-                                 effective_k, true, minority_neighbors);
+                                 effective_k, true, minority_neighbors,
+                                 minority_neighbor_k);
 
   std::vector<int> base_idx(synthetic_count);
   std::vector<int> nbr_idx(synthetic_count);
@@ -463,11 +484,10 @@ static int sby_run_adasyn_stage(
   for(int s = 0; s < synthetic_count; ++s){
     int base = s % n_min;
     base_idx[s] = base + 1;
-    const std::vector<int>& nbrs = minority_neighbors[base];
-    int pick = (int) std::floor(unif_pick[s] * (double) nbrs.size());
+    int pick = (int) std::floor(unif_pick[s] * (double) minority_neighbor_k);
     if(pick < 0) pick = 0;
-    if(pick >= (int) nbrs.size()) pick = (int) nbrs.size() - 1;
-    nbr_idx[s] = nbrs[pick];
+    if(pick >= minority_neighbor_k) pick = minority_neighbor_k - 1;
+    nbr_idx[s] = minority_neighbors[(size_t) base * (size_t) minority_neighbor_k + (size_t) pick];
     lambda[s]  = (float) unif_lambda[s];
   }
 
@@ -493,7 +513,8 @@ static int sby_run_adasyn_stage(
 static std::vector<int> sby_run_nearmiss_stage(
     const sby_float_buffer& x_scaled_orig, int n, int p,
     const std::vector<int>& y_codes_orig, int minority_code,
-    int k_neighbor, double under_ratio){
+    int k_neighbor, double under_ratio,
+    const sby_float_buffer* extra_minority = nullptr, int n_extra_minority = 0){
 
   std::vector<int> minority_index;
   std::vector<int> majority_index;
@@ -506,121 +527,164 @@ static std::vector<int> sby_run_nearmiss_stage(
       majority_index.push_back(i);
     }
   }
-  int n_min = (int) minority_index.size();
+  int n_min_orig = (int) minority_index.size();
   int n_maj = (int) majority_index.size();
+  if(extra_minority == nullptr || n_extra_minority < 1){
+    n_extra_minority = 0;
+  }
+  int n_min = n_min_orig + n_extra_minority;
 
-  int retained_majority = (int) std::floor((double) n_min / under_ratio);
+  // sby_under_ratio opera sobre a quantidade minoritaria apos oversampling
+  // quando sinteticas sao fornecidas. Valores menores que 1 podem reter uma
+  // maioria menor que a minoria; as linhas raras nunca sao descartadas aqui.
+  int retained_majority = (int) std::floor((double) n_min * under_ratio);
   if(retained_majority > n_maj) retained_majority = n_maj;
-  if(retained_majority < 0)    retained_majority = 0;
+  if(retained_majority < 1 && n_maj > 0) retained_majority = 1;
 
-  sby_float_buffer majority;
   sby_float_buffer minority;
-  sby_resize_first_touch(majority, (size_t) n_maj * (size_t) p, 0.0f);
   sby_resize_first_touch(minority, (size_t) n_min * (size_t) p, 0.0f);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static)
 #endif
   for(int j = 0; j < p; ++j){
     const float* col = x_scaled_orig.data() + (size_t) j * (size_t) n;
-    float* mdst = majority.data() + (size_t) j * (size_t) n_maj;
     float* ndst = minority.data() + (size_t) j * (size_t) n_min;
-    for(int r = 0; r < n_maj; ++r){ mdst[r] = col[majority_index[r]]; }
-    for(int r = 0; r < n_min; ++r){ ndst[r] = col[minority_index[r]]; }
+    for(int r = 0; r < n_min_orig; ++r){ ndst[r] = col[minority_index[r]]; }
+    if(n_extra_minority > 0){
+      const float* extra_col = extra_minority->data() + (size_t) j * (size_t) n_extra_minority;
+      for(int r = 0; r < n_extra_minority; ++r){
+        ndst[n_min_orig + r] = extra_col[r];
+      }
+    }
   }
 
   int effective_k = k_neighbor;
   if(effective_k > n_min) effective_k = n_min;
   if(effective_k < 1)     effective_k = 1;
 
-  // Score NearMiss-1 em streaming sobre a minoria ORIGINAL (sem sinteticas)
   std::vector< std::pair<double,int> > scores(n_maj);
-  sby_double_buffer score_acc;
-  sby_resize_first_touch(score_acc, (size_t) n_maj, 0.0);
-
-  sby_double_buffer topk;
-  sby_double_buffer worst_val;
-  std::vector<int> worst_pos;
-  if(effective_k < n_min){
-    sby_resize_first_touch(topk, (size_t) n_maj * (size_t) effective_k,
-                           std::numeric_limits<double>::infinity());
-    worst_pos.assign(n_maj, 0);
-    sby_resize_first_touch(worst_val, (size_t) n_maj,
-                           std::numeric_limits<double>::infinity());
-  }
-
-  int minority_block_size = sby_resolve_gemm_ref_block(n_maj, n_min, p);
+  int majority_block_size = sby_resolve_nearmiss_majority_block(n_maj, n_min, p);
+  sby_float_buffer majority_block;
   sby_float_buffer minority_block;
   sby_float_buffer dist_block;
   int status = 0;
 
-  for(int min_start = 0; min_start < n_min; min_start += minority_block_size){
-    int n_block = std::min(minority_block_size, n_min - min_start);
-    sby_copy_column_block(minority, n_min, p, min_start, n_block, minority_block);
-    sby_resize_first_touch(dist_block, (size_t) n_maj * (size_t) n_block, 0.0f);
-    sby_pairwise_sqdist_sgemm_f(majority.data(), n_maj, minority_block.data(), n_block, p,
-                                dist_block.data(), &status);
-    if(status != 0){
-      Rcpp::stop("Falha no calculo blocado de distancias NearMiss por sgemm (status=%d)", status);
+  for(int maj_start = 0; maj_start < n_maj; maj_start += majority_block_size){
+    int n_maj_block = std::min(majority_block_size, n_maj - maj_start);
+    sby_resize_first_touch(majority_block, (size_t) n_maj_block * (size_t) p, 0.0f);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for(int j = 0; j < p; ++j){
+      const float* col = x_scaled_orig.data() + (size_t) j * (size_t) n;
+      float* mdst = majority_block.data() + (size_t) j * (size_t) n_maj_block;
+      for(int r = 0; r < n_maj_block; ++r){
+        mdst[r] = col[majority_index[maj_start + r]];
+      }
     }
 
-    if(effective_k == n_min){
-      for(int c = 0; c < n_block; ++c){
-        const float* col = dist_block.data() + (size_t) c * (size_t) n_maj;
+    int minority_block_size = sby_resolve_gemm_ref_block(n_maj_block, n_min, p);
+    sby_double_buffer score_acc;
+    sby_resize_first_touch(score_acc, (size_t) n_maj_block, 0.0);
+
+    sby_double_buffer topk;
+    sby_double_buffer worst_val;
+    std::vector<int> worst_pos;
+    if(effective_k < n_min){
+      sby_resize_first_touch(topk, (size_t) n_maj_block * (size_t) effective_k,
+                             std::numeric_limits<double>::infinity());
+      worst_pos.assign(n_maj_block, 0);
+      sby_resize_first_touch(worst_val, (size_t) n_maj_block,
+                             std::numeric_limits<double>::infinity());
+    }
+
+    for(int min_start = 0; min_start < n_min; min_start += minority_block_size){
+      int n_block = std::min(minority_block_size, n_min - min_start);
+      sby_copy_column_block(minority, n_min, p, min_start, n_block, minority_block);
+      sby_resize_first_touch(dist_block, (size_t) n_maj_block * (size_t) n_block, 0.0f);
+      sby_pairwise_sqdist_sgemm_f(majority_block.data(), n_maj_block,
+                                  minority_block.data(), n_block, p,
+                                  dist_block.data(), &status);
+      if(status != 0){
+        Rcpp::stop("Falha no calculo blocado de distancias NearMiss por sgemm (status=%d)", status);
+      }
+
+      if(effective_k == n_min){
+        for(int c = 0; c < n_block; ++c){
+          const float* col = dist_block.data() + (size_t) c * (size_t) n_maj_block;
 #ifdef _OPENMP
 #pragma omp simd
 #endif
-        for(int m = 0; m < n_maj; ++m){
-          score_acc[m] += col[m];
-        }
-      }
-    } else {
-      for(int c = 0; c < n_block; ++c){
-        const float* col = dist_block.data() + (size_t) c * (size_t) n_maj;
-        for(int m = 0; m < n_maj; ++m){
-          float candidate = col[m];
-          if(candidate >= worst_val[m]) continue;
-          double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
-          row_topk[worst_pos[m]] = candidate;
-
-          int new_worst_pos = 0;
-          double new_worst_val = row_topk[0];
-          for(int t = 1; t < effective_k; ++t){
-            if(row_topk[t] > new_worst_val){
-              new_worst_val = row_topk[t];
-              new_worst_pos = t;
-            }
+          for(int m = 0; m < n_maj_block; ++m){
+            score_acc[m] += col[m];
           }
-          worst_pos[m] = new_worst_pos;
-          worst_val[m] = new_worst_val;
+        }
+      } else {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for(int m = 0; m < n_maj_block; ++m){
+          double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
+          int local_worst_pos = worst_pos[m];
+          double local_worst_val = worst_val[m];
+          for(int c = 0; c < n_block; ++c){
+            const float candidate = dist_block[(size_t) c * (size_t) n_maj_block + (size_t) m];
+            if(candidate >= local_worst_val) continue;
+            row_topk[local_worst_pos] = candidate;
+
+            int new_worst_pos = 0;
+            double new_worst_val = row_topk[0];
+            for(int t = 1; t < effective_k; ++t){
+              if(row_topk[t] > new_worst_val){
+                new_worst_val = row_topk[t];
+                new_worst_pos = t;
+              }
+            }
+            local_worst_pos = new_worst_pos;
+            local_worst_val = new_worst_val;
+          }
+          worst_pos[m] = local_worst_pos;
+          worst_val[m] = local_worst_val;
         }
       }
     }
-  }
 
-  if(effective_k < n_min){
-    for(int m = 0; m < n_maj; ++m){
-      const double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
-      double acc = 0.0;
+    if(effective_k < n_min){
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+      for(int m = 0; m < n_maj_block; ++m){
+        const double* row_topk = topk.data() + (size_t) m * (size_t) effective_k;
+        double acc = 0.0;
 #ifdef _OPENMP
 #pragma omp simd reduction(+:acc)
 #endif
-      for(int t = 0; t < effective_k; ++t){
-        acc += row_topk[t];
+        for(int t = 0; t < effective_k; ++t){
+          acc += row_topk[t];
+        }
+        score_acc[m] = acc;
       }
-      score_acc[m] = acc;
     }
-  }
 
-  for(int m = 0; m < n_maj; ++m){
-    scores[m] = std::make_pair(score_acc[m] / (double) effective_k, majority_index[m]);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for(int m = 0; m < n_maj_block; ++m){
+      scores[maj_start + m] = std::make_pair(
+        score_acc[m] / (double) effective_k,
+        majority_index[maj_start + m]
+      );
+    }
   }
 
   auto score_less = [](const std::pair<double,int>& a, const std::pair<double,int>& b){
     if(a.first != b.first) return a.first < b.first;
     return a.second < b.second;
   };
-  if(retained_majority < n_maj){
-    std::partial_sort(scores.begin(), scores.begin() + retained_majority, scores.end(), score_less);
+  if(retained_majority > 0 && retained_majority < n_maj){
+    auto middle = scores.begin() + retained_majority;
+    std::nth_element(scores.begin(), middle, scores.end(), score_less);
+    std::sort(scores.begin(), middle, score_less);
   } else {
     std::sort(scores.begin(), scores.end(), score_less);
   }
@@ -747,9 +811,11 @@ extern "C" SEXP sby_adanear_hpc_result_cpp(
   int n_syn = sby_run_adasyn_stage(x_scaled, n, p, y_codes, minority_code,
                                    k_over, r_over, syn_scaled, syn_codes);
 
-  // NearMiss sobre os originais apenas (sem sinteticas)
+  // NearMiss usa a minoria apos oversampling como referencia de distancia e
+  // como base para a contagem de maioria retida, sem descartar raras.
   std::vector<int> retained_maj_0based = sby_run_nearmiss_stage(
-    x_scaled, n, p, y_codes, minority_code, k_under, r_under
+    x_scaled, n, p, y_codes, minority_code, k_under, r_under,
+    &syn_scaled, n_syn
   );
   int n_ret_maj = (int) retained_maj_0based.size();
 

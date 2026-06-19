@@ -40,18 +40,24 @@ sby_adanear_hpc <- function(
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L),
   sby_over_ratio          = 0.2,
-  sby_under_ratio         = 0.5
+  sby_under_ratio         = 1
 ){
   sby_adanear_check_user_interrupt()
 
   # Ordem das colunas do input para recompor o output na mesma sequencia
   sby_original_column_order <- colnames(.data)
 
-  # Captura e restauro das variaveis de ambiente MKL/OMP
-  sby_previous_env <- sby_hpc_capture_env()
-  on.exit(sby_hpc_restore_env(sby_previous_env), add = TRUE)
-
+  # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
+  # respeita a configuracao externa do runtime HPC.
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
+
+  if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
+      is.na(sby_under_ratio) || sby_under_ratio <= 0 || sby_under_ratio > 1) {
+    sby_adanear_abort(
+      "sby_under_ratio deve estar no intervalo (0, 1].",
+      call = sys.call()
+    )
+  }
 
   # --- Validacoes antes de qualquer operacao matricial ---
   if (!is.numeric(sby_over_ratio) || length(sby_over_ratio) != 1L ||
@@ -87,13 +93,7 @@ sby_adanear_hpc <- function(
   sby_target_factor  <- factor(sby_target_vector, levels = sby_original_levels)
   sby_class_counts   <- sby_binary_class_counts_fast(sby_target_factor)
 
-  # Configura env ANTES do primeiro kernel MKL
-  sby_hpc_apply_env(
-    sby_total_threads  = sby_total_threads,
-    sby_majority_count = sby_class_counts$sby_majority_count,
-    sby_minority_count = sby_class_counts$sby_minority_count,
-    sby_column_count   = ncol(sby_x_matrix)
-  )
+  # O runtime MKL/OpenMP deve ser configurado externamente pelo usuario HPC.
 
   sby_type_info <- sby_infer_numeric_column_types(sby_original_predictor_data)
 

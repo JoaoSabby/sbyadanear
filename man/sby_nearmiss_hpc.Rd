@@ -3,13 +3,13 @@
 \title{Atalho HPC do undersampling NearMiss-1}
 \usage{
 sby_nearmiss_hpc(.data, formula, sby_k_neighbor_nearmiss = 7,
-  sby_under_ratio = 0.5, sby_config_max_threads = -1)
+  sby_under_ratio = 1, sby_config_max_threads = -1)
 }
 \arguments{
 \item{.data}{Data frame, tibble ou matriz com a coluna de desfecho e os preditores numericos.}
 \item{formula}{Formula no formato alvo ~ preditores.}
 \item{sby_k_neighbor_nearmiss}{Numero inteiro positivo de vizinhos da etapa NearMiss-1. O padrao e 7.}
-\item{sby_under_ratio}{Razao minima desejada entre minoria e maioria apos o NearMiss-1. O padrao e 0.5.}
+\item{sby_under_ratio}{Razao minima desejada entre minoria e maioria apos o NearMiss-1. O padrao e 1.}
 \item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. O padrao -1 detecta os nucleos fisicos disponiveis.}
 }
 \description{

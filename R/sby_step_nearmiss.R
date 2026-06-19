@@ -124,7 +124,7 @@ sby_step_nearmiss <- function(
   role = NA,
   trained = FALSE,
   columns = NULL,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,

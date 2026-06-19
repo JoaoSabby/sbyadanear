@@ -18,7 +18,7 @@ test_that("HPC shortcuts honor configurable sampling ratios", {
   near_loose <- sby_nearmiss_hpc(dat, y ~ ., sby_k_neighbor_nearmiss = 3,
                                  sby_under_ratio = 0.5)
   expect_equal(nrow(near_equal), 8L)
-  expect_equal(nrow(near_loose), 12L)
+  expect_equal(nrow(near_loose), 6L)
 
   adanear_equal <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
                                    sby_k_neighbor_nearmiss = 3,
@@ -29,7 +29,9 @@ test_that("HPC shortcuts honor configurable sampling ratios", {
                                    sby_over_ratio = 1,
                                    sby_under_ratio = 0.5)
   expect_equal(nrow(adanear_equal), 12L)
-  expect_equal(nrow(adanear_loose), 18L)
+  expect_equal(nrow(adanear_loose), 16L)
+  expect_equal(sum(adanear_equal$y == "min"), 6L)
+  expect_equal(sum(adanear_loose$y == "min"), 8L)
 })
 
 test_that("HPC shortcuts validate sampling ratios before native execution", {
