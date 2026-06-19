@@ -38,9 +38,8 @@ sby_nearmiss_hpc <- function(
 
   sby_original_column_order <- colnames(.data)
 
-  sby_previous_env <- sby_hpc_capture_env()
-  on.exit(sby_hpc_restore_env(sby_previous_env), add = TRUE)
-
+  # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
+  # respeita a configuracao externa do runtime HPC.
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
   sby_formula_data            <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
@@ -67,13 +66,7 @@ sby_nearmiss_hpc <- function(
   sby_target_factor <- factor(sby_target_vector, levels = sby_original_levels)
   sby_class_counts  <- sby_binary_class_counts_fast(sby_target_factor)
 
-  # Configura env ANTES do primeiro kernel MKL
-  sby_hpc_apply_env(
-    sby_total_threads  = sby_total_threads,
-    sby_majority_count = sby_class_counts$sby_majority_count,
-    sby_minority_count = sby_class_counts$sby_minority_count,
-    sby_column_count   = ncol(sby_x_matrix)
-  )
+  # O runtime MKL/OpenMP deve ser configurado externamente pelo usuario HPC.
 
   # Indices 1-based das linhas da minoria no conjunto original
   sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
