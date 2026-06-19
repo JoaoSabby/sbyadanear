@@ -1,17 +1,55 @@
-# Padronizacao z-score populacional via engine nativa Fortran
-#
-# Calcula e aplica z-score populacional sobre preditores numericos
-# usando o motor nativo em Fortran com paralelismo OpenMP. Opera
-# sobre a matriz transposta (P x N) para maximizar localidade de
-# cache e vetorizacao AVX-512.
-#
-# @param sby_formula Formula no formato alvo ~ preditores.
-# @param sby_data Data frame ou tibble com os dados.
-# @param sby_engine character. Engine a usar: "native" (Fortran) ou "r" (base).
-#
-# @return Lista com matriz padronizada, vetores de media e desvio,
-#   e nomes das features.
-# @keywords internal
+#' @title Preparar preditores com z-score populacional
+#' @usage sby_mutate_zscore(sby_formula, sby_data, sby_engine = c("native", "r"))
+#' @description
+#' Extrai os preditores numéricos definidos por uma fórmula, calcula parâmetros
+#' de padronização populacional e devolve a matriz transformada junto com os
+#' insumos necessários para rotinas de balanceamento.
+#'
+#' @details
+#' A função é interna e preserva uma cópia da matriz original para que registros
+#' sintéticos possam ser revertidos à escala observada quando necessário. Na
+#' engine `"native"`, a rotina delega cálculo e aplicação do z-score ao núcleo
+#' Fortran registrado via `.Call`; na engine `"r"`, usa os símbolos nativos já
+#' existentes para manter a mesma convenção de escala.
+#'
+#' A padronização usa denominador populacional, isto é:
+#'
+#' $$z_{ij} = \frac{x_{ij} - \mu_j}{\sigma_j}, \quad
+#' \sigma_j = \sqrt{\frac{1}{n}\sum_{i = 1}^{n}(x_{ij} - \mu_j)^2}$$
+#'
+#' **Fluxo interno:**
+#'
+#' ```mermaid
+#' flowchart LR
+#'   A[Fórmula e dados] --> B[Extração de alvo e preditores]
+#'   B --> C[Matriz double densa]
+#'   C --> D{Engine native?}
+#'   D -->|Sim| E[Fortran registrado]
+#'   D -->|Não| F[Símbolos nativos auxiliares]
+#'   E --> G[Lista técnica de z-score]
+#'   F --> G
+#' ```
+#'
+#' > **Nota:** colunas com desvio zero devem ser validadas pelas camadas
+#' > chamadoras, pois a função documenta e executa apenas a etapa de preparo.
+#'
+#' @param sby_formula Fórmula no formato `alvo ~ preditores`.
+#' @param sby_data Data frame ou tibble com a coluna alvo e os preditores.
+#' @param sby_engine Engine de padronização, aceita `"native"` ou `"r"`.
+#' @return Lista com `x_scaled`, `x_original`, médias, desvios, nomes de
+#'   features, dimensões e vetor alvo extraído.
+#' @section Pré-condições:
+#' Os preditores extraídos devem ser conversíveis para matriz `double` densa.
+#' @section Pós-condições:
+#' A matriz escalonada mantém a mesma ordem de linhas e colunas da matriz
+#' original usada pela fórmula.
+#' @seealso sby_extract_formula_data, sby_call_native, sby_configure_blas_threads
+#' @references He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN.
+#' @examples
+#' \dontrun{
+#' sbyadanear:::sby_mutate_zscore(target ~ ., dados, sby_engine = "native")
+#' }
+#' @keywords internal
 sby_mutate_zscore <- function(
     sby_formula,
     sby_data,

@@ -1,16 +1,37 @@
-# Gera vetor numerico com distribuicoes aleatorias controladas
-#
-# Funcao auxiliar para produzir vetores com distribuicoes
-# estatisticas variadas, simulando ruido de fundo em features
-# sinteticas. Inclui retornos antecipados para execucao otimizada.
-#
-# @param num_rows integer. Numero de linhas a gerar.
-# @param data_type character. Tipo de dado a simular:
-#   'monetary', 'ratio', 'integer' ou 'binary'.
-# @param negative logical. Reservado para uso futuro.
-#
-# @return Vetor numerico, inteiro ou logico correspondente ao tipo solicitado.
-# @keywords internal
+#' @title Gerar vetor sintético controlado por tipo estatístico
+#' @usage sby_syn_build_vector(num_rows = 4000000L, data_type, negative = FALSE)
+#' @description
+#' Produz um vetor sintético para compor bases densas de teste em classificação
+#' binária, escolhendo distribuições aleatórias compatíveis com o tipo solicitado.
+#'
+#' @details
+#' Esta função interna apoia geradores de benchmark e validação. Ela não altera
+#' `sby_metadata` e não controla semente localmente; a reprodutibilidade deve ser
+#' definida pela camada chamadora via estado de RNG do R.
+#'
+#' | `data_type` | Saída esperada | Finalidade didática |
+#' | --- | --- | --- |
+#' | `monetary` | `double` esparso | valores monetários simulados |
+#' | `ratio` | `double` em `[0, 1]` | proporções e indicadores contínuos |
+#' | `integer` | `integer` esparso | contagens discretas |
+#' | `binary` | `logical` | indicadores booleanos |
+#'
+#' @param num_rows Número de observações a gerar.
+#' @param data_type Tipo estatístico do vetor: `"monetary"`, `"ratio"`,
+#'   `"integer"` ou `"binary"`.
+#' @param negative Reservado para compatibilidade futura; atualmente não altera
+#'   a geração.
+#' @return Vetor numérico, inteiro ou lógico compatível com `data_type`.
+#' @section Pré-condições:
+#' `num_rows` deve representar quantidade positiva de observações.
+#' @section Pós-condições:
+#' O comprimento do vetor retornado é igual a `num_rows`.
+#' @seealso sby_syn_build_table_binary_class
+#' @examples
+#' \dontrun{
+#' sbyadanear:::sby_syn_build_vector(1000L, "ratio")
+#' }
+#' @keywords internal
 sby_syn_build_vector <- function(
     num_rows = 4000000L,
     data_type = c("monetary", "ratio", "integer", "binary"),
