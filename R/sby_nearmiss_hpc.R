@@ -30,7 +30,7 @@ sby_nearmiss_hpc <- function(
   .data,
   formula,
   sby_k_neighbor_nearmiss = 7,
-  sby_under_ratio         = 0.5,
+  sby_under_ratio         = 1,
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L)
 ){
@@ -41,6 +41,14 @@ sby_nearmiss_hpc <- function(
   # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
   # respeita a configuracao externa do runtime HPC.
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
+
+  if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
+      is.na(sby_under_ratio) || sby_under_ratio <= 0 || sby_under_ratio > 1) {
+    sby_adanear_abort(
+      "sby_under_ratio deve estar no intervalo (0, 1].",
+      call = sys.call()
+    )
+  }
 
   sby_formula_data            <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
   sby_original_predictor_data <- sby_formula_data$sby_predictor_data

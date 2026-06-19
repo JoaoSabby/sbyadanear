@@ -40,7 +40,7 @@ sby_adanear_hpc <- function(
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L),
   sby_over_ratio          = 0.2,
-  sby_under_ratio         = 0.5
+  sby_under_ratio         = 1
 ){
   sby_adanear_check_user_interrupt()
 
@@ -50,6 +50,14 @@ sby_adanear_hpc <- function(
   # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
   # respeita a configuracao externa do runtime HPC.
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
+
+  if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
+      is.na(sby_under_ratio) || sby_under_ratio <= 0 || sby_under_ratio > 1) {
+    sby_adanear_abort(
+      "sby_under_ratio deve estar no intervalo (0, 1].",
+      call = sys.call()
+    )
+  }
 
   # --- Validacoes antes de qualquer operacao matricial ---
   if (!is.numeric(sby_over_ratio) || length(sby_over_ratio) != 1L ||

@@ -2,7 +2,7 @@
 \alias{sby_nearmiss_index}
 \title{Selecionar índices NearMiss-1}
 \usage{
-sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 0.5,
+sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
   sby_knn_under_k = 5L, sby_seed = sample.int(10L^5L, 1L),
   sby_scaling_info = NULL, sby_input_already_scaled = FALSE,
   sby_fixed_minority_label = NULL, sby_fixed_majority_label = NULL,

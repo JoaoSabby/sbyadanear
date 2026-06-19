@@ -16,7 +16,7 @@ sby_step_adanear(
   trained = FALSE,
   columns = NULL,
   sby_over_ratio = 0.2,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
@@ -48,7 +48,7 @@ sby_step_adanear(
 \item{trained}{Indicador lógico escalar que informa se a etapa já passou por \code{prep()}. O padrão é \code{FALSE}, estado adequado para a criação inicial da etapa. Esse valor é controlado internamente por \code{recipes}; defini-lo manualmente como \code{TRUE} sem os metadados correspondentes pode tornar a etapa inconsistente.}
 \item{columns}{Vetor de caracteres ou \code{NULL} com o nome da coluna de desfecho resolvida durante \code{prep()}. O padrão é \code{NULL}, indicando que a seleção ainda não foi treinada. Esse metadado define qual variável será removida dos preditores e usada como alvo no momento do balanceamento.}
 \item{sby_over_ratio}{Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é \code{0.2}; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética antes da subamostragem. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.}
-\item{sby_under_ratio}{Valor numérico escalar no intervalo \code{(0, 1]} que representa a razão mínima desejada entre minoria e maioria após o NearMiss-1. O padrão \code{0.5} permite reter até duas observações majoritárias para cada minoritária; \code{1} reduz a maioria até igualar a minoria.}
+\item{sby_under_ratio}{Valor numérico escalar no intervalo \code{(0, 1]} que representa a razão mínima desejada entre minoria e maioria após o NearMiss-1. O padrão \code{1} reduz a maioria até igualar a minoria; valores menores que \code{1} retêm mais observações majoritárias por minoritária.}
 \item{sby_knn_over_k}{Número inteiro positivo de vizinhos usados pela etapa ADASYN para estimar dificuldade local e gerar amostras sintéticas. O padrão é \code{5L}. Essa escolha influencia onde a expansão minoritária será concentrada e o grau de suavização da avaliação local.}
 \item{sby_knn_under_k}{Número inteiro positivo de vizinhos minoritários considerados pelo critério NearMiss-1 para ranquear observações majoritárias. O padrão é \code{5L}. Valores maiores suavizam o critério de proximidade por considerar uma vizinhança mais ampla; valores menores tornam a seleção mais sensível a fronteiras locais e possíveis ruídos.}
 \item{sby_seed}{Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é \code{sample.int(10L^5L, 1L)}, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para garantir reprodutibilidade dos empates, amostragens internas e índices retidos durante o balanceamento.}

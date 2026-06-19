@@ -458,8 +458,10 @@ static int sby_run_adasyn_stage(
     }
   }
 
-  // Numero de sinteticas: ceil(n_min * over_ratio), minimo 1
-  int synthetic_count = (int) std::ceil((double) n_min * over_ratio);
+  // Numero de sinteticas: floor(n_min * over_ratio), minimo 1.
+  // Mantem a semantica historica de expandir a minoria sem reduzir
+  // observacoes raras originais.
+  int synthetic_count = (int) std::floor((double) n_min * over_ratio);
   if(synthetic_count < 1) synthetic_count = 1;
 
   int effective_k = k_neighbor;
@@ -511,7 +513,8 @@ static int sby_run_adasyn_stage(
 static std::vector<int> sby_run_nearmiss_stage(
     const sby_float_buffer& x_scaled_orig, int n, int p,
     const std::vector<int>& y_codes_orig, int minority_code,
-    int k_neighbor, double under_ratio){
+    int k_neighbor, double under_ratio,
+    const sby_float_buffer* extra_minority = nullptr, int n_extra_minority = 0){
 
   std::vector<int> minority_index;
   std::vector<int> majority_index;
@@ -524,12 +527,19 @@ static std::vector<int> sby_run_nearmiss_stage(
       majority_index.push_back(i);
     }
   }
-  int n_min = (int) minority_index.size();
+  int n_min_orig = (int) minority_index.size();
   int n_maj = (int) majority_index.size();
+  if(extra_minority == nullptr || n_extra_minority < 1){
+    n_extra_minority = 0;
+  }
+  int n_min = n_min_orig + n_extra_minority;
 
-  int retained_majority = (int) std::floor((double) n_min / under_ratio);
+  // sby_under_ratio opera sobre a quantidade minoritaria apos oversampling
+  // quando sinteticas sao fornecidas. Valores menores que 1 podem reter uma
+  // maioria menor que a minoria; as linhas raras nunca sao descartadas aqui.
+  int retained_majority = (int) std::floor((double) n_min * under_ratio);
   if(retained_majority > n_maj) retained_majority = n_maj;
-  if(retained_majority < 0)    retained_majority = 0;
+  if(retained_majority < 1 && n_maj > 0) retained_majority = 1;
 
   sby_float_buffer minority;
   sby_resize_first_touch(minority, (size_t) n_min * (size_t) p, 0.0f);
@@ -539,7 +549,13 @@ static std::vector<int> sby_run_nearmiss_stage(
   for(int j = 0; j < p; ++j){
     const float* col = x_scaled_orig.data() + (size_t) j * (size_t) n;
     float* ndst = minority.data() + (size_t) j * (size_t) n_min;
-    for(int r = 0; r < n_min; ++r){ ndst[r] = col[minority_index[r]]; }
+    for(int r = 0; r < n_min_orig; ++r){ ndst[r] = col[minority_index[r]]; }
+    if(n_extra_minority > 0){
+      const float* extra_col = extra_minority->data() + (size_t) j * (size_t) n_extra_minority;
+      for(int r = 0; r < n_extra_minority; ++r){
+        ndst[n_min_orig + r] = extra_col[r];
+      }
+    }
   }
 
   int effective_k = k_neighbor;
@@ -795,9 +811,11 @@ extern "C" SEXP sby_adanear_hpc_result_cpp(
   int n_syn = sby_run_adasyn_stage(x_scaled, n, p, y_codes, minority_code,
                                    k_over, r_over, syn_scaled, syn_codes);
 
-  // NearMiss sobre os originais apenas (sem sinteticas)
+  // NearMiss usa a minoria apos oversampling como referencia de distancia e
+  // como base para a contagem de maioria retida, sem descartar raras.
   std::vector<int> retained_maj_0based = sby_run_nearmiss_stage(
-    x_scaled, n, p, y_codes, minority_code, k_under, r_under
+    x_scaled, n, p, y_codes, minority_code, k_under, r_under,
+    &syn_scaled, n_syn
   );
   int n_ret_maj = (int) retained_maj_0based.size();
 

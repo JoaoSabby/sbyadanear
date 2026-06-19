@@ -8,7 +8,7 @@ sby_adanear_matrix <- function(
   sby_x_matrix,
   sby_y_vector,
   sby_over_ratio = 0.2,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),

@@ -171,7 +171,7 @@ sby_adanear(
   sby_formula,
   sby_data,
   sby_over_ratio = 0.2,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
@@ -192,7 +192,7 @@ sby_adasyn(
 sby_nearmiss(
   sby_formula,
   sby_data,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE
@@ -218,7 +218,7 @@ sby_step_adasyn(
 sby_step_nearmiss(
   recipe,
   ...,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE
@@ -229,7 +229,7 @@ sby_step_adanear(
   recipe,
   ...,
   sby_over_ratio = 0.2,
-  sby_under_ratio = 0.5,
+  sby_under_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
