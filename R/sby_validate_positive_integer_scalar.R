@@ -6,9 +6,11 @@
 #' por chamadas posteriores a `as.integer()`.
 #'
 #' @param sby_value Valor a validar
+#'
 #' @param sby_name Nome do argumento usado na mensagem de erro
 #'
 #' @return Inteiro positivo escalar
+#'
 #' @noRd
 sby_validate_positive_integer_scalar <- function(sby_value, sby_name){
   # Verifica contrato numerico antes de converter o valor

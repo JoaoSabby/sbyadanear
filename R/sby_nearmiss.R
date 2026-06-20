@@ -34,24 +34,43 @@
 #' )
 #'
 #' @param sby_formula Fórmula no formato `alvo ~ preditores` usada para identificar uma única coluna de desfecho binário e as colunas preditoras numéricas em `sby_data`. O lado direito deve referenciar apenas colunas ja existentes; transformacoes, interacoes e offsets precisam ser materializados antes da chamada. Não possui valor padrão; use `alvo ~ .` para selecionar todos os demais campos como preditores.
+#'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esses dados definem o espaço no qual as observações majoritárias serão ranqueadas por proximidade à classe minoritária.
+#'
 #' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que representa a razão mínima desejada entre minoria e maioria após a subamostragem. O padrão `1` reduz a maioria até igualar a minoria; valores menores que `1` retêm mais observações majoritárias por minoritária.
+#'
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos minoritários usados para calcular a distância média do critério NearMiss-1. O padrão é `5L`. Valores maiores reduzem variância do ranqueamento; valores menores focalizam a fronteira local e podem selecionar exemplos muito próximos de ruído minoritário.
+#'
 #' @param sby_seed Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é `sample.int(10L^5L, 1L)`, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para tornar reprodutíveis desempates, amostragens complementares e a ordem final das observações preservadas.
+#'
 #' @param sby_audit Indicador lógico escalar que controla o retorno de metadados de auditoria. O padrão é `FALSE`, retornando apenas o tibble final. Quando `TRUE`, a função retorna lista com índices retidos, distribuições de classe, parâmetros resolvidos e informações de escala.
+#'
 #' @param sby_precomputed_scaling Lista opcional com parâmetros de centralização e escala previamente calculados. O padrão é `NULL`, fazendo com que a função estime a padronização a partir de `sby_data`. Fornecer essa lista permite reutilizar uma escala externa ou herdada de etapa anterior, evitando inconsistência geométrica em pipelines encadeados.
+#'
 #' @param sby_input_already_scaled Indicador lógico escalar que informa se `sby_data` já está em escala Z-score compatível com `sby_precomputed_scaling`. O padrão é `FALSE`. Quando `TRUE`, a função evita reaplicar padronização e interpreta as coordenadas de entrada como prontas para busca KNN.
+#'
 #' @param sby_restore_types Indicador lógico escalar que define se tipos numéricos originais devem ser restaurados no retorno final. O padrão é `TRUE`. Essa escolha preserva compatibilidade com o esquema de dados de entrada; desativá-la reduz pós-processamento e mantém valores no formato numérico resultante das operações matriciais.
+#'
 #' @param sby_type_info Lista opcional com metadados dos tipos numéricos originais dos preditores. O padrão é `NULL`, fazendo a função inferir os tipos quando necessário. Fornecer esse objeto é útil em pipelines encadeados, pois garante que a restauração de tipos use exatamente o mesmo diagnóstico da etapa anterior.
+#'
 #' @param sby_fixed_minority_label Rótulo interno opcional usado por `sby_adanear()` para preservar a classe minoritária original após o ADASYN. O padrão `NULL` mantém o comportamento autônomo de inferir os papéis pelas contagens atuais.
+#'
 #' @param sby_fixed_majority_label Rótulo interno opcional usado por `sby_adanear()` para preservar a classe majoritária original após o ADASYN. O padrão `NULL` mantém o comportamento autônomo de inferir os papéis pelas contagens atuais.
+#'
 #' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
+#'
 #' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"` ou `"bigKNN"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, engine nativa exata, compatibilidade `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
+#'
 #' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
+#'
 #' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
+#'
 #' @param sby_knn_workers Número inteiro positivo de workers usados nas consultas KNN. O padrão é `1L`. Mais workers podem reduzir latência em bases grandes, mas aumentam consumo de CPU e podem exigir engines compatíveis com execução paralela.
+#'
 #' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
+#'
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
+#'
 #' @param sby_knn_hnsw_ef Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a largura da lista dinâmica de candidatos (`ef`) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão `200L` prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.
 #'
 #' @details
@@ -155,6 +174,7 @@
 #' 824-836.
 #'
 #' @return Tibble balanceado quando `sby_audit = FALSE`; lista de auditoria com dados balanceados, índices, diagnósticos e escala quando `sby_audit = TRUE`.
+#'
 #' @export
 sby_nearmiss <- function(
   sby_formula,

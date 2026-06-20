@@ -8,6 +8,7 @@
 #' tudo continue funcionando sem o motor HPC compilado.
 #'
 #' @return Valor logico indicando se o motor HPC consolidado pode ser chamado.
+#'
 #' @noRd
 sby_adanear_hpc_available <- function(){
   return(sby_native_symbol_available("sby_adanear_hpc_result_cpp"))

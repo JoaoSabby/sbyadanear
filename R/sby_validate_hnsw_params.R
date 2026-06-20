@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_knn_hnsw_m Conectividade solicitada para o indice HNSW
+#'
 #' @param sby_knn_hnsw_ef Tamanho da lista dinamica HNSW solicitada
 #'
 #' @return Lista com parametros HNSW convertidos para inteiros
+#'
 #' @noRd
 sby_validate_hnsw_params <- function(sby_knn_hnsw_m, sby_knn_hnsw_ef){
   

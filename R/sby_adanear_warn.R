@@ -7,6 +7,7 @@
 #' @param sby_message Mensagem tecnica a ser exibida no aviso
 #'
 #' @return Retorna invisivelmente NULL apos emitir o aviso
+#'
 #' @noRd
 sby_adanear_warn <- function(sby_message){
   # Emite aviso estruturado quando o pacote cli esta disponivel

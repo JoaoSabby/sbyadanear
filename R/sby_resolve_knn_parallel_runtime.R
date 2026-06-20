@@ -3,6 +3,7 @@
 #' @param sby_knn_parallel_backend Backend de paralelismo KNN validado
 #'
 #' @return String descritiva do runtime efetivo
+#'
 #' @noRd
 sby_resolve_knn_parallel_runtime <- function(sby_knn_parallel_backend){
   sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(

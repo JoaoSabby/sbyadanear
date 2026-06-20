@@ -3,6 +3,7 @@
 #' @param sby_x Objeto de etapa recipes
 #'
 #' @return String com subclasse primaria
+#'
 #' @noRd
 sby_step_sampling_subclass <- function(sby_x){
   return(sub(
@@ -15,11 +16,15 @@ sby_step_sampling_subclass <- function(sby_x){
 #' Preparar etapa recipes de sampling
 #'
 #' @param x Objeto de etapa nao treinado
+#'
 #' @param training Dados de treinamento
+#'
 #' @param info Metadados recipes
+#'
 #' @param sby_step_name Nome publico da etapa para mensagens
 #'
 #' @return Objeto treinado
+#'
 #' @noRd
 sby_prep_step_sampling <- function(x, training, info, sby_step_name){
   
@@ -78,10 +83,13 @@ sby_prep_step_sampling <- function(x, training, info, sby_step_name){
 #' Aplicar etapa recipes de sampling
 #'
 #' @param object Objeto de etapa treinado
+#'
 #' @param new_data Dados novos
+#'
 #' @param sby_step_name Nome publico da etapa para mensagens
 #'
 #' @return Tibble balanceado ou lista de auditoria
+#'
 #' @noRd
 sby_bake_step_sampling <- function(object, new_data, sby_step_name){
   
@@ -225,6 +233,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
 #' @param x Objeto de etapa recipes
 #'
 #' @return Data frame de metadados
+#'
 #' @noRd
 sby_tidy_step_sampling <- function(x){
   
@@ -258,10 +267,13 @@ sby_tidy_step_sampling <- function(x){
 #' Imprimir etapa recipes de sampling
 #'
 #' @param x Objeto de etapa recipes
+#'
 #' @param width Largura de impressao
+#'
 #' @param sby_title Titulo da etapa
 #'
 #' @return Objeto invisivel
+#'
 #' @noRd
 sby_print_step_sampling <- function(x, width, sby_title){
   

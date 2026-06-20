@@ -5,18 +5,29 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_data Matriz de referencia para busca KNN
+#'
 #' @param sby_query Matriz de consulta para busca KNN
+#'
 #' @param sby_k Numero de vizinhos solicitados
+#'
 #' @param sby_knn_algorithm Algoritmo KNN configurado
+#'
 #' @param sby_knn_engine Engine KNN configurado
+#'
 #' @param sby_knn_workers Numero de workers KNN configurado
+#'
 #' @param sby_knn_parallel_backend Backend usado quando ha paralelismo exato por blocos ou kernel nativo
+#'
 #' @param sby_knn_hnsw_m Conectividade HNSW configurada
+#'
 #' @param sby_knn_hnsw_ef Lista dinamica HNSW configurada
+#'
 #' @param sby_knn_query_chunk_size Tamanho de bloco para consultas KNN
+#'
 #' @param sby_query_is_data Indicador de que consulta e referencia sao a mesma matriz
 #'
 #' @return Lista com matrizes `nn.index` e `nn.dist`
+#'
 #' @noRd
 sby_get_knnx <- function(
   sby_data,
@@ -422,6 +433,7 @@ sby_get_knnx <- function(
 #' Executar consulta KNN pelo kernel nativo explicito
 #'
 #' @return Lista com matrizes `nn.index` e/ou `nn.dist`
+#'
 #' @noRd
 sby_get_knnx_native <- function(
   sby_data,
@@ -528,12 +540,17 @@ sby_get_knnx_native <- function(
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_query Matriz de consulta para busca KNN
+#'
 #' @param sby_k Numero de vizinhos solicitados
+#'
 #' @param sby_knn_query_chunk_size Tamanho de bloco para consultas KNN
+#'
 #' @param sby_knn_workers Numero de workers usados para processar blocos de consulta
+#'
 #' @param sby_query_fun Funcao que executa consulta KNN em um bloco
 #'
 #' @return Lista com matrizes `nn.index` e `nn.dist`
+#'
 #' @noRd
 sby_query_knn_in_chunks <- function(
   sby_query,
@@ -689,9 +706,11 @@ sby_query_knn_in_chunks <- function(
 #' Descartar componentes KNN nao solicitados
 #'
 #' @param sby_knn_result Resultado KNN com `nn.index` e/ou `nn.dist`
+#'
 #' @param sby_knn_return Componentes a manter
 #'
 #' @return Lista KNN reduzida
+#'
 #' @noRd
 sby_trim_knn_result <- function(sby_knn_result, sby_knn_return){
   if(identical(sby_knn_return, "index")){

@@ -1,12 +1,17 @@
 #' Verificar orcamento de memoria para matrizes densas
 #'
 #' @param sby_row_count Numero de linhas esperado
+#'
 #' @param sby_column_count Numero de colunas esperado
+#'
 #' @param sby_extra_matrix_count Multiplicador de matrizes densas simultaneas
+#'
 #' @param sby_max_dense_gb Limite maximo em GiB
+#'
 #' @param sby_context Contexto usado na mensagem
 #'
 #' @return Invisivelmente TRUE quando dentro do orcamento
+#'
 #' @noRd
 sby_check_dense_memory_budget <- function(
   sby_row_count,

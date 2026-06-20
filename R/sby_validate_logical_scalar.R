@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_value Valor a ser validado como logico escalar
+#'
 #' @param sby_name Nome tecnico do parametro usado em mensagens de erro
 #'
 #' @return Valor logico validado sem alteracoes
+#'
 #' @noRd
 sby_validate_logical_scalar <- function(sby_value, sby_name){
   

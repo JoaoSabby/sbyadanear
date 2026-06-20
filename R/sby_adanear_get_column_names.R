@@ -7,6 +7,7 @@
 #' @param sby_predictor_data Dados preditores em data frame ou matriz
 #'
 #' @return Vetor de nomes de colunas validado ou gerado
+#'
 #' @noRd
 sby_adanear_get_column_names <- function(sby_predictor_data){
   

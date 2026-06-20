@@ -8,6 +8,7 @@
 #' (caso padrao), Rfast nao e acionado.
 #'
 #' @return Vetor de nomes de pacotes requeridos pelas etapas recipes
+#'
 #' @noRd
 sby_required_sampling_pkgs <- function(){
   # Retorna dependencias necessarias para construir e executar as etapas padrao

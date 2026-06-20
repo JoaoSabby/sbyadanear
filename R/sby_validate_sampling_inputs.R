@@ -5,10 +5,13 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_predictor_data Dados preditores em data frame ou matriz
+#'
 #' @param sby_target_vector Vetor alvo binario associado aos preditores
+#'
 #' @param sby_seed Semente numerica usada para reprodutibilidade
 #'
 #' @return Retorna invisivelmente TRUE quando as entradas sao validas
+#'
 #' @noRd
 sby_validate_sampling_inputs <- function(
   sby_predictor_data,

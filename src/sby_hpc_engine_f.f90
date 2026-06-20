@@ -9,7 +9,7 @@
 ! Decisoes de desempenho:
 !   - estatisticas iniciais via Vector Statistics Library (vslsscompute).
 !   - matriz de distancias por D^2 = ||A||^2 + ||B||^2 - 2 A B^T com cblas_sgemm.
-!   - interpolacao lambda do ADASYN com vdrnguniform no espaco padronizado.
+!   - interpolacao lambda do ADASYN com uniformes pre-gerados no C++/Rcpp no espaco padronizado.
 !   - reversao do z-score por laco SIMD explicito forcando vfmadd213ps.
 !
 ! Toda a nomenclatura segue snake_case. Nenhum caractere de travessao e usado.
@@ -378,10 +378,10 @@ contains
   ! sby_adasyn_interp_uniform_f
   ! Interpolacao sintetica do ADASYN no espaco padronizado. Para cada linha
   ! sintetica, combina a linha base e um vizinho minoritario com peso lambda
-  ! amostrado por vdrnguniform. Os indices base e vizinho sao 1-based.
+  ! pre-gerado no C++/Rcpp. Os indices base e vizinho sao 1-based.
   !   minority(n_min x p)         matriz minoritaria padronizada
   !   base_idx(n_syn), nbr_idx(n_syn)  indices base e vizinho por linha sintetica
-  !   lambda(n_syn)               pesos uniformes pre-gerados por vdrnguniform
+  !   lambda(n_syn)               pesos uniformes pre-gerados no C++/Rcpp
   !   syn_out(n_syn x p)          saida sintetica padronizada
   ! -------------------------------------------------------------------
   subroutine sby_adasyn_interp_uniform_f(minority, n_min, p, base_idx, nbr_idx, &

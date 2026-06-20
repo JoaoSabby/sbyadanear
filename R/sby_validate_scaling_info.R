@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_scaling_info Lista com centros e escalas precomputados
+#'
 #' @param sby_predictor_column_count Quantidade esperada de colunas preditoras
 #'
 #' @return Retorna invisivelmente TRUE quando os parametros sao validos
+#'
 #' @noRd
 sby_validate_scaling_info <- function(sby_scaling_info, sby_predictor_column_count){
   

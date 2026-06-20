@@ -7,6 +7,7 @@
 #' @param sby_knn_query_chunk_size Tamanho de bloco solicitado para consultas KNN
 #'
 #' @return Tamanho de bloco inteiro positivo validado
+#'
 #' @noRd
 sby_validate_knn_query_chunk_size <- function(sby_knn_query_chunk_size){
   

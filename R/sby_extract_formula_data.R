@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_formula Formula no formato alvo ~ preditores
+#'
 #' @param sby_data Dados tabulares contendo alvo e preditores
 #'
 #' @return Lista com preditores, alvo e nomes resolvidos
+#'
 #' @noRd
 sby_extract_formula_data <- function(sby_formula, sby_data){
 

@@ -5,18 +5,29 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_x_scaled Matriz de preditores ja padronizada
+#'
 #' @param sby_target_factor Fator binario associado aos preditores
+#'
 #' @param sby_synthetic_count Numero de amostras sinteticas a gerar
+#'
 #' @param sby_knn_over_k Numero de vizinhos usado pelo ADASYN
+#'
 #' @param sby_knn_algorithm Algoritmo KNN configurado
+#'
 #' @param sby_knn_engine Engine KNN configurado
+#'
 #' @param sby_knn_distance_metric Metrica de distancia KNN configurada
+#'
 #' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
+#'
 #' @param sby_knn_workers Numero de workers KNN configurado
+#'
 #' @param sby_knn_hnsw_m Conectividade HNSW configurada
+#'
 #' @param sby_knn_hnsw_ef Lista dinamica HNSW configurada
 #'
 #' @return Lista com matriz expandida `x` e fator expandido `y`
+#'
 #' @noRd
 sby_generate_adasyn_samples <- function(
   sby_x_scaled,

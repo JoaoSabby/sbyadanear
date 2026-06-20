@@ -10,10 +10,13 @@
 #' comparacao a implementacao linha-a-linha anterior.
 #'
 #' @param sby_neighbor_index Matriz de indices de vizinhos candidatos
+#'
 #' @param sby_self_index Vetor com indices das proprias linhas
+#'
 #' @param sby_desired_k Numero desejado de vizinhos apos a remocao
 #'
 #' @return Matriz de indices de vizinhos sem o proprio ponto
+#'
 #' @noRd
 sby_drop_self_neighbor_index <- function(sby_neighbor_index, sby_self_index, sby_desired_k){
   sby_n <- collapse::fnrow(sby_neighbor_index)

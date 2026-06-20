@@ -6,7 +6,7 @@
  * Decisoes de desempenho:
  *   - estatisticas populacionais via Vector Statistics Library (Fortran).
  *   - matriz de distancias por D^2 = ||A||^2 + ||B||^2 - 2 A B^T com cblas_sgemm.
- *   - interpolacao lambda do ADASYN com vdrnguniform no espaco padronizado.
+ *   - interpolacao lambda do ADASYN com uniformes gerados por Rcpp::runif no espaco padronizado.
  *   - despadronizacao das sinteticas por FMA AVX-512 inteiramente no C++.
  *   - NearMiss processa a minoria em blocos (GEMM particionado) sem materializar
  *     a matriz ampliada (minoria + sinteticas).

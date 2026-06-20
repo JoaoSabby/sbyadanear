@@ -13,6 +13,7 @@
 #' - Mantem restauracao opcional de tipos para interpretabilidade
 #'
 #' @keywords internal
+#'
 #' @importFrom RcppParallel RcppParallelLibs
 NULL
 

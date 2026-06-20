@@ -3,6 +3,7 @@
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`; ajuste para equilibrar overhead de chamadas e pico de memória.
 #'
 #' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos.
+#'
 #' @export
 sby_nearmiss_matrix <- function(
   sby_x_matrix,

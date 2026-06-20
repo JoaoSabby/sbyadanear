@@ -1,10 +1,13 @@
 #' Aplicar etapa de balanceamento NearMiss em novos dados
 #'
 #' @param object Objeto de etapa treinado
+#'
 #' @param new_data Dados novos fornecidos ao `bake()` da recipe
+#'
 #' @param ... Argumentos adicionais preservados para compatibilidade S3
 #'
 #' @return Tibble balanceado ou lista de auditoria quando configurado
+#'
 #' @export
 bake.step_sby_step_nearmiss <- function(object, new_data, ...){
   return(sby_bake_step_sampling(

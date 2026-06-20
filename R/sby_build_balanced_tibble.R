@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_predictor_data Dados preditores ja balanceados
+#'
 #' @param sby_target_vector Vetor alvo correspondente aos preditores
 #'
 #' @return Tibble com preditores e coluna TARGET
+#'
 #' @noRd
 sby_build_balanced_tibble <- function(sby_predictor_data, sby_target_vector){
   

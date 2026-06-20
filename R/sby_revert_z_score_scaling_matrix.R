@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_x_matrix Matriz numerica padronizada a ser revertida
+#'
 #' @param sby_scaling_info Lista com centros e escalas de padronizacao
 #'
 #' @return Matriz numerica restaurada para a escala original
+#'
 #' @noRd
 sby_revert_z_score_scaling_matrix <- function(
   sby_x_matrix, 

@@ -5,6 +5,7 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @return Retorna invisivelmente TRUE apos a verificacao de interrupcao
+#'
 #' @noRd
 sby_adanear_check_user_interrupt <- function(){
   

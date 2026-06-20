@@ -8,6 +8,7 @@
 #' @param sby_seed Valor informado como semente
 #'
 #' @return Inteiro escalar validado para uso em `set.seed()`
+#'
 #' @noRd
 sby_validate_seed <- function(sby_seed){
   # Verifica tipo, tamanho e finitude antes de qualquer conversao para inteiro

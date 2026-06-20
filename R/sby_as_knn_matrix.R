@@ -1,10 +1,13 @@
 #' Normalizar componente de resultado KNN para matriz
 #'
 #' @param sby_component Componente de indices ou distancias retornado por engine KNN
+#'
 #' @param sby_k Numero de vizinhos esperado
+#'
 #' @param sby_storage Tipo de armazenamento de saida
 #'
 #' @return Matriz com uma linha por consulta e `sby_k` colunas
+#'
 #' @noRd
 sby_as_knn_matrix <- function(sby_component, sby_k, sby_storage = c("integer", "double")){
   sby_storage <- match.arg(sby_storage)

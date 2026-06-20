@@ -7,6 +7,7 @@
 #' @param sby_message Mensagem tecnica a ser exibida ao usuario
 #'
 #' @return Retorna invisivelmente NULL apos emitir a mensagem
+#'
 #' @noRd
 sby_adanear_inform <- function(sby_message){
   

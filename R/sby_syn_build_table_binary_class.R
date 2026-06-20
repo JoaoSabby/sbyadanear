@@ -104,7 +104,23 @@ sby_syn_build_table_binary_class <- function(
     all_vars <- all_vars[1:250L]
   }
 
-  set.seed(42L)
+  sby_seed <- sby_validate_seed(42L)
+  sby_rng_kind <- RNGkind()
+  sby_had_random_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  sby_random_seed <- if(sby_had_random_seed){
+    get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  }else{
+    NULL
+  }
+  on.exit({
+    do.call(RNGkind, as.list(sby_rng_kind))
+    if(isTRUE(sby_had_random_seed)){
+      assign(".Random.seed", sby_random_seed, envir = .GlobalEnv)
+    }else if(exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)){
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+  set.seed(sby_seed)
   shuffled_vars <- sample(all_vars)
 
   # Seleciona 20 features que terao sinal real com o TARGET

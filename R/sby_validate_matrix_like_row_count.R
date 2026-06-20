@@ -1,9 +1,11 @@
 #' Validar alinhamento de objeto matricial sem densificar
 #'
 #' @param sby_x Objeto com dimensao de linhas
+#'
 #' @param sby_y_vector Vetor alvo associado
 #'
 #' @return Invisivelmente TRUE quando alinhado
+#'
 #' @noRd
 sby_validate_matrix_like_row_count <- function(sby_x, sby_y_vector){
   sby_row_count <- tryCatch(

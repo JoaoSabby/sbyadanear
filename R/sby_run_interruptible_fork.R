@@ -9,6 +9,7 @@
 #' @param sby_expr Expressao R a ser executada
 #'
 #' @return Resultado produzido por `sby_expr`
+#'
 #' @noRd
 sby_run_interruptible_fork <- function(sby_expr){
   # Captura expressao e ambiente chamador antes de decidir o modo de execucao

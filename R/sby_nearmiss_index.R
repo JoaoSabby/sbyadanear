@@ -1,6 +1,7 @@
 #' Selecionar indices NearMiss-1 diretamente sobre matrix double e factor binario
 #'
 #' @return Lista com indices retidos, distribuicoes e diagnosticos.
+#'
 #' @export
 sby_nearmiss_index <- function(
   sby_x_matrix,
@@ -115,8 +116,6 @@ sby_nearmiss_index <- function(
       # quadratico desnecessario em bases ja proximas do alvo de balanceamento.
       sby_selected_majority_index <- sby_majority_index
     }else{
-      set.seed(sby_seed)
-
       # Rota NearMiss-1 exata fundida: para busca brute force euclidiana, o
       # kernel nativo calcula as medias dos k vizinhos minoritarios via BLAS e
       # seleciona os indices majoritarios sem materializar nn.dist em R.

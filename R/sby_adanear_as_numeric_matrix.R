@@ -7,6 +7,7 @@
 #' @param sby_predictor_data Dados preditores em data frame ou matriz
 #'
 #' @return Matriz numerica com nomes de colunas preservados
+#'
 #' @noRd
 sby_adanear_as_numeric_matrix <- function(sby_predictor_data){
   # Bloqueia Matrix esparsa antes de qualquer conversao densa implicita. As
