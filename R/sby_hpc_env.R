@@ -8,6 +8,7 @@
 #' variaveis que nao existiam.
 #'
 #' @return Lista com o estado anterior das variaveis modificadas.
+#'
 #' @noRd
 
 # Lista canonica das variaveis de ambiente controladas pela rota HPC

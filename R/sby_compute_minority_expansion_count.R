@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_target_factor Fator binario com as classes observadas
+#'
 #' @param sby_over_ratio Fator relativo de expansao da classe minoritaria
 #'
 #' @return Quantidade inteira de linhas sinteticas a gerar
+#'
 #' @noRd
 sby_compute_minority_expansion_count <- function(sby_target_factor, sby_over_ratio){
   

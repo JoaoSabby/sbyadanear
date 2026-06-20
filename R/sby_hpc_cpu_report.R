@@ -19,6 +19,7 @@
 #'
 #' @return Lista com indicadores logicos e evidencias de runtime, compilacao,
 #' threads MKL/OpenMP e varredura opcional do binario nativo.
+#'
 #' @export
 sby_hpc_cpu_report <- function(){
   sby_flags <- character()

@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_message Mensagem tecnica a ser exibida no erro
+#'
 #' @param ... Argumentos adicionais ignorados silenciosamente (compatibilidade de chamada)
 #'
 #' @return Interrompe a execucao com erro padronizado
+#'
 #' @noRd
 sby_adanear_abort <- function(sby_message, ...){
   

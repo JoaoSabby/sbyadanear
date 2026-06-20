@@ -7,6 +7,7 @@
 #' @param sby_x_matrix Matriz numerica a normalizar
 #'
 #' @return Matriz numerica com linhas normalizadas pela norma L2
+#'
 #' @noRd
 sby_normalize_l2 <- function(sby_x_matrix){
   

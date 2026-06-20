@@ -4,7 +4,7 @@
 #' `sby_adanear_hpc()` e o atalho de alto desempenho do pipeline combinado de
 #' balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no
 #' espaco padronizado, usando MKL VSL para estatisticas, cblas_sgemm para
-#' distancias e interpolacao lambda com vdrnguniform. A despadronizacao das
+#' distancias e pesos de interpolacao gerados por `Rcpp::runif()` sob controle da semente local. A despadronizacao das
 #' sinteticas ocorre inteiramente no C++ via FMA AVX-512. A reconstrucao final
 #' do tibble acontece na camada R, preservando os tipos originais das colunas.
 #'
@@ -16,21 +16,29 @@
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
+#'
 #' @param formula Formula no formato `alvo ~ preditores`.
+#'
 #' @param sby_k_neighbor_adanear Numero inteiro positivo de vizinhos da etapa
 #'   ADASYN. Padrao: `3`.
+#'
 #' @param sby_k_neighbor_nearmiss Numero inteiro positivo de vizinhos da etapa
 #'   NearMiss-1. Padrao: `7`.
+#'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
 #'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
+#'
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios
-#'   do ADASYN. Padrao: `sample.int(10L^5L, 1L)`.
+#'   do ADASYN. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
+#'
 #' @param sby_over_ratio Fator de expansao da classe minoritaria pelo ADASYN.
 #'   Deve ser estritamente positivo. Padrao: `0.2`.
+#'
 #' @param sby_under_ratio Razao minima minoria/maioria apos o NearMiss-1.
 #'   Padrao: `0.5`.
 #'
 #' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
+#'
 #' @export
 sby_adanear_hpc <- function(
   .data,
@@ -116,19 +124,20 @@ sby_adanear_hpc <- function(
     )
   }
 
-  set.seed(sby_seed)
-  sby_hpc_result <- sby_call_native(
-    "sby_adanear_hpc_result_cpp",
-    sby_x_matrix,
-    sby_target_factor,
-    as.integer(sby_k_neighbor_adanear),
-    as.integer(sby_k_neighbor_nearmiss),
-    as.numeric(sby_over_ratio),
-    as.numeric(sby_under_ratio),
-    as.integer(sby_total_threads),
-    sby_column_names,
-    levels(sby_target_factor)
-  )
+  sby_hpc_result <- sby_with_seed(sby_seed, {
+    sby_call_native(
+      "sby_adanear_hpc_result_cpp",
+      sby_x_matrix,
+      sby_target_factor,
+      as.integer(sby_k_neighbor_adanear),
+      as.integer(sby_k_neighbor_nearmiss),
+      as.numeric(sby_over_ratio),
+      as.numeric(sby_under_ratio),
+      as.integer(sby_total_threads),
+      sby_column_names,
+      levels(sby_target_factor)
+    )
+  })
   # Retorno esperado de sby_adanear_hpc_result_cpp:
   #   $sby_synthetic_rows        — NumericMatrix (double, despadronizado no C++)
   #   $sby_retained_majority_idx — IntegerVector (indices 1-based no original)

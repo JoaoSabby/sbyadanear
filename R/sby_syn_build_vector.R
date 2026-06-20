@@ -1,5 +1,7 @@
 #' @title Gerar vetor sintético controlado por tipo estatístico
+#'
 #' @usage sby_syn_build_vector(num_rows = 4000000L, data_type, negative = FALSE)
+#'
 #' @description
 #' Produz um vetor sintético para compor bases densas de teste em classificação
 #' binária, escolhendo distribuições aleatórias compatíveis com o tipo solicitado.
@@ -17,20 +19,28 @@
 #' | `binary` | `logical` | indicadores booleanos |
 #'
 #' @param num_rows Número de observações a gerar.
+#'
 #' @param data_type Tipo estatístico do vetor: `"monetary"`, `"ratio"`,
 #'   `"integer"` ou `"binary"`.
+#'
 #' @param negative Reservado para compatibilidade futura; atualmente não altera
 #'   a geração.
+#'
 #' @return Vetor numérico, inteiro ou lógico compatível com `data_type`.
+#'
 #' @section Pré-condições:
 #' `num_rows` deve representar quantidade positiva de observações.
+#'
 #' @section Pós-condições:
 #' O comprimento do vetor retornado é igual a `num_rows`.
+#'
 #' @seealso sby_syn_build_table_binary_class
+#'
 #' @examples
 #' \dontrun{
 #' sbyadanear:::sby_syn_build_vector(1000L, "ratio")
 #' }
+#'
 #' @keywords internal
 sby_syn_build_vector <- function(
     num_rows = 4000000L,

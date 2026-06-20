@@ -1,12 +1,17 @@
 #' Validar matriz densa double
 #'
 #' @param sby_x_matrix Objeto de entrada esperado como matrix double densa
+#'
 #' @param sby_name Nome usado em mensagens de erro
+#'
 #' @param sby_allow_integer Permite converter matrix integer para double uma unica vez
+#'
 #' @param sby_allow_na Permite valores ausentes
+#'
 #' @param sby_allow_infinite Permite valores infinitos
 #'
 #' @return A propria matriz quando ja estiver no contrato, ou uma copia double quando integer for permitido
+#'
 #' @noRd
 sby_validate_dense_double_matrix <- function(
   sby_x_matrix,

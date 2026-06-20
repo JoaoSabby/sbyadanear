@@ -96,27 +96,47 @@
 #'   Aumente `sby_knn_hnsw_ef` quando essa estabilidade for importante.
 #'
 #' @param recipe Objeto `recipe` que receberá a etapa de balanceamento.
+#'
 #' @param ... Seletores `recipes` ou `tidyselect` usados para identificar exatamente uma coluna de desfecho binário.
+#'
 #' @param role Papel armazenado na etapa para compatibilidade com `recipes`.
+#'
 #' @param trained Indicador lógico escalar que informa se a etapa já passou por `prep()`.
+#'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`.
+#'
 #' @param sby_over_ratio Valor numérico escalar positivo que controla a expansão relativa da classe minoritária. Em bases pequenas, valores positivos geram ao menos uma linha sintética para evitar abortos por arredondamento.
+#'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN.
+#'
 #' @param sby_seed Valor numérico inteiro usado para inicializar o gerador pseudoaleatório.
+#'
 #' @param sby_audit Indicador lógico escalar que controla se metadados de auditoria devem ser preservados.
+#'
 #' @param sby_restore_types Indicador lógico escalar que define se tipos numéricos originais devem ser restaurados.
+#'
 #' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
+#'
 #' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"` ou `"bigKNN"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, engine nativa exata, compatibilidade `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
+#'
 #' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
+#'
 #' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
+#'
 #' @param sby_knn_workers Número de workers KNN configurado.
+#'
 #' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
+#'
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
+#'
 #' @param sby_knn_hnsw_ef Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a largura da lista dinâmica de candidatos (`ef`) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão `200L` prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.
+#'
 #' @param skip Indicador lógico escalar que define se a etapa deve ser ignorada em novos dados.
+#'
 #' @param id Identificador recipes da etapa.
 #'
 #' @return Objeto `recipe` com uma etapa `sby_step_adasyn` adicionada ao pipeline.
+#'
 #' @export
 sby_step_adasyn <- function(
   recipe,

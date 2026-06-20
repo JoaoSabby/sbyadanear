@@ -5,10 +5,13 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_x_matrix Matriz numerica com valores a restaurar
+#'
 #' @param sby_type_info Data frame com tipos numericos inferidos por coluna
+#'
 #' @param sby_as_data_frame Indicador logico para retornar data frame
 #'
 #' @return Matriz ou data frame com tipos numericos restaurados
+#'
 #' @noRd
 sby_restore_numeric_column_types <- function(sby_x_matrix, sby_type_info, sby_as_data_frame = TRUE){
   

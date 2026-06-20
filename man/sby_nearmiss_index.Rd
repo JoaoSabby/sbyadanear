@@ -17,7 +17,8 @@ sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa usada para calcular os índices.}
 \item{sby_y_vector}{Fator binário.}
-\item{sby_under_ratio, sby_knn_under_k, sby_seed}{Controles NearMiss.}
+\item{sby_under_ratio, sby_knn_under_k}{Controles NearMiss.}
+\item{sby_seed}{Semente mantida por compatibilidade de API. A rota NearMiss-1 exata e deterministica e nao consome RNG.}
 \item{sby_scaling_info, sby_input_already_scaled}{Reuso de escala.}
 \item{sby_fixed_minority_label, sby_fixed_majority_label}{Papéis fixos de classe.}
 \item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_parallel_backend, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
@@ -26,7 +27,7 @@ sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
 \item{sby_return_reduced_scaled}{Retorna matriz reduzida em z-score sem expor a matriz escalada completa.}
 }
 \description{Retorna índices de retenção NearMiss-1 para que pipelines possam aplicar a seleção em matrizes externas.}
-\details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. Útil para preservar matrizes esparsas fora do pacote quando a estratégia for apenas NearMiss. A seleção nativa retém menores distâncias médias; empates favorecem o menor índice original.}
+\details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. Útil para preservar matrizes esparsas fora do pacote quando a estratégia for apenas NearMiss. A seleção nativa retém menores distâncias médias; empates favorecem o menor índice original. A rota NearMiss-1 exata e deterministica e nao altera o RNG global do chamador.}
 \value{Lista com \code{sby_retained_index}, distribuições e diagnósticos; opcionalmente escala e matriz reduzida escalada.}
 \examples{
 x <- matrix(rnorm(40), ncol = 2); storage.mode(x) <- "double"

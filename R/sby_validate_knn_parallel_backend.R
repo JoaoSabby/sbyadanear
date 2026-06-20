@@ -3,6 +3,7 @@
 #' @param sby_knn_parallel_backend Backend solicitado para paralelismo KNN
 #'
 #' @return String validada com o backend de paralelismo
+#'
 #' @noRd
 sby_validate_knn_parallel_backend <- function(sby_knn_parallel_backend){
   sby_knn_parallel_backend <- match.arg(

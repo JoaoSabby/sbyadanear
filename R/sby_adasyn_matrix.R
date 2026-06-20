@@ -3,6 +3,7 @@
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`; ajuste para equilibrar overhead de chamadas e pico de memória.
 #'
 #' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos.
+#'
 #' @export
 sby_adasyn_matrix <- function(
   sby_x_matrix,
@@ -101,21 +102,22 @@ sby_adasyn_matrix <- function(
     sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine)
   }
 
-  set.seed(sby_seed)
-  sby_adasyn_result <- sby_generate_adasyn_samples(
-    sby_x_scaled = sby_x_scaled,
-    sby_target_factor = sby_y_vector,
-    sby_synthetic_count = sby_synthetic_count,
-    sby_knn_over_k = sby_knn_over_k,
-    sby_knn_algorithm = sby_knn_algorithm,
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_knn_workers = sby_knn_workers,
-    sby_knn_parallel_backend = sby_knn_parallel_backend,
-    sby_knn_hnsw_m = sby_knn_hnsw_m,
-    sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-    sby_knn_query_chunk_size = sby_knn_query_chunk_size
-  )
+  sby_adasyn_result <- sby_with_seed(sby_seed, {
+    sby_generate_adasyn_samples(
+      sby_x_scaled = sby_x_scaled,
+      sby_target_factor = sby_y_vector,
+      sby_synthetic_count = sby_synthetic_count,
+      sby_knn_over_k = sby_knn_over_k,
+      sby_knn_algorithm = sby_knn_algorithm,
+      sby_knn_engine = sby_knn_engine,
+      sby_knn_distance_metric = sby_knn_distance_metric,
+      sby_knn_workers = sby_knn_workers,
+      sby_knn_parallel_backend = sby_knn_parallel_backend,
+      sby_knn_hnsw_m = sby_knn_hnsw_m,
+      sby_knn_hnsw_ef = sby_knn_hnsw_ef,
+      sby_knn_query_chunk_size = sby_knn_query_chunk_size
+    )
+  })
   colnames(sby_adasyn_result$x) <- colnames(sby_x_matrix)
 
   if(isTRUE(sby_return_original_scale)){

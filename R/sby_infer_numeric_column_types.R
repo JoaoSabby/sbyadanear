@@ -7,6 +7,7 @@
 #' @param sby_data_frame Dados preditores numericos usados para inferencia de tipos
 #'
 #' @return Data frame com nomes de colunas e tipos numericos inferidos
+#'
 #' @noRd
 sby_infer_numeric_column_types <- function(sby_data_frame){
   

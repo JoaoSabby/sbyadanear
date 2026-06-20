@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_x_matrix Matriz numerica a ser padronizada
+#'
 #' @param sby_scaling_info Lista com centros e escalas de padronizacao
 #'
 #' @return Matriz numerica padronizada por z-score
+#'
 #' @noRd
 sby_apply_z_score_scaling_matrix <- function(
   sby_x_matrix, 

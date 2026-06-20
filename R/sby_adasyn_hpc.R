@@ -2,7 +2,7 @@
 #'
 #' @description
 #' `sby_adasyn_hpc()` e o atalho de alto desempenho do oversampling ADASYN.
-#' Executa todo o processamento no espaco padronizado via MKL VSL e cblas_sgemm.
+#' Executa todo o processamento no espaco padronizado com estatisticas via MKL VSL, distancias por cblas_sgemm e pesos de interpolacao gerados por `Rcpp::runif()` sob controle da semente local.
 #' A despadronizacao das sinteticas ocorre inteiramente no C++ via FMA AVX-512.
 #' A reconstrucao final do tibble acontece na camada R, preservando os tipos
 #' originais das colunas.
@@ -14,17 +14,23 @@
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
+#'
 #' @param formula Formula no formato `alvo ~ preditores`.
+#'
 #' @param sby_k_neighbor_adanear Numero inteiro positivo de vizinhos do ADASYN.
 #'   Padrao: `3`.
+#'
 #' @param sby_over_ratio Fator de expansao da classe minoritaria. Deve ser
 #'   estritamente positivo. Padrao: `0.2`.
+#'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
 #'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
+#'
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios.
-#'   Padrao: `sample.int(10L^5L, 1L)`.
+#'   A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
 #'
 #' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
+#'
 #' @export
 sby_adasyn_hpc <- function(
   .data,
@@ -94,17 +100,18 @@ sby_adasyn_hpc <- function(
     )
   }
 
-  set.seed(sby_seed)
-  sby_hpc_result <- sby_call_native(
-    "sby_adasyn_hpc_cpp",
-    sby_x_matrix,
-    sby_target_factor,
-    as.integer(sby_k_neighbor_adanear),
-    as.numeric(sby_over_ratio),
-    as.integer(sby_total_threads),
-    sby_column_names,
-    levels(sby_target_factor)
-  )
+  sby_hpc_result <- sby_with_seed(sby_seed, {
+    sby_call_native(
+      "sby_adasyn_hpc_cpp",
+      sby_x_matrix,
+      sby_target_factor,
+      as.integer(sby_k_neighbor_adanear),
+      as.numeric(sby_over_ratio),
+      as.integer(sby_total_threads),
+      sby_column_names,
+      levels(sby_target_factor)
+    )
+  })
   # Retorno esperado de sby_adasyn_hpc_cpp:
   #   $sby_synthetic_rows   — NumericMatrix (double, despadronizado no C++)
   #   $sby_target_synthetic — IntegerVector (codigos de nivel das sinteticas)

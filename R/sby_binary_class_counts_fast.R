@@ -3,6 +3,7 @@
 #' @param sby_y_vector Fator binario sem ausentes
 #'
 #' @return Lista com contagens nomeadas, papeis de classe e razao maioria/minoria
+#'
 #' @noRd
 sby_binary_class_counts_fast <- function(sby_y_vector){
   if(!is.factor(sby_y_vector)){

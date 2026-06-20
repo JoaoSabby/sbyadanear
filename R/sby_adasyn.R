@@ -33,20 +33,35 @@
 #' )
 #'
 #' @param sby_formula Fórmula no formato `alvo ~ preditores` usada para identificar uma única coluna de desfecho binário e as colunas preditoras numéricas em `sby_data`. O lado direito deve referenciar apenas colunas ja existentes; transformacoes, interacoes e offsets precisam ser materializados antes da chamada. Não possui valor padrão; use `alvo ~ .` para selecionar todos os demais campos como preditores.
+#'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. A escala e a distribuição das colunas preditoras influenciam diretamente a geração sintética, embora o pacote aplique padronização Z-score antes da busca.
+#'
 #' @param sby_over_ratio Valor numérico escalar que controla a expansão relativa da classe minoritária. O padrão é `0.2`, indicando uma geração sintética moderada; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética para evitar abortos por arredondamento. Valores maiores aumentam a expansão da minoria, mas também elevam o risco de criar amostras sintéticas em regiões ruidosas.
+#'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados para estimar a dificuldade local de cada observação minoritária no critério ADASYN. O padrão é `5L`. Valores maiores tornam a estimativa de dificuldade mais estável e global; valores menores enfatizam estruturas locais e podem reagir fortemente a outliers.
+#'
 #' @param sby_seed Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é `sample.int(10L^5L, 1L)`, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para reproduzir exatamente os vizinhos empatados, as escolhas de interpolação e as matrizes sintéticas geradas.
+#'
 #' @param sby_audit Indicador lógico escalar que controla o formato do retorno. O padrão é `FALSE`, retornando apenas o conjunto balanceado final. Quando `TRUE`, a função retorna uma lista com diagnósticos, parâmetros resolvidos e artefatos intermediários úteis para validação metodológica e depuração.
+#'
 #' @param sby_return_scaled Indicador lógico escalar que define se a matriz balanceada ainda padronizada deve ser incluída no retorno de auditoria. O padrão é `FALSE`, evitando armazenamento adicional. Quando `TRUE`, permite encadear a saída com rotinas que reutilizam a mesma escala, como o pipeline combinado `sby_adanear()`.
+#'
 #' @param sby_restore_types Indicador lógico escalar que define se tipos numéricos originais devem ser restaurados no tibble final. O padrão é `TRUE`. Essa restauração melhora compatibilidade com dados que entraram como inteiros ou classes numéricas específicas; quando `FALSE`, a saída tende a permanecer em representação numérica de ponto flutuante.
+#'
 #' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
+#'
 #' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"` ou `"bigKNN"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, engine nativa exata, compatibilidade `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
+#'
 #' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
+#'
 #' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
+#'
 #' @param sby_knn_workers Número inteiro positivo de workers disponibilizados para consultas KNN. O padrão é `1L`. Aumentar o valor pode acelerar consultas KNN em matrizes grandes, mas eleva uso de CPU e pode acelerar a rota exata do FNN por blocos ou a rota HNSW nativa.
+#'
 #' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
+#'
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
+#'
 #' @param sby_knn_hnsw_ef Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a largura da lista dinâmica de candidatos (`ef`) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão `200L` prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.
 #'
 #' @details
@@ -150,6 +165,7 @@
 #' 824-836.
 #'
 #' @return Tibble balanceado quando `sby_audit = FALSE`; lista de auditoria com dados balanceados, diagnósticos e artefatos intermediários quando `sby_audit = TRUE`.
+#'
 #' @export
 sby_adasyn <- function(
   sby_formula,
@@ -195,6 +211,7 @@ sby_adasyn <- function(
       .data = sby_data,
       formula = sby_formula,
       sby_k_neighbor_adanear = sby_knn_over_k,
+      sby_seed = sby_seed,
       sby_over_ratio = sby_over_ratio
     ))
   }

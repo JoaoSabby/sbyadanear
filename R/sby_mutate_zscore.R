@@ -1,5 +1,7 @@
 #' @title Preparar preditores com z-score populacional
+#'
 #' @usage sby_mutate_zscore(sby_formula, sby_data, sby_engine = c("native", "r"))
+#'
 #' @description
 #' Extrai os preditores numéricos definidos por uma fórmula, calcula parâmetros
 #' de padronização populacional e devolve a matriz transformada junto com os
@@ -34,21 +36,30 @@
 #' > chamadoras, pois a função documenta e executa apenas a etapa de preparo.
 #'
 #' @param sby_formula Fórmula no formato `alvo ~ preditores`.
+#'
 #' @param sby_data Data frame ou tibble com a coluna alvo e os preditores.
+#'
 #' @param sby_engine Engine de padronização, aceita `"native"` ou `"r"`.
+#'
 #' @return Lista com `x_scaled`, `x_original`, médias, desvios, nomes de
 #'   features, dimensões e vetor alvo extraído.
+#'
 #' @section Pré-condições:
 #' Os preditores extraídos devem ser conversíveis para matriz `double` densa.
+#'
 #' @section Pós-condições:
 #' A matriz escalonada mantém a mesma ordem de linhas e colunas da matriz
 #' original usada pela fórmula.
+#'
 #' @seealso sby_extract_formula_data, sby_call_native, sby_configure_blas_threads
+#'
 #' @references He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN.
+#'
 #' @examples
 #' \dontrun{
 #' sbyadanear:::sby_mutate_zscore(target ~ ., dados, sby_engine = "native")
 #' }
+#'
 #' @keywords internal
 sby_mutate_zscore <- function(
     sby_formula,

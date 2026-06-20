@@ -5,10 +5,13 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_target_factor Fator binario com as classes observadas
+#'
 #' @param sby_minority_label Rotulo fixo opcional da classe minoritaria
+#'
 #' @param sby_majority_label Rotulo fixo opcional da classe majoritaria
 #'
 #' @return Lista com contagens e rotulos das classes minoritaria e majoritaria
+#'
 #' @noRd
 sby_get_binary_class_roles <- function(
   sby_target_factor,

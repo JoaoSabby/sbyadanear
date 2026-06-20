@@ -39,26 +39,47 @@
 #' )
 #'
 #' @param recipe Objeto `recipe` que receberá a etapa de balanceamento. Deve ser uma instância válida de `recipes::recipe()` contendo os preditores numéricos e a variável de desfecho selecionável por `...`. Não possui valor padrão, pois a etapa precisa ser anexada explicitamente a uma receita existente; a escolha determina em qual pipeline de pré-processamento a subamostragem será executada.
+#'
 #' @param ... Seletores `recipes` ou `tidyselect` usados para identificar exatamente uma coluna de desfecho binário. O formato esperado é uma expressão de seleção não avaliada, como um nome de coluna, `all_outcomes()` ou outro seletor compatível. Não há valor padrão; selecionar uma coluna incorreta altera diretamente quais classes serão tratadas como minoritária e majoritária no balanceamento.
+#'
 #' @param role Valor de papel (`role`) armazenado na etapa para compatibilidade com a infraestrutura de `recipes`. Espera-se `NA` ou uma string escalar. O padrão é `NA`, indicando que a etapa não introduz um novo papel operacional; alterar esse valor afeta apenas metadados da etapa, não o cálculo dos vizinhos.
+#'
 #' @param trained Indicador lógico escalar que informa se a etapa já passou por `prep()`. O padrão é `FALSE`, estado adequado para a criação inicial da etapa. Esse valor é controlado internamente por `recipes`; defini-lo manualmente como `TRUE` sem os metadados correspondentes pode tornar a etapa inconsistente.
+#'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`. O padrão é `NULL`, indicando que a seleção ainda não foi treinada. Esse metadado define qual variável será removida dos preditores e usada como alvo no momento do balanceamento.
+#'
 #' @param sby_over_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética antes da subamostragem. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
+#'
 #' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que representa a razão mínima desejada entre minoria e maioria após o NearMiss-1. O padrão `1` reduz a maioria até igualar a minoria; valores menores que `1` retêm mais observações majoritárias por minoritária.
+#'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN para estimar dificuldade local e gerar amostras sintéticas. O padrão é `5L`. Essa escolha influencia onde a expansão minoritária será concentrada e o grau de suavização da avaliação local.
+#'
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos minoritários considerados pelo critério NearMiss-1 para ranquear observações majoritárias. O padrão é `5L`. Valores maiores suavizam o critério de proximidade por considerar uma vizinhança mais ampla; valores menores tornam a seleção mais sensível a fronteiras locais e possíveis ruídos.
+#'
 #' @param sby_seed Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é `sample.int(10L^5L, 1L)`, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para garantir reprodutibilidade dos empates, amostragens internas e índices retidos durante o balanceamento.
+#'
 #' @param sby_audit Indicador lógico escalar que controla se metadados de auditoria devem ser preservados no resultado interno da etapa. O padrão é `FALSE`, priorizando uma saída operacional simples. Quando `TRUE`, facilita rastrear contagens, parâmetros resolvidos e diagnósticos, com maior custo de memória.
+#'
 #' @param sby_restore_types Indicador lógico escalar que define se tipos numéricos inferidos dos preditores originais devem ser restaurados após o processamento matricial. O padrão é `TRUE`. Mantê-lo ativado favorece integração com pipelines que dependem de classes numéricas originais; desativá-lo preserva a representação matricial convertida com menor pós-processamento.
+#'
 #' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
+#'
 #' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"` ou `"bigKNN"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, engine nativa exata, compatibilidade `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
+#'
 #' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
+#'
 #' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
+#'
 #' @param sby_knn_workers Número inteiro positivo de workers usados por engines com suporte a paralelização. O padrão é `1L`, executando em modo sequencial. Aumentar esse valor pode reduzir tempo de busca em bases maiores, mas também aumenta consumo de recursos e pode restringir a resolução automática do engine.
+#'
 #' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
+#'
 #' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
+#'
 #' @param sby_knn_hnsw_ef Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a largura da lista dinâmica de candidatos (`ef`) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão `200L` prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.
+#'
 #' @param skip Indicador lógico escalar que define se a etapa deve ser ignorada ao aplicar `bake()` em novos dados. O padrão é `TRUE`, configuração recomendada para etapas que alteram o número de linhas durante treinamento. Definir `FALSE` força a aplicação em novos dados e pode ser inadequado para fluxos de predição.
+#'
 #' @param id String escalar que identifica unicamente a etapa dentro da `recipe`. O padrão é `recipes::rand_id("adanear")`, gerando um identificador reprodutível apenas no contexto da construção da etapa. Esse valor é usado por `recipes` para rastreamento, impressão e manutenção do pipeline.
 #'
 #' @details
@@ -160,6 +181,7 @@
 #' 824-836.
 #'
 #' @return Objeto `recipe` com uma etapa `sby_step_adanear` adicionada ao pipeline.
+#'
 #' @export
 sby_step_adanear <- function(
   recipe,

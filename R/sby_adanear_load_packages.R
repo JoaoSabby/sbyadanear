@@ -5,6 +5,7 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @return Retorna invisivelmente TRUE apos validar dependencias
+#'
 #' @noRd
 sby_adanear_load_packages <- function(){
   

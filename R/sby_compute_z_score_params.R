@@ -7,6 +7,7 @@
 #' @param sby_x_matrix Matriz numerica usada para estimar centro e escala
 #'
 #' @return Lista com vetores numericos `centers` e `scales`
+#'
 #' @noRd
 sby_compute_z_score_params <- function(
   sby_x_matrix,

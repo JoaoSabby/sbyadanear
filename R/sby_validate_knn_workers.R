@@ -7,6 +7,7 @@
 #' @param sby_knn_workers Numero de workers solicitado para o engine KNN
 #'
 #' @return Numero inteiro positivo de workers validado
+#'
 #' @noRd
 sby_validate_knn_workers <- function(sby_knn_workers){
   

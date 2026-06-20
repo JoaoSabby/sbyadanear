@@ -5,9 +5,11 @@
 #' A documentacao descreve a intencao operacional para apoiar manutencao, auditoria e revisao tecnica do pacote
 #'
 #' @param sby_subclass Subclasse recipes da etapa
+#'
 #' @param sby_sampling_method Metodo de sampling da etapa
 #'
 #' @return Objeto de etapa recipes configurado
+#'
 #' @noRd
 sby_step_sampling_new <- function(
   sby_subclass,

@@ -14,17 +14,23 @@
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
+#'
 #' @param formula Formula no formato `alvo ~ preditores`.
+#'
 #' @param sby_k_neighbor_nearmiss Numero inteiro positivo de vizinhos do
 #'   NearMiss-1. Padrao: `7`.
+#'
 #' @param sby_under_ratio Razao minima minoria/maioria apos o NearMiss-1.
 #'   Padrao: `0.5`.
+#'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
 #'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
+#'
 #' @param sby_seed Semente inteira para reproducibilidade. Padrao:
 #'   `sample.int(10L^5L, 1L)`.
 #'
 #' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
+#'
 #' @export
 sby_nearmiss_hpc <- function(
   .data,
@@ -91,7 +97,6 @@ sby_nearmiss_hpc <- function(
     )
   }
 
-  set.seed(sby_seed)
   sby_hpc_result <- sby_call_native(
     "sby_nearmiss_hpc_cpp",
     sby_x_matrix,
