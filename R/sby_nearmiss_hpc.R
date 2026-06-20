@@ -20,7 +20,7 @@
 #' @param sby_k_neighbor_nearmiss Numero inteiro positivo de vizinhos do
 #'   NearMiss-1. Padrao: `7`.
 #'
-#' @param sby_under_ratio Razao minima minoria/maioria apos o NearMiss-1.
+#' @param sby_under_ratio Razao positiva de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_under_ratio)`, limitado a maioria disponivel.
 #'   Padrao: `0.5`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
@@ -49,9 +49,9 @@ sby_nearmiss_hpc <- function(
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
   if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
-      is.na(sby_under_ratio) || sby_under_ratio <= 0 || sby_under_ratio > 1) {
+      is.na(sby_under_ratio) || sby_under_ratio <= 0) {
     sby_adanear_abort(
-      "sby_under_ratio deve estar no intervalo (0, 1].",
+      "sby_under_ratio deve ser um numero positivo maior que zero.",
       call = sys.call()
     )
   }

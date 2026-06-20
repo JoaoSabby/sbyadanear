@@ -38,74 +38,207 @@ sby_adanear_matrix <- function(
   if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
+  if(!(is.numeric(sby_over_ratio) && length(sby_over_ratio) == 1L && !is.na(sby_over_ratio) && sby_over_ratio >= 0)){
+    sby_adanear_abort("'sby_over_ratio' deve ser escalar numerico nao negativo")
+  }
+  if(!(is.numeric(sby_under_ratio) && length(sby_under_ratio) == 1L && !is.na(sby_under_ratio) && sby_under_ratio >= 0)){
+    sby_adanear_abort("'sby_under_ratio' deve ser escalar numerico nao negativo")
+  }
+
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
   sby_original_roles <- sby_get_binary_class_roles(sby_target_factor = sby_y_vector)
+  sby_run_adasyn <- isTRUE(sby_over_ratio > 0)
+  sby_run_nearmiss <- isTRUE(sby_under_ratio > 0)
 
-  sby_over_result <- sby_adasyn_matrix(
-    sby_x_matrix = sby_x_matrix,
-    sby_y_vector = sby_y_vector,
-    sby_over_ratio = sby_over_ratio,
-    sby_knn_over_k = sby_knn_over_k,
-    sby_seed = sby_seed,
-    sby_audit = sby_audit_full,
-    sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
-    sby_return_scaled = TRUE,
-    sby_return_original_scale = FALSE,
-    sby_knn_algorithm = sby_knn_algorithm,
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_knn_workers = sby_knn_workers,
-    sby_knn_parallel_backend = sby_knn_parallel_backend,
-    sby_knn_hnsw_m = sby_knn_hnsw_m,
-    sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-    sby_knn_query_chunk_size = sby_knn_query_chunk_size,
-    sby_memory_guard = sby_memory_guard,
-    sby_max_output_rows = sby_max_output_rows,
-    sby_max_dense_gb = sby_max_dense_gb
-  )
+  if(!isTRUE(sby_run_adasyn) && !isTRUE(sby_run_nearmiss)){
+    sby_y_out <- as.factor(sby_y_vector)
+    sby_class_info_output <- sby_binary_class_counts_fast(sby_y_out)
+    sby_scaling_info <- list(
+      centers = rep(0, collapse::fncol(sby_x_matrix)),
+      scales = rep(1, collapse::fncol(sby_x_matrix))
+    )
+    sby_diagnostics <- list(
+      sby_method = "adanear",
+      sby_input_rows = collapse::fnrow(sby_x_matrix),
+      sby_after_oversampling_rows = collapse::fnrow(sby_x_matrix),
+      sby_output_rows = collapse::fnrow(sby_x_matrix),
+      sby_output_scale = "original",
+      sby_original_minority_label = sby_original_roles$sby_minority_label,
+      sby_original_majority_label = sby_original_roles$sby_majority_label,
+      sby_adasyn_executed = FALSE,
+      sby_nearmiss_executed = FALSE,
+      sby_oversampling_diagnostics = list(
+        sby_method = "adasyn_skipped",
+        sby_input_rows = collapse::fnrow(sby_x_matrix),
+        sby_output_rows = collapse::fnrow(sby_x_matrix),
+        sby_generated_rows = 0L,
+        sby_skipped = TRUE
+      ),
+      sby_undersampling_diagnostics = list(
+        sby_method = "nearmiss_skipped",
+        sby_input_rows = collapse::fnrow(sby_x_matrix),
+        sby_output_rows = collapse::fnrow(sby_x_matrix),
+        sby_removed_rows = 0L,
+        sby_skipped = TRUE
+      )
+    )
+    sby_result <- list(
+      sby_x_matrix = sby_x_matrix,
+      sby_y_vector = sby_y_out,
+      sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
+      sby_class_ratio_output = sby_class_info_output$sby_class_ratio,
+      sby_input_class_distribution = sby_class_info_input$sby_class_counts,
+      sby_output_class_distribution = sby_class_info_output$sby_class_counts,
+      sby_diagnostics = sby_diagnostics
+    )
+    if(isTRUE(sby_audit_light)){
+      sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
+      sby_result$sby_diagnostics$sby_generated_rows <- 0L
+      sby_result$sby_diagnostics$sby_removed_rows <- 0L
+    }
+    if(isTRUE(sby_audit_full)){
+      sby_result$sby_oversampling_result <- list(sby_diagnostics = sby_diagnostics$sby_oversampling_diagnostics)
+      sby_result$sby_undersampling_result <- list(sby_diagnostics = sby_diagnostics$sby_undersampling_diagnostics)
+    }
+    if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
+      sby_result$sby_scaling_info <- sby_scaling_info
+      sby_result$sby_retained_index <- seq_len(collapse::fnrow(sby_x_matrix))
+    }
+    if(isTRUE(sby_return_scaled)){
+      sby_result$sby_balanced_scaled <- list(x = sby_x_matrix, y = sby_y_out)
+    }
+    return(sby_result)
+  }
 
-  sby_under_result <- sby_nearmiss_matrix(
-    sby_x_matrix = sby_over_result$sby_balanced_scaled$x,
-    sby_y_vector = sby_over_result$sby_balanced_scaled$y,
-    sby_under_ratio = sby_under_ratio,
-    sby_knn_under_k = sby_knn_under_k,
-    sby_seed = sby_seed,
-    sby_audit = sby_audit_full,
-    sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
-    sby_return_index = TRUE,
-    sby_return_scaled = isTRUE(sby_return_scaled) || isTRUE(sby_audit_full),
-    sby_return_original_scale = sby_return_original_scale,
-    sby_scaling_info = sby_over_result$sby_scaling_info,
-    sby_input_already_scaled = TRUE,
-    sby_fixed_minority_label = sby_original_roles$sby_minority_label,
-    sby_fixed_majority_label = sby_original_roles$sby_majority_label,
-    sby_knn_algorithm = sby_knn_algorithm,
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_knn_workers = sby_knn_workers,
-    sby_knn_parallel_backend = sby_knn_parallel_backend,
-    sby_knn_hnsw_m = sby_knn_hnsw_m,
-    sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-    sby_knn_query_chunk_size = sby_knn_query_chunk_size,
-    sby_memory_guard = sby_memory_guard
-  )
+  if(isTRUE(sby_run_adasyn)){
+    sby_over_result <- sby_adasyn_matrix(
+      sby_x_matrix = sby_x_matrix,
+      sby_y_vector = sby_y_vector,
+      sby_over_ratio = sby_over_ratio,
+      sby_knn_over_k = sby_knn_over_k,
+      sby_seed = sby_seed,
+      sby_audit = sby_audit_full,
+      sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
+      sby_return_scaled = TRUE,
+      sby_return_original_scale = FALSE,
+      sby_knn_algorithm = sby_knn_algorithm,
+      sby_knn_engine = sby_knn_engine,
+      sby_knn_distance_metric = sby_knn_distance_metric,
+      sby_knn_workers = sby_knn_workers,
+      sby_knn_parallel_backend = sby_knn_parallel_backend,
+      sby_knn_hnsw_m = sby_knn_hnsw_m,
+      sby_knn_hnsw_ef = sby_knn_hnsw_ef,
+      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+      sby_memory_guard = sby_memory_guard,
+      sby_max_output_rows = sby_max_output_rows,
+      sby_max_dense_gb = sby_max_dense_gb
+    )
+    sby_current_scaled_x <- sby_over_result$sby_balanced_scaled$x
+    sby_current_y <- sby_over_result$sby_balanced_scaled$y
+    sby_scaling_info <- sby_over_result$sby_scaling_info
+    sby_over_diagnostics <- sby_over_result$sby_diagnostics
+    sby_after_oversampling_rows <- collapse::fnrow(sby_current_scaled_x)
+  }else{
+    sby_knn_engine_for_scaling <- match.arg(sby_knn_engine)
+    sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix, sby_engine = sby_knn_engine_for_scaling)
+    sby_current_scaled_x <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine_for_scaling)
+    sby_current_y <- as.factor(sby_y_vector)
+    sby_after_oversampling_rows <- collapse::fnrow(sby_current_scaled_x)
+    sby_over_diagnostics <- list(
+      sby_method = "adasyn_skipped",
+      sby_input_rows = collapse::fnrow(sby_x_matrix),
+      sby_output_rows = collapse::fnrow(sby_x_matrix),
+      sby_generated_rows = 0L,
+      sby_output_scale = "z_score",
+      sby_skipped = TRUE
+    )
+    sby_over_result <- list(
+      sby_x_matrix = sby_current_scaled_x,
+      sby_y_vector = sby_current_y,
+      sby_scaling_info = sby_scaling_info,
+      sby_balanced_scaled = list(x = sby_current_scaled_x, y = sby_current_y),
+      sby_diagnostics = sby_over_diagnostics
+    )
+  }
 
-  sby_class_info_output <- sby_binary_class_counts_fast(sby_under_result$sby_y_vector)
+  if(isTRUE(sby_run_nearmiss)){
+    sby_under_result <- sby_nearmiss_matrix(
+      sby_x_matrix = sby_current_scaled_x,
+      sby_y_vector = sby_current_y,
+      sby_under_ratio = sby_under_ratio,
+      sby_knn_under_k = sby_knn_under_k,
+      sby_seed = sby_seed,
+      sby_audit = sby_audit_full,
+      sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
+      sby_return_index = TRUE,
+      sby_return_scaled = isTRUE(sby_return_scaled) || isTRUE(sby_audit_full),
+      sby_return_original_scale = sby_return_original_scale,
+      sby_scaling_info = sby_scaling_info,
+      sby_input_already_scaled = TRUE,
+      sby_fixed_minority_label = sby_original_roles$sby_minority_label,
+      sby_fixed_majority_label = sby_original_roles$sby_majority_label,
+      sby_knn_algorithm = sby_knn_algorithm,
+      sby_knn_engine = sby_knn_engine,
+      sby_knn_distance_metric = sby_knn_distance_metric,
+      sby_knn_workers = sby_knn_workers,
+      sby_knn_parallel_backend = sby_knn_parallel_backend,
+      sby_knn_hnsw_m = sby_knn_hnsw_m,
+      sby_knn_hnsw_ef = sby_knn_hnsw_ef,
+      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
+      sby_memory_guard = sby_memory_guard
+    )
+    sby_final_x <- sby_under_result$sby_x_matrix
+    sby_final_y <- sby_under_result$sby_y_vector
+    sby_final_scaled <- sby_under_result$sby_balanced_scaled
+    sby_retained_index <- sby_under_result$sby_retained_index
+    sby_under_diagnostics <- sby_under_result$sby_diagnostics
+    sby_output_scale <- sby_under_result$sby_diagnostics$sby_output_scale
+  }else{
+    if(isTRUE(sby_return_original_scale)){
+      sby_final_x <- sby_revert_z_score_scaling_matrix(sby_current_scaled_x, sby_scaling_info, sby_engine = match.arg(sby_knn_engine))
+      sby_output_scale <- "original"
+    }else{
+      sby_final_x <- sby_current_scaled_x
+      sby_output_scale <- "z_score"
+    }
+    sby_final_y <- sby_current_y
+    sby_final_scaled <- list(x = sby_current_scaled_x, y = sby_current_y)
+    sby_retained_index <- seq_len(collapse::fnrow(sby_current_scaled_x))
+    sby_under_diagnostics <- list(
+      sby_method = "nearmiss_skipped",
+      sby_input_rows = collapse::fnrow(sby_current_scaled_x),
+      sby_output_rows = collapse::fnrow(sby_current_scaled_x),
+      sby_removed_rows = 0L,
+      sby_output_scale = sby_output_scale,
+      sby_skipped = TRUE
+    )
+    sby_under_result <- list(
+      sby_x_matrix = sby_final_x,
+      sby_y_vector = sby_final_y,
+      sby_retained_index = sby_retained_index,
+      sby_balanced_scaled = sby_final_scaled,
+      sby_diagnostics = sby_under_diagnostics
+    )
+  }
+
+  sby_class_info_output <- sby_binary_class_counts_fast(sby_final_y)
   sby_diagnostics <- list(
     sby_method = "adanear",
     sby_input_rows = collapse::fnrow(sby_x_matrix),
-    sby_after_oversampling_rows = collapse::fnrow(sby_over_result$sby_balanced_scaled$x),
-    sby_output_rows = collapse::fnrow(sby_under_result$sby_x_matrix),
-    sby_output_scale = sby_under_result$sby_diagnostics$sby_output_scale,
+    sby_after_oversampling_rows = sby_after_oversampling_rows,
+    sby_output_rows = collapse::fnrow(sby_final_x),
+    sby_output_scale = sby_output_scale,
     sby_original_minority_label = sby_original_roles$sby_minority_label,
     sby_original_majority_label = sby_original_roles$sby_majority_label,
-    sby_oversampling_diagnostics = sby_over_result$sby_diagnostics,
-    sby_undersampling_diagnostics = sby_under_result$sby_diagnostics
+    sby_adasyn_executed = sby_run_adasyn,
+    sby_nearmiss_executed = sby_run_nearmiss,
+    sby_oversampling_diagnostics = sby_over_diagnostics,
+    sby_undersampling_diagnostics = sby_under_diagnostics
   )
 
   sby_result <- list(
-    sby_x_matrix = sby_under_result$sby_x_matrix,
-    sby_y_vector = sby_under_result$sby_y_vector,
+    sby_x_matrix = sby_final_x,
+    sby_y_vector = sby_final_y,
     sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
     sby_class_ratio_output = sby_class_info_output$sby_class_ratio,
     sby_input_class_distribution = sby_class_info_input$sby_class_counts,
@@ -115,19 +248,19 @@ sby_adanear_matrix <- function(
 
   if(isTRUE(sby_audit_light)){
     sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
-    sby_result$sby_diagnostics$sby_generated_rows <- sby_over_result$sby_diagnostics$sby_generated_rows
-    sby_result$sby_diagnostics$sby_removed_rows <- collapse::fnrow(sby_over_result$sby_balanced_scaled$x) - collapse::fnrow(sby_under_result$sby_x_matrix)
+    sby_result$sby_diagnostics$sby_generated_rows <- sby_over_diagnostics$sby_generated_rows
+    sby_result$sby_diagnostics$sby_removed_rows <- sby_after_oversampling_rows - collapse::fnrow(sby_final_x)
   }
   if(isTRUE(sby_audit_full)){
     sby_result$sby_oversampling_result <- sby_over_result
     sby_result$sby_undersampling_result <- sby_under_result
   }
   if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
-    sby_result$sby_scaling_info <- sby_over_result$sby_scaling_info
-    sby_result$sby_retained_index <- sby_under_result$sby_retained_index
+    sby_result$sby_scaling_info <- sby_scaling_info
+    sby_result$sby_retained_index <- sby_retained_index
   }
   if(isTRUE(sby_return_scaled)){
-    sby_result$sby_balanced_scaled <- sby_under_result$sby_balanced_scaled
+    sby_result$sby_balanced_scaled <- sby_final_scaled
   }
 
   return(sby_result)

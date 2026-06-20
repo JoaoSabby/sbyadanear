@@ -123,7 +123,7 @@ test_that("tabular API gives a clear error when TARGET is reused as predictor", 
                regexp = "TARGET", ignore.case = FALSE)
 })
 
-test_that("over_ratio = 0 and out-of-range under_ratio are rejected", {
+test_that("exclusive zero ratios are rejected and under_ratio above one is accepted", {
   set.seed(1)
   x <- matrix(rnorm(40), 20, 2)
   storage.mode(x) <- "double"
@@ -133,10 +133,41 @@ test_that("over_ratio = 0 and out-of-range under_ratio are rejected", {
                regexp = "positivo|positive", ignore.case = TRUE)
   expect_error(sby_nearmiss_matrix(x, y, sby_under_ratio = 0,
                                    sby_knn_engine = "FNN"),
-               regexp = "intervalo|range|0, 1", ignore.case = TRUE)
-  expect_error(sby_nearmiss_matrix(x, y, sby_under_ratio = 2,
+               regexp = "maior que zero|positive", ignore.case = TRUE)
+  expect_error(sby_nearmiss_matrix(x, y, sby_under_ratio = -1,
                                    sby_knn_engine = "FNN"),
-               regexp = "intervalo|range|0, 1", ignore.case = TRUE)
+               regexp = "maior que zero|positive", ignore.case = TRUE)
+  expect_equal(
+    as.integer(table(sby_nearmiss_matrix(x, y, sby_under_ratio = 2,
+                                         sby_knn_engine = "FNN")$sby_y_vector)["maj"]),
+    10L
+  )
+})
+
+test_that("adanear zero ratios skip the corresponding stages", {
+  set.seed(1)
+  x <- matrix(rnorm(40), 20, 2)
+  storage.mode(x) <- "double"
+  y <- factor(c(rep("min", 5), rep("maj", 15)), levels = c("min", "maj"))
+
+  no_over <- sby_adanear_matrix(x, y, sby_over_ratio = 0, sby_under_ratio = 1,
+                                sby_knn_engine = "FNN", sby_return_scaled = TRUE)
+  expect_false(no_over$sby_diagnostics$sby_adasyn_executed)
+  expect_true(no_over$sby_diagnostics$sby_nearmiss_executed)
+  expect_equal(as.integer(table(no_over$sby_y_vector)["maj"]), 5L)
+
+  no_under <- sby_adanear_matrix(x, y, sby_over_ratio = 0.2, sby_under_ratio = 0,
+                                 sby_knn_engine = "FNN", sby_return_scaled = TRUE)
+  expect_true(no_under$sby_diagnostics$sby_adasyn_executed)
+  expect_false(no_under$sby_diagnostics$sby_nearmiss_executed)
+  expect_equal(as.integer(table(no_under$sby_y_vector)["maj"]), 15L)
+
+  neither <- sby_adanear_matrix(x, y, sby_over_ratio = 0, sby_under_ratio = 0,
+                                sby_knn_engine = "FNN", sby_return_scaled = TRUE)
+  expect_false(neither$sby_diagnostics$sby_adasyn_executed)
+  expect_false(neither$sby_diagnostics$sby_nearmiss_executed)
+  expect_equal(nrow(neither$sby_x_matrix), nrow(x))
+  expect_equal(as.character(neither$sby_y_vector), as.character(y))
 })
 
 test_that("k larger than minority count is handled gracefully", {

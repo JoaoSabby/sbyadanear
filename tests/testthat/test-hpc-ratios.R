@@ -29,7 +29,7 @@ test_that("HPC shortcuts honor configurable sampling ratios", {
                                    sby_over_ratio = 1,
                                    sby_under_ratio = 0.5)
   expect_equal(nrow(adanear_equal), 12L)
-  expect_equal(nrow(adanear_loose), 16L)
+  expect_equal(nrow(adanear_loose), 12L)
   expect_equal(sum(adanear_equal$y == "min"), 6L)
   expect_equal(sum(adanear_loose$y == "min"), 8L)
 })
@@ -43,12 +43,17 @@ test_that("HPC shortcuts validate sampling ratios before native execution", {
 
   expect_error(sby_adasyn_hpc(dat, y ~ ., sby_over_ratio = 0),
                regexp = "sby_over_ratio")
-  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_under_ratio = 2),
+  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_under_ratio = 0),
                regexp = "sby_under_ratio")
-  expect_error(sby_adanear_hpc(dat, y ~ ., sby_over_ratio = 0),
+  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_under_ratio = -1),
+               regexp = "sby_under_ratio")
+  expect_error(sby_adanear_hpc(dat, y ~ ., sby_over_ratio = -1),
                regexp = "sby_over_ratio")
-  expect_error(sby_adanear_hpc(dat, y ~ ., sby_under_ratio = 2),
+  expect_error(sby_adanear_hpc(dat, y ~ ., sby_under_ratio = -1),
                regexp = "sby_under_ratio")
+  expect_equal(nrow(sby_nearmiss_hpc(dat, y ~ ., sby_under_ratio = 2)), 12L)
+  expect_equal(nrow(sby_adanear_hpc(dat, y ~ ., sby_over_ratio = 0,
+                                    sby_under_ratio = 0)), nrow(dat))
 })
 
 test_that("sby_adanear_hpc restores original scale and integer predictor types", {
