@@ -105,7 +105,7 @@
 #'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`.
 #'
-#' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que controla a razão mínima desejada entre minoria e maioria após o NearMiss-1.
+#' @param sby_under_ratio Valor numérico escalar maior que zero que controla a quantidade de registros majoritários retidos pelo NearMiss-1 em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_under_ratio)`, limitado à maioria disponível.
 #'
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos usados pela etapa NearMiss-1.
 #'

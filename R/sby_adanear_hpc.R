@@ -14,6 +14,67 @@
 #' O ambiente e configurado antes de qualquer operacao matricial para garantir
 #' que o MKL leia os valores corretos desde o primeiro kernel.
 #'
+#' Regras formais das razoes de reamostragem:
+#'
+#' Sejam \eqn{r_o = sby\_over\_ratio}, \eqn{r_u = sby\_under\_ratio},
+#' \eqn{n_{min}^{(0)}} o numero original de registros da classe rara,
+#' \eqn{n_{maj}^{(0)}} o numero original de registros da classe majoritaria,
+#' \eqn{n_{syn}} o numero de registros sinteticos gerados pelo ADASYN,
+#' \eqn{n_{min}^{(1)}} o numero de registros da classe rara disponiveis para
+#' o NearMiss-1, \eqn{n_{maj}^{disp}} o numero de registros majoritarios
+#' disponiveis antes do NearMiss-1 e \eqn{n_{maj}^{ret}} o numero-alvo de
+#' registros majoritarios retidos. O dominio das razoes nesta rotina hibrida e
+#' \deqn{r_o, r_u \in [0, \infty).}
+#' Valores negativos sao invalidos.
+#'
+#' A etapa ADASYN e executada se, e somente se,
+#' \deqn{r_o > 0.}
+#' Formalmente:
+#' \deqn{
+#' \operatorname{ADASYN}(r_o) =
+#' \begin{cases}
+#' \text{nao executado}, & \text{se } r_o = 0 \\
+#' \text{executado}, & \text{se } r_o > 0
+#' \end{cases}
+#' }
+#' Quando \eqn{r_o > 0}, o numero de registros sinteticos e aproximadamente
+#' \deqn{n_{syn} = \left\lfloor n_{min}^{(0)} r_o \right\rfloor}
+#' e a classe rara apos ADASYN tem aproximadamente
+#' \deqn{n_{min}^{(1)} = n_{min}^{(0)} + n_{syn}
+#' \approx n_{min}^{(0)}(1 + r_o).}
+#' Em bases pequenas, valores positivos podem gerar ao menos uma linha
+#' sintetica, conforme a politica interna de arredondamento.
+#'
+#' A etapa NearMiss-1 e executada se, e somente se,
+#' \deqn{r_u > 0.}
+#' Formalmente:
+#' \deqn{
+#' \operatorname{NearMiss}(r_u) =
+#' \begin{cases}
+#' \text{nao executado}, & \text{se } r_u = 0 \\
+#' \text{executado}, & \text{se } r_u > 0
+#' \end{cases}
+#' }
+#' Quando \eqn{r_u > 0}, a quantidade-alvo de registros majoritarios retidos e
+#' \deqn{
+#' n_{maj}^{ret} =
+#' \min\left(n_{maj}^{disp},
+#' \left\lfloor n_{min}^{(1)} r_u \right\rfloor\right).
+#' }
+#' Assim, `sby_under_ratio = 0.5` retem ate metade do tamanho final da classe
+#' rara, `sby_under_ratio = 1` retem ate a mesma quantidade da classe rara e
+#' `sby_under_ratio = 2` retem ate duas vezes o tamanho da classe rara,
+#' limitado a maioria disponivel.
+#'
+#' A logica do pipeline hibrido e:
+#' \itemize{
+#'   \item \eqn{r_o = 0 \land r_u = 0}: ADASYN e NearMiss-1 nao executam; os
+#'     dados originais sao retornados preservados.
+#'   \item \eqn{r_o > 0 \land r_u = 0}: apenas ADASYN executa.
+#'   \item \eqn{r_o = 0 \land r_u > 0}: apenas NearMiss-1 executa.
+#'   \item \eqn{r_o > 0 \land r_u > 0}: ADASYN executa seguido de NearMiss-1.
+#' }
+#'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
 #'
@@ -31,11 +92,13 @@
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios
 #'   do ADASYN. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
 #'
-#' @param sby_over_ratio Fator de expansao da classe minoritaria pelo ADASYN.
-#'   Deve ser estritamente positivo. Padrao: `0.2`.
+#' @param sby_over_ratio Razao nao negativa de aumento da classe rara. Valores
+#'   positivos executam ADASYN; zero desativa ADASYN nesta rotina hibrida.
+#'   Padrao: `0.2`.
 #'
-#' @param sby_under_ratio Razao minima minoria/maioria apos o NearMiss-1.
-#'   Padrao: `0.5`.
+#' @param sby_under_ratio Razao nao negativa de retencao da classe majoritaria
+#'   em relacao ao tamanho final da classe rara. Valores positivos executam
+#'   NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. Padrao: `1`.
 #'
 #' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
 #'
@@ -60,20 +123,44 @@ sby_adanear_hpc <- function(
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
   if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
-      is.na(sby_under_ratio) || sby_under_ratio <= 0 || sby_under_ratio > 1) {
+      is.na(sby_under_ratio) || sby_under_ratio < 0) {
     sby_adanear_abort(
-      "sby_under_ratio deve estar no intervalo (0, 1].",
+      "sby_under_ratio deve ser um numero nao negativo.",
       call = sys.call()
     )
   }
 
   # --- Validacoes antes de qualquer operacao matricial ---
   if (!is.numeric(sby_over_ratio) || length(sby_over_ratio) != 1L ||
-      is.na(sby_over_ratio) || sby_over_ratio <= 0) {
+      is.na(sby_over_ratio) || sby_over_ratio < 0) {
     sby_adanear_abort(
-      "sby_over_ratio deve ser um numero positivo maior que zero.",
+      "sby_over_ratio deve ser um numero nao negativo.",
       call = sys.call()
     )
+  }
+
+  if(identical(as.numeric(sby_over_ratio), 0) && identical(as.numeric(sby_under_ratio), 0)){
+    return(tibble::as_tibble(.data))
+  }
+  if(identical(as.numeric(sby_over_ratio), 0) && isTRUE(sby_under_ratio > 0)){
+    return(sby_nearmiss_hpc(
+      .data = .data,
+      formula = formula,
+      sby_k_neighbor_nearmiss = sby_k_neighbor_nearmiss,
+      sby_under_ratio = sby_under_ratio,
+      sby_config_max_threads = sby_config_max_threads,
+      sby_seed = sby_seed
+    ))
+  }
+  if(isTRUE(sby_over_ratio > 0) && identical(as.numeric(sby_under_ratio), 0)){
+    return(sby_adasyn_hpc(
+      .data = .data,
+      formula = formula,
+      sby_k_neighbor_adanear = sby_k_neighbor_adanear,
+      sby_over_ratio = sby_over_ratio,
+      sby_config_max_threads = sby_config_max_threads,
+      sby_seed = sby_seed
+    ))
   }
 
   # Extrai preditores e alvo

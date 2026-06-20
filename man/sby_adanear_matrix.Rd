@@ -17,7 +17,7 @@ sby_adanear_matrix(sby_x_matrix, sby_y_vector, sby_over_ratio = 0.2,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa de preditores.}
 \item{sby_y_vector}{Fator binário.}
-\item{sby_over_ratio, sby_under_ratio}{Controles de expansão ADASYN e retenção NearMiss.}
+\item{sby_over_ratio, sby_under_ratio}{Controles não negativos de expansão ADASYN e retenção NearMiss. Em ADANEAR, \code{sby_over_ratio = 0} pula ADASYN e \code{sby_under_ratio = 0} pula NearMiss-1; valores positivos executam a etapa correspondente.}
 \item{sby_knn_over_k, sby_knn_under_k}{Vizinhos usados nas duas etapas.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Auditoria none/light/full.}
@@ -25,7 +25,7 @@ sby_adanear_matrix(sby_x_matrix, sby_y_vector, sby_over_ratio = 0.2,
 \item{sby_knn_algorithm, sby_knn_engine, sby_knn_distance_metric, sby_knn_workers, sby_knn_parallel_backend, sby_knn_hnsw_m, sby_knn_hnsw_ef, sby_knn_query_chunk_size}{Configuração KNN.}
 \item{sby_memory_guard, sby_max_output_rows, sby_max_dense_gb}{Controles de memória.}
 }
-\description{Aplica sobreamostragem ADASYN e depois subamostragem NearMiss-1 reutilizando a mesma escala.}
+\description{Aplica sobreamostragem ADASYN e depois subamostragem NearMiss-1 reutilizando a mesma escala; razões iguais a zero pulam a etapa correspondente no fluxo híbrido.}
 \details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. Os papéis originais de minoria e maioria são preservados entre etapas. Auditoria padrão não guarda objetos intermediários pesados; \code{full} preserva artefatos completos.}
 \value{Lista com matriz, alvo, razões, distribuições e diagnósticos; opcionalmente escala, índices e intermediários.}
 \examples{

@@ -266,7 +266,7 @@ sby_data <- tibble::add_column(sby_x, sby_y = sby_y)
 # - sby_formula = sby_y ~ . informa que sby_y é o alvo e as demais colunas são
 #   preditores;
 # - sby_over_ratio controla a geração sintética ADASYN;
-# - sby_under_ratio controla a razão minoria/maioria final no NearMiss-1;
+# - sby_under_ratio controla a maioria retida como múltiplo do tamanho final da classe rara no NearMiss-1;
 #   use 1 para reduzir a majoritária até igualar a minoritária disponível;
 # - sby_seed fixo torna a geração e desempates reproduzíveis.
 sby_balanced <- sby_adanear(

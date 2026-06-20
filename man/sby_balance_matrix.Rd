@@ -20,7 +20,7 @@ sby_balance_matrix(sby_x_matrix, sby_y_vector,
 \item{sby_x_matrix}{Objeto matricial. Para \code{none} e \code{weight} pode ser esparso; para balanceamento físico deve ser matrix double densa.}
 \item{sby_y_vector}{Fator binário alinhado às linhas.}
 \item{sby_strategy}{Estratégia: \code{none}, \code{weight}, \code{adasyn}, \code{nearmiss}, \code{adanear} ou \code{adanearWeight}.}
-\item{sby_over_ratio, sby_under_ratio}{Controles de sobreamostragem e subamostragem.}
+\item{sby_over_ratio, sby_under_ratio}{Controles de sobreamostragem e subamostragem. Para estratégias híbridas, zero pula a etapa correspondente; para estratégias exclusivas ADASYN/NearMiss, a razão da etapa chamada deve ser positiva.}
 \item{sby_knn_over_k, sby_knn_under_k}{Números de vizinhos por etapa.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Auditoria none/light/full.}

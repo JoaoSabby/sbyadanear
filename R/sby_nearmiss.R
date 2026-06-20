@@ -37,7 +37,7 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esses dados definem o espaço no qual as observações majoritárias serão ranqueadas por proximidade à classe minoritária.
 #'
-#' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que representa a razão mínima desejada entre minoria e maioria após a subamostragem. O padrão `1` reduz a maioria até igualar a minoria; valores menores que `1` retêm mais observações majoritárias por minoritária.
+#' @param sby_under_ratio Valor numérico escalar maior que zero que define a quantidade de registros majoritários retidos em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_under_ratio)`, limitado à maioria disponível. O padrão `1` retém até a mesma quantidade da classe rara; `0.5` retém até metade; `2` retém até duas vezes.
 #'
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos minoritários usados para calcular a distância média do critério NearMiss-1. O padrão é `5L`. Valores maiores reduzem variância do ranqueamento; valores menores focalizam a fronteira local e podem selecionar exemplos muito próximos de ruído minoritário.
 #'

@@ -18,7 +18,7 @@ sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa de preditores.}
 \item{sby_y_vector}{Fator binário alinhado às linhas.}
-\item{sby_under_ratio}{Fração alvo para retenção da maioria em relação à minoria.}
+\item{sby_under_ratio}{Razão positiva de retenção da classe majoritária em relação ao tamanho da classe rara. O alvo é \code{floor(n_minoria * sby_under_ratio)}, limitado à maioria disponível.}
 \item{sby_knn_under_k}{Número de vizinhos minoritários usados no NearMiss-1.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Controle de auditoria.}

@@ -37,9 +37,9 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esse objeto define o espaço comum no qual serão calculadas tanto a dificuldade adaptativa do ADASYN quanto a proximidade NearMiss-1.
 #'
-#' @param sby_over_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética antes da subamostragem. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
+#' @param sby_over_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, valores positivos executam ADASYN e podem gerar ao menos uma linha sintética antes da subamostragem; `0` desativa ADASYN nesta rotina híbrida. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
 #'
-#' @param sby_under_ratio Valor numérico escalar no intervalo `(0, 1]` que controla a razão mínima desejada entre minoria e maioria após o NearMiss-1. O padrão `1` reduz a maioria até igualar a minoria quando houver registros suficientes; valores menores que `1` retêm mais linhas majoritárias.
+#' @param sby_under_ratio Valor numérico escalar não negativo que controla a retenção da classe majoritária em relação ao tamanho final da classe rara. Valores positivos executam NearMiss-1 com alvo `floor(n_minoria_final * sby_under_ratio)`, limitado à maioria disponível; `0` desativa NearMiss-1 nesta rotina híbrida.
 #'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN para estimar dificuldade local e gerar amostras sintéticas. O padrão é `5L`. Essa escolha influencia onde a expansão minoritária será concentrada e o grau de suavização da avaliação local.
 #'
