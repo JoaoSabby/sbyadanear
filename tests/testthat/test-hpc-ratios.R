@@ -6,26 +6,26 @@ test_that("HPC shortcuts honor configurable sampling ratios", {
     y = factor(c(rep("min", 4), rep("maj", 10)), levels = c("min", "maj"))
   )
 
-  ada_low <- sby_adasyn_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
+  ada_low <- sby_adasyn_hpc(dat, y ~ ., sby_k_adasyn = 3,
                             sby_over_ratio = 0.5)
-  ada_high <- sby_adasyn_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
+  ada_high <- sby_adasyn_hpc(dat, y ~ ., sby_k_adasyn = 3,
                              sby_over_ratio = 1)
   expect_equal(nrow(ada_low), 16L)
   expect_equal(nrow(ada_high), 18L)
 
-  near_equal <- sby_nearmiss_hpc(dat, y ~ ., sby_k_neighbor_nearmiss = 3,
+  near_equal <- sby_nearmiss_hpc(dat, y ~ ., sby_k_nearmiss = 3,
                                  sby_under_ratio = 1)
-  near_loose <- sby_nearmiss_hpc(dat, y ~ ., sby_k_neighbor_nearmiss = 3,
+  near_loose <- sby_nearmiss_hpc(dat, y ~ ., sby_k_nearmiss = 3,
                                  sby_under_ratio = 0.5)
   expect_equal(nrow(near_equal), 8L)
   expect_equal(nrow(near_loose), 6L)
 
-  adanear_equal <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
-                                   sby_k_neighbor_nearmiss = 3,
+  adanear_equal <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
+                                   sby_k_nearmiss = 3,
                                    sby_over_ratio = 0.5,
                                    sby_under_ratio = 1)
-  adanear_loose <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
-                                   sby_k_neighbor_nearmiss = 3,
+  adanear_loose <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
+                                   sby_k_nearmiss = 3,
                                    sby_over_ratio = 1,
                                    sby_under_ratio = 0.5)
   expect_equal(nrow(adanear_equal), 12L)
@@ -69,8 +69,8 @@ test_that("sby_adanear_hpc restores original scale and integer predictor types",
   out <- sby_adanear_hpc(
     dat,
     class_col ~ .,
-    sby_k_neighbor_adanear = 3,
-    sby_k_neighbor_nearmiss = 3,
+    sby_k_adasyn = 3,
+    sby_k_nearmiss = 3,
     sby_over_ratio = 1,
     sby_under_ratio = 0.5
   )
@@ -97,13 +97,13 @@ test_that("sby_adanear_hpc honors fixed seeds", {
     y = factor(c(rep("min", 5), rep("maj", 15)), levels = c("min", "maj"))
   )
 
-  out1 <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
-                          sby_k_neighbor_nearmiss = 3,
+  out1 <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
+                          sby_k_nearmiss = 3,
                           sby_seed = 99L,
                           sby_over_ratio = 1,
                           sby_under_ratio = 0.5)
-  out2 <- sby_adanear_hpc(dat, y ~ ., sby_k_neighbor_adanear = 3,
-                          sby_k_neighbor_nearmiss = 3,
+  out2 <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
+                          sby_k_nearmiss = 3,
                           sby_seed = 99L,
                           sby_over_ratio = 1,
                           sby_under_ratio = 0.5)

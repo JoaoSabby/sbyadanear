@@ -228,7 +228,7 @@ sby_nearmiss <- function(
     return(sby_nearmiss_hpc(
       .data = sby_data,
       formula = sby_formula,
-      sby_k_neighbor_nearmiss = sby_knn_under_k,
+      sby_k_nearmiss = sby_knn_under_k,
       sby_under_ratio = sby_under_ratio
     ))
   }
