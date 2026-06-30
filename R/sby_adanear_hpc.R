@@ -80,10 +80,10 @@
 #'
 #' @param formula Formula no formato `alvo ~ preditores`.
 #'
-#' @param sby_k_neighbor_adanear Numero inteiro positivo de vizinhos da etapa
+#' @param sby_k_adasyn Numero inteiro positivo de vizinhos da etapa
 #'   ADASYN. Padrao: `3`.
 #'
-#' @param sby_k_neighbor_nearmiss Numero inteiro positivo de vizinhos da etapa
+#' @param sby_k_nearmiss Numero inteiro positivo de vizinhos da etapa
 #'   NearMiss-1. Padrao: `7`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
@@ -106,8 +106,8 @@
 sby_adanear_hpc <- function(
   .data,
   formula,
-  sby_k_neighbor_adanear  = 3,
-  sby_k_neighbor_nearmiss = 7,
+  sby_k_adasyn  = 3,
+  sby_k_nearmiss = 7,
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L),
   sby_over_ratio          = 0.2,
@@ -146,7 +146,7 @@ sby_adanear_hpc <- function(
     return(sby_nearmiss_hpc(
       .data = .data,
       formula = formula,
-      sby_k_neighbor_nearmiss = sby_k_neighbor_nearmiss,
+      sby_k_nearmiss = sby_k_nearmiss,
       sby_under_ratio = sby_under_ratio,
       sby_config_max_threads = sby_config_max_threads,
       sby_seed = sby_seed
@@ -156,7 +156,7 @@ sby_adanear_hpc <- function(
     return(sby_adasyn_hpc(
       .data = .data,
       formula = formula,
-      sby_k_neighbor_adanear = sby_k_neighbor_adanear,
+      sby_k_adasyn = sby_k_adasyn,
       sby_over_ratio = sby_over_ratio,
       sby_config_max_threads = sby_config_max_threads,
       sby_seed = sby_seed
@@ -196,11 +196,11 @@ sby_adanear_hpc <- function(
   sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
   sby_minority_idx       <- which(as.integer(sby_target_factor) == sby_minority_level_int)
 
-  sby_k_neighbor_adanear  <- sby_validate_positive_integer_scalar(
-    sby_k_neighbor_adanear, "sby_k_neighbor_adanear"
+  sby_k_adasyn  <- sby_validate_positive_integer_scalar(
+    sby_k_adasyn, "sby_k_adasyn"
   )
-  sby_k_neighbor_nearmiss <- sby_validate_positive_integer_scalar(
-    sby_k_neighbor_nearmiss, "sby_k_neighbor_nearmiss"
+  sby_k_nearmiss <- sby_validate_positive_integer_scalar(
+    sby_k_nearmiss, "sby_k_nearmiss"
   )
 
   # Motor HPC obrigatorio: sem fallback de engine generico
@@ -216,8 +216,8 @@ sby_adanear_hpc <- function(
       "sby_adanear_hpc_result_cpp",
       sby_x_matrix,
       sby_target_factor,
-      as.integer(sby_k_neighbor_adanear),
-      as.integer(sby_k_neighbor_nearmiss),
+      as.integer(sby_k_adasyn),
+      as.integer(sby_k_nearmiss),
       as.numeric(sby_over_ratio),
       as.numeric(sby_under_ratio),
       as.integer(sby_total_threads),

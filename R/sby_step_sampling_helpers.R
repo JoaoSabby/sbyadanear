@@ -150,7 +150,42 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
   )
 
   # Executa metodo de sampling configurado na etapa
-  if(identical(sby_object$sby_sampling_method, "adasyn")){
+  if(identical(sby_object$sby_sampling_method, "adasyn_hpc")){
+
+    sby_balanced_data <- sby_adasyn_hpc(
+      .data = sby_data,
+      formula = sby_formula,
+      sby_k_adasyn = sby_object$sby_knn_over_k,
+      sby_over_ratio = sby_object$sby_over_ratio,
+      sby_config_max_threads = sby_object$sby_config_max_threads,
+      sby_seed = sby_object$sby_seed
+    )
+    sby_sampling_result <- list(sby_balanced_data = sby_balanced_data)
+  }else if(identical(sby_object$sby_sampling_method, "nearmiss_hpc")){
+
+    sby_balanced_data <- sby_nearmiss_hpc(
+      .data = sby_data,
+      formula = sby_formula,
+      sby_k_nearmiss = sby_object$sby_knn_under_k,
+      sby_under_ratio = sby_object$sby_under_ratio,
+      sby_config_max_threads = sby_object$sby_config_max_threads,
+      sby_seed = sby_object$sby_seed
+    )
+    sby_sampling_result <- list(sby_balanced_data = sby_balanced_data)
+  }else if(identical(sby_object$sby_sampling_method, "adanear_hpc")){
+
+    sby_balanced_data <- sby_adanear_hpc(
+      .data = sby_data,
+      formula = sby_formula,
+      sby_k_adasyn = sby_object$sby_knn_over_k,
+      sby_k_nearmiss = sby_object$sby_knn_under_k,
+      sby_config_max_threads = sby_object$sby_config_max_threads,
+      sby_seed = sby_object$sby_seed,
+      sby_over_ratio = sby_object$sby_over_ratio,
+      sby_under_ratio = sby_object$sby_under_ratio
+    )
+    sby_sampling_result <- list(sby_balanced_data = sby_balanced_data)
+  }else if(identical(sby_object$sby_sampling_method, "adasyn")){
 
     # Executa sobreamostragem ADASYN
     sby_sampling_result <- sby_adasyn(

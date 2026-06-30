@@ -34,7 +34,8 @@ sby_step_sampling_new <- function(
   sby_knn_hnsw_ef,
   sby_knn_query_chunk_size,
   sby_skip,
-  sby_id
+  sby_id,
+  sby_config_max_threads = NA_integer_
 ){
   
   # Constroi objeto de etapa recipes com metadados internos de balanceamento
@@ -65,6 +66,7 @@ sby_step_sampling_new <- function(
     sby_knn_hnsw_m              = sby_knn_hnsw_m,
     sby_knn_hnsw_ef             = sby_knn_hnsw_ef,
     sby_knn_query_chunk_size  = sby_knn_query_chunk_size,
+    sby_config_max_threads    = sby_config_max_threads,
     sby_skip                    = sby_skip,
     sby_id                      = sby_id
   ))

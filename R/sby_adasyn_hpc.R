@@ -17,7 +17,7 @@
 #'
 #' @param formula Formula no formato `alvo ~ preditores`.
 #'
-#' @param sby_k_neighbor_adanear Numero inteiro positivo de vizinhos do ADASYN.
+#' @param sby_k_adasyn Numero inteiro positivo de vizinhos do ADASYN.
 #'   Padrao: `3`.
 #'
 #' @param sby_over_ratio Fator de expansao da classe minoritaria. Deve ser
@@ -35,7 +35,7 @@
 sby_adasyn_hpc <- function(
   .data,
   formula,
-  sby_k_neighbor_adanear = 3,
+  sby_k_adasyn = 3,
   sby_over_ratio         = 0.2,
   sby_config_max_threads = -1,
   sby_seed               = sample.int(10L^5L, 1L)
@@ -89,8 +89,8 @@ sby_adasyn_hpc <- function(
   sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
   sby_minority_idx       <- which(as.integer(sby_target_factor) == sby_minority_level_int)
 
-  sby_k_neighbor_adanear <- sby_validate_positive_integer_scalar(
-    sby_k_neighbor_adanear, "sby_k_neighbor_adanear"
+  sby_k_adasyn <- sby_validate_positive_integer_scalar(
+    sby_k_adasyn, "sby_k_adasyn"
   )
 
   if (!sby_adanear_hpc_available()) {
@@ -105,7 +105,7 @@ sby_adasyn_hpc <- function(
       "sby_adasyn_hpc_cpp",
       sby_x_matrix,
       sby_target_factor,
-      as.integer(sby_k_neighbor_adanear),
+      as.integer(sby_k_adasyn),
       as.numeric(sby_over_ratio),
       as.integer(sby_total_threads),
       sby_column_names,
