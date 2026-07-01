@@ -215,8 +215,8 @@ sby_adanear <- function(
     return(sby_adanear_hpc(
       .data = sby_data,
       formula = sby_formula,
-      sby_k_adasyn = sby_knn_over_k,
-      sby_k_nearmiss = sby_knn_under_k,
+      sby_adasyn_k = sby_knn_over_k,
+      sby_nearmiss_k = sby_knn_under_k,
       sby_seed = sby_seed,
       sby_adasyn_ratio = sby_adasyn_ratio,
       sby_nearmiss_ratio = sby_nearmiss_ratio

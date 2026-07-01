@@ -210,7 +210,7 @@ sby_adasyn <- function(
     return(sby_adasyn_hpc(
       .data = sby_data,
       formula = sby_formula,
-      sby_k_adasyn = sby_knn_over_k,
+      sby_adasyn_k = sby_knn_over_k,
       sby_seed = sby_seed,
       sby_adasyn_ratio = sby_adasyn_ratio
     ))

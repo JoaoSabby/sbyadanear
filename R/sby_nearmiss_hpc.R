@@ -17,7 +17,7 @@
 #'
 #' @param formula Formula no formato `alvo ~ preditores`.
 #'
-#' @param sby_k_nearmiss Numero inteiro positivo de vizinhos do
+#' @param sby_nearmiss_k Numero inteiro positivo de vizinhos do
 #'   NearMiss-1. Padrao: `7`.
 #'
 #' @param sby_nearmiss_ratio Razao positiva de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_nearmiss_ratio)`, limitado a maioria disponivel.
@@ -35,7 +35,7 @@
 sby_nearmiss_hpc <- function(
   .data,
   formula,
-  sby_k_nearmiss = 7,
+  sby_nearmiss_k = 7,
   sby_nearmiss_ratio         = 1,
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L)
@@ -86,8 +86,8 @@ sby_nearmiss_hpc <- function(
   sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
   sby_minority_idx       <- which(as.integer(sby_target_factor) == sby_minority_level_int)
 
-  sby_k_nearmiss <- sby_validate_positive_integer_scalar(
-    sby_k_nearmiss, "sby_k_nearmiss"
+  sby_nearmiss_k <- sby_validate_positive_integer_scalar(
+    sby_nearmiss_k, "sby_nearmiss_k"
   )
 
   if (!sby_adanear_hpc_available()) {
@@ -101,7 +101,7 @@ sby_nearmiss_hpc <- function(
     "sby_nearmiss_hpc_cpp",
     sby_x_matrix,
     sby_target_factor,
-    as.integer(sby_k_nearmiss),
+    as.integer(sby_nearmiss_k),
     as.numeric(sby_nearmiss_ratio),
     as.integer(sby_total_threads),
     sby_column_names,

@@ -13,8 +13,8 @@
 #' @param columns Coluna de desfecho resolvida durante `prep()`.
 #' @param sby_adasyn_ratio Razao de sobreamostragem ADASYN.
 #' @param sby_nearmiss_ratio Razao de retencao NearMiss-1.
-#' @param sby_k_adasyn Numero inteiro positivo de vizinhos para ADASYN.
-#' @param sby_k_nearmiss Numero inteiro positivo de vizinhos para NearMiss-1.
+#' @param sby_adasyn_k Numero inteiro positivo de vizinhos para ADASYN.
+#' @param sby_nearmiss_k Numero inteiro positivo de vizinhos para NearMiss-1.
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1` detecta os nucleos fisicos disponiveis.
 #' @param sby_seed Semente inteira.
 #' @param sby_audit Indicador logico que retorna uma lista com `sby_balanced_data` quando `TRUE`.
@@ -32,7 +32,7 @@ sby_step_adasyn_hpc <- function(
   trained = FALSE,
   columns = NULL,
   sby_adasyn_ratio = 0.2,
-  sby_k_adasyn = 3L,
+  sby_adasyn_k = 3L,
   sby_config_max_threads = -1L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -43,8 +43,8 @@ sby_step_adasyn_hpc <- function(
   sby_step_hpc_add(
     recipe = recipe, ..., role = role, trained = trained, columns = columns,
     sby_sampling_method = "adasyn_hpc", sby_adasyn_ratio = sby_adasyn_ratio,
-    sby_nearmiss_ratio = NA_real_, sby_k_adasyn = sby_k_adasyn,
-    sby_k_nearmiss = NA_integer_, sby_config_max_threads = sby_config_max_threads,
+    sby_nearmiss_ratio = NA_real_, sby_adasyn_k = sby_adasyn_k,
+    sby_nearmiss_k = NA_integer_, sby_config_max_threads = sby_config_max_threads,
     sby_seed = sby_seed, sby_audit = sby_audit, sby_restore_types = sby_restore_types,
     skip = skip, id = id, sby_required_pkgs = required_pkgs.step_sby_step_adasyn_hpc()
   )
@@ -59,7 +59,7 @@ sby_step_nearmiss_hpc <- function(
   trained = FALSE,
   columns = NULL,
   sby_nearmiss_ratio = 1,
-  sby_k_nearmiss = 7L,
+  sby_nearmiss_k = 7L,
   sby_config_max_threads = -1L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -70,8 +70,8 @@ sby_step_nearmiss_hpc <- function(
   sby_step_hpc_add(
     recipe = recipe, ..., role = role, trained = trained, columns = columns,
     sby_sampling_method = "nearmiss_hpc", sby_adasyn_ratio = NA_real_,
-    sby_nearmiss_ratio = sby_nearmiss_ratio, sby_k_adasyn = NA_integer_,
-    sby_k_nearmiss = sby_k_nearmiss, sby_config_max_threads = sby_config_max_threads,
+    sby_nearmiss_ratio = sby_nearmiss_ratio, sby_adasyn_k = NA_integer_,
+    sby_nearmiss_k = sby_nearmiss_k, sby_config_max_threads = sby_config_max_threads,
     sby_seed = sby_seed, sby_audit = sby_audit, sby_restore_types = sby_restore_types,
     skip = skip, id = id, sby_required_pkgs = required_pkgs.step_sby_step_nearmiss_hpc()
   )
@@ -87,8 +87,8 @@ sby_step_adanear_hpc <- function(
   columns = NULL,
   sby_adasyn_ratio = 0.2,
   sby_nearmiss_ratio = 1,
-  sby_k_adasyn = 3L,
-  sby_k_nearmiss = 7L,
+  sby_adasyn_k = 3L,
+  sby_nearmiss_k = 7L,
   sby_config_max_threads = -1L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -99,16 +99,16 @@ sby_step_adanear_hpc <- function(
   sby_step_hpc_add(
     recipe = recipe, ..., role = role, trained = trained, columns = columns,
     sby_sampling_method = "adanear_hpc", sby_adasyn_ratio = sby_adasyn_ratio,
-    sby_nearmiss_ratio = sby_nearmiss_ratio, sby_k_adasyn = sby_k_adasyn,
-    sby_k_nearmiss = sby_k_nearmiss, sby_config_max_threads = sby_config_max_threads,
+    sby_nearmiss_ratio = sby_nearmiss_ratio, sby_adasyn_k = sby_adasyn_k,
+    sby_nearmiss_k = sby_nearmiss_k, sby_config_max_threads = sby_config_max_threads,
     sby_seed = sby_seed, sby_audit = sby_audit, sby_restore_types = sby_restore_types,
     skip = skip, id = id, sby_required_pkgs = required_pkgs.step_sby_step_adanear_hpc()
   )
 }
 
 sby_step_hpc_add <- function(recipe, ..., role, trained, columns, sby_sampling_method,
-                             sby_adasyn_ratio, sby_nearmiss_ratio, sby_k_adasyn,
-                             sby_k_nearmiss, sby_config_max_threads, sby_seed,
+                             sby_adasyn_ratio, sby_nearmiss_ratio, sby_adasyn_k,
+                             sby_nearmiss_k, sby_config_max_threads, sby_seed,
                              sby_audit, sby_restore_types, skip, id, sby_required_pkgs){
   sby_adanear_check_user_interrupt()
   recipes::recipes_pkg_check(sby_required_pkgs)
@@ -117,8 +117,8 @@ sby_step_hpc_add <- function(recipe, ..., role, trained, columns, sby_sampling_m
   sby_restore_types <- sby_validate_logical_scalar(sby_value = sby_restore_types, sby_name = "sby_restore_types")
   skip <- sby_validate_logical_scalar(sby_value = skip, sby_name = "skip")
   sby_seed <- sby_validate_seed(sby_seed = sby_seed)
-  if(!is.na(sby_k_adasyn)) sby_k_adasyn <- sby_validate_positive_integer_scalar(sby_k_adasyn, "sby_k_adasyn")
-  if(!is.na(sby_k_nearmiss)) sby_k_nearmiss <- sby_validate_positive_integer_scalar(sby_k_nearmiss, "sby_k_nearmiss")
+  if(!is.na(sby_adasyn_k)) sby_adasyn_k <- sby_validate_positive_integer_scalar(sby_adasyn_k, "sby_adasyn_k")
+  if(!is.na(sby_nearmiss_k)) sby_nearmiss_k <- sby_validate_positive_integer_scalar(sby_nearmiss_k, "sby_nearmiss_k")
   recipes::add_step(
     rec = recipe,
     object = sby_step_sampling_new(
@@ -126,8 +126,8 @@ sby_step_hpc_add <- function(recipe, ..., role, trained, columns, sby_sampling_m
       sby_sampling_method = sby_sampling_method,
       sby_terms = sby_terms, sby_role = role, sby_trained = trained,
       sby_columns = columns, sby_adasyn_ratio = sby_adasyn_ratio,
-      sby_nearmiss_ratio = sby_nearmiss_ratio, sby_knn_over_k = sby_k_adasyn,
-      sby_knn_under_k = sby_k_nearmiss, sby_seed = sby_seed,
+      sby_nearmiss_ratio = sby_nearmiss_ratio, sby_knn_over_k = sby_adasyn_k,
+      sby_knn_under_k = sby_nearmiss_k, sby_seed = sby_seed,
       sby_audit = sby_audit, sby_restore_types = sby_restore_types,
       sby_knn_algorithm = NA_character_, sby_knn_engine = NA_character_,
       sby_knn_distance_metric = NA_character_, sby_knn_workers = NA_integer_,

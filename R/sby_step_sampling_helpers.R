@@ -155,7 +155,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
     sby_balanced_data <- sby_adasyn_hpc(
       .data = sby_data,
       formula = sby_formula,
-      sby_k_adasyn = sby_object$sby_knn_over_k,
+      sby_adasyn_k = sby_object$sby_knn_over_k,
       sby_adasyn_ratio = sby_object$sby_adasyn_ratio,
       sby_config_max_threads = sby_object$sby_config_max_threads,
       sby_seed = sby_object$sby_seed
@@ -166,7 +166,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
     sby_balanced_data <- sby_nearmiss_hpc(
       .data = sby_data,
       formula = sby_formula,
-      sby_k_nearmiss = sby_object$sby_knn_under_k,
+      sby_nearmiss_k = sby_object$sby_knn_under_k,
       sby_nearmiss_ratio = sby_object$sby_nearmiss_ratio,
       sby_config_max_threads = sby_object$sby_config_max_threads,
       sby_seed = sby_object$sby_seed
@@ -177,8 +177,8 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
     sby_balanced_data <- sby_adanear_hpc(
       .data = sby_data,
       formula = sby_formula,
-      sby_k_adasyn = sby_object$sby_knn_over_k,
-      sby_k_nearmiss = sby_object$sby_knn_under_k,
+      sby_adasyn_k = sby_object$sby_knn_over_k,
+      sby_nearmiss_k = sby_object$sby_knn_under_k,
       sby_config_max_threads = sby_object$sby_config_max_threads,
       sby_seed = sby_object$sby_seed,
       sby_adasyn_ratio = sby_object$sby_adasyn_ratio,
