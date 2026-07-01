@@ -11,8 +11,8 @@
 #' sby_adanear(
 #'   sby_formula,
 #'   sby_data,
-#'   sby_ratio_over = 0.2,
-#'   sby_ratio_under = 1,
+#'   sby_adasyn_ratio = 0.2,
+#'   sby_nearmiss_ratio = 1,
 #'   sby_knn_over_k = 5L,
 #'   sby_knn_under_k = 5L,
 #'   sby_seed = sample.int(10L^5L, 1L),
@@ -37,9 +37,9 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esse objeto define o espaço comum no qual serão calculadas tanto a dificuldade adaptativa do ADASYN quanto a proximidade NearMiss-1.
 #'
-#' @param sby_ratio_over Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, valores positivos executam ADASYN e podem gerar ao menos uma linha sintética antes da subamostragem; `0` desativa ADASYN nesta rotina híbrida. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
+#' @param sby_adasyn_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, valores positivos executam ADASYN e podem gerar ao menos uma linha sintética antes da subamostragem; `0` desativa ADASYN nesta rotina híbrida. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
 #'
-#' @param sby_ratio_under Valor numérico escalar não negativo que controla a retenção da classe majoritária em relação ao tamanho final da classe rara. Valores positivos executam NearMiss-1 com alvo `floor(n_minoria_final * sby_ratio_under)`, limitado à maioria disponível; `0` desativa NearMiss-1 nesta rotina híbrida.
+#' @param sby_nearmiss_ratio Valor numérico escalar não negativo que controla a retenção da classe majoritária em relação ao tamanho final da classe rara. Valores positivos executam NearMiss-1 com alvo `floor(n_minoria_final * sby_nearmiss_ratio)`, limitado à maioria disponível; `0` desativa NearMiss-1 nesta rotina híbrida.
 #'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN para estimar dificuldade local e gerar amostras sintéticas. O padrão é `5L`. Essa escolha influencia onde a expansão minoritária será concentrada e o grau de suavização da avaliação local.
 #'
@@ -175,8 +175,8 @@
 sby_adanear <- function(
   sby_formula,
   sby_data,
-  sby_ratio_over = 0.2,
-  sby_ratio_under = 1,
+  sby_adasyn_ratio = 0.2,
+  sby_nearmiss_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
@@ -218,8 +218,8 @@ sby_adanear <- function(
       sby_k_adasyn = sby_knn_over_k,
       sby_k_nearmiss = sby_knn_under_k,
       sby_seed = sby_seed,
-      sby_ratio_over = sby_ratio_over,
-      sby_ratio_under = sby_ratio_under
+      sby_adasyn_ratio = sby_adasyn_ratio,
+      sby_nearmiss_ratio = sby_nearmiss_ratio
     ))
   }
 
@@ -232,8 +232,8 @@ sby_adanear <- function(
   sby_matrix_result <- sby_adanear_matrix(
     sby_x_matrix = sby_x_matrix,
     sby_y_vector = sby_target_factor,
-    sby_ratio_over = sby_ratio_over,
-    sby_ratio_under = sby_ratio_under,
+    sby_adasyn_ratio = sby_adasyn_ratio,
+    sby_nearmiss_ratio = sby_nearmiss_ratio,
     sby_knn_over_k = sby_knn_over_k,
     sby_knn_under_k = sby_knn_under_k,
     sby_seed = sby_seed,

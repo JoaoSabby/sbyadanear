@@ -17,7 +17,7 @@ test_that("sby_step_adasyn balances a recipe end-to-end", {
   rec <- sby_step_adasyn(
     recipe                  = rec,
     recipes::all_outcomes(),
-    sby_ratio_over          = 0.5,
+    sby_adasyn_ratio          = 0.5,
     sby_seed                = 1L,
     sby_knn_engine          = "FNN"
   )
@@ -47,7 +47,7 @@ test_that("sby_step_nearmiss reduces the majority class via recipes", {
   rec <- sby_step_nearmiss(
     recipe          = rec,
     recipes::all_outcomes(),
-    sby_ratio_under = 0.5,
+    sby_nearmiss_ratio = 0.5,
     sby_seed        = 1L,
     sby_knn_engine  = "FNN"
   )
@@ -73,8 +73,8 @@ test_that("sby_step_adanear runs the full pipeline through recipes", {
   rec <- sby_step_adanear(
     recipe                  = rec,
     recipes::all_outcomes(),
-    sby_ratio_over          = 0.5,
-    sby_ratio_under         = 0.8,
+    sby_adasyn_ratio          = 0.5,
+    sby_nearmiss_ratio         = 0.8,
     sby_seed                = 1L,
     sby_knn_engine          = "FNN"
   )

@@ -89,28 +89,28 @@ run_scenarios <- function(){
     # ADASYN matrix - FNN kd_tree (small p) or FNN brute (large p)
     rows[[length(rows) + 1L]] <- bench_row(
       sc$label, "sby_adasyn_matrix",
-      list(d$x, d$y, sby_ratio_over = 0.5, sby_seed = 1L,
+      list(d$x, d$y, sby_adasyn_ratio = 0.5, sby_seed = 1L,
            sby_knn_engine = "FNN")
     )
 
     # NearMiss matrix - FNN
     rows[[length(rows) + 1L]] <- bench_row(
       sc$label, "sby_nearmiss_matrix",
-      list(d$x, d$y, sby_ratio_under = 0.5, sby_seed = 1L,
+      list(d$x, d$y, sby_nearmiss_ratio = 0.5, sby_seed = 1L,
            sby_knn_engine = "FNN")
     )
 
     # ADANEAR matrix - FNN
     rows[[length(rows) + 1L]] <- bench_row(
       sc$label, "sby_adanear_matrix",
-      list(d$x, d$y, sby_ratio_over = 0.3, sby_ratio_under = 0.5,
+      list(d$x, d$y, sby_adasyn_ratio = 0.3, sby_nearmiss_ratio = 0.5,
            sby_seed = 1L, sby_knn_engine = "FNN")
     )
 
     # ADASYN tabular wrapper (overhead measurement)
     rows[[length(rows) + 1L]] <- bench_row(
       paste0(sc$label, "_tabular"), "sby_adasyn",
-      list(TARGET ~ ., d$dat, sby_ratio_over = 0.5, sby_seed = 1L,
+      list(TARGET ~ ., d$dat, sby_adasyn_ratio = 0.5, sby_seed = 1L,
            sby_knn_engine = "FNN")
     )
 
@@ -118,7 +118,7 @@ run_scenarios <- function(){
     options(sbyadanear.sby_use_native_brute = TRUE)
     rows[[length(rows) + 1L]] <- bench_row(
       paste0(sc$label, "_native_brute"), "sby_adasyn_matrix",
-      list(d$x, d$y, sby_ratio_over = 0.5, sby_seed = 1L,
+      list(d$x, d$y, sby_adasyn_ratio = 0.5, sby_seed = 1L,
            sby_knn_engine = "FNN", sby_knn_algorithm = "brute")
     )
 
@@ -126,7 +126,7 @@ run_scenarios <- function(){
     options(sbyadanear.sby_use_native_brute = FALSE)
     rows[[length(rows) + 1L]] <- bench_row(
       paste0(sc$label, "_fnn_brute"), "sby_adasyn_matrix",
-      list(d$x, d$y, sby_ratio_over = 0.5, sby_seed = 1L,
+      list(d$x, d$y, sby_adasyn_ratio = 0.5, sby_seed = 1L,
            sby_knn_engine = "FNN", sby_knn_algorithm = "brute")
     )
     options(sbyadanear.sby_use_native_brute = TRUE)
@@ -137,7 +137,7 @@ run_scenarios <- function(){
   d <- make_data(5000L, 50L, 0.05)
   rows[[length(rows) + 1L]] <- bench_row(
     "hnsw_cosine_n5k_p50", "sby_adasyn_matrix",
-    list(d$x, d$y, sby_ratio_over = 0.5, sby_seed = 1L,
+    list(d$x, d$y, sby_adasyn_ratio = 0.5, sby_seed = 1L,
          sby_knn_engine = "RcppHNSW", sby_knn_distance_metric = "cosine")
   )
 

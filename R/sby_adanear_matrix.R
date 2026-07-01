@@ -8,8 +8,8 @@
 sby_adanear_matrix <- function(
   sby_x_matrix,
   sby_y_vector,
-  sby_ratio_over = 0.2,
-  sby_ratio_under = 1,
+  sby_adasyn_ratio = 0.2,
+  sby_nearmiss_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
@@ -38,17 +38,17 @@ sby_adanear_matrix <- function(
   if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
-  if(!(is.numeric(sby_ratio_over) && length(sby_ratio_over) == 1L && !is.na(sby_ratio_over) && sby_ratio_over >= 0)){
-    sby_adanear_abort("'sby_ratio_over' deve ser escalar numerico nao negativo")
+  if(!(is.numeric(sby_adasyn_ratio) && length(sby_adasyn_ratio) == 1L && !is.na(sby_adasyn_ratio) && sby_adasyn_ratio >= 0)){
+    sby_adanear_abort("'sby_adasyn_ratio' deve ser escalar numerico nao negativo")
   }
-  if(!(is.numeric(sby_ratio_under) && length(sby_ratio_under) == 1L && !is.na(sby_ratio_under) && sby_ratio_under >= 0)){
-    sby_adanear_abort("'sby_ratio_under' deve ser escalar numerico nao negativo")
+  if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L && !is.na(sby_nearmiss_ratio) && sby_nearmiss_ratio >= 0)){
+    sby_adanear_abort("'sby_nearmiss_ratio' deve ser escalar numerico nao negativo")
   }
 
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
   sby_original_roles <- sby_get_binary_class_roles(sby_target_factor = sby_y_vector)
-  sby_run_adasyn <- isTRUE(sby_ratio_over > 0)
-  sby_run_nearmiss <- isTRUE(sby_ratio_under > 0)
+  sby_run_adasyn <- isTRUE(sby_adasyn_ratio > 0)
+  sby_run_nearmiss <- isTRUE(sby_nearmiss_ratio > 0)
 
   if(!isTRUE(sby_run_adasyn) && !isTRUE(sby_run_nearmiss)){
     sby_y_out <- as.factor(sby_y_vector)
@@ -114,7 +114,7 @@ sby_adanear_matrix <- function(
     sby_over_result <- sby_adasyn_matrix(
       sby_x_matrix = sby_x_matrix,
       sby_y_vector = sby_y_vector,
-      sby_ratio_over = sby_ratio_over,
+      sby_adasyn_ratio = sby_adasyn_ratio,
       sby_knn_over_k = sby_knn_over_k,
       sby_seed = sby_seed,
       sby_audit = sby_audit_full,
@@ -165,7 +165,7 @@ sby_adanear_matrix <- function(
     sby_under_result <- sby_nearmiss_matrix(
       sby_x_matrix = sby_current_scaled_x,
       sby_y_vector = sby_current_y,
-      sby_ratio_under = sby_ratio_under,
+      sby_nearmiss_ratio = sby_nearmiss_ratio,
       sby_knn_under_k = sby_knn_under_k,
       sby_seed = sby_seed,
       sby_audit = sby_audit_full,

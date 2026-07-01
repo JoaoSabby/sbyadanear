@@ -105,7 +105,7 @@
 #'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`.
 #'
-#' @param sby_ratio_under Valor numérico escalar maior que zero que controla a quantidade de registros majoritários retidos pelo NearMiss-1 em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_ratio_under)`, limitado à maioria disponível.
+#' @param sby_nearmiss_ratio Valor numérico escalar maior que zero que controla a quantidade de registros majoritários retidos pelo NearMiss-1 em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_nearmiss_ratio)`, limitado à maioria disponível.
 #'
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos usados pela etapa NearMiss-1.
 #'
@@ -144,7 +144,7 @@ sby_step_nearmiss <- function(
   role = NA,
   trained = FALSE,
   columns = NULL,
-  sby_ratio_under = 1,
+  sby_nearmiss_ratio = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -216,8 +216,8 @@ sby_step_nearmiss <- function(
       sby_role                    = role,
       sby_trained                 = trained,
       sby_columns                 = columns,
-      sby_ratio_over              = NA_real_,
-      sby_ratio_under             = sby_ratio_under,
+      sby_adasyn_ratio              = NA_real_,
+      sby_nearmiss_ratio             = sby_nearmiss_ratio,
       sby_knn_over_k              = NA_integer_,
       sby_knn_under_k             = sby_knn_under_k,
       sby_seed                    = sby_seed,

@@ -7,27 +7,27 @@ test_that("HPC shortcuts honor configurable sampling ratios", {
   )
 
   ada_low <- sby_adasyn_hpc(dat, y ~ ., sby_k_adasyn = 3,
-                            sby_ratio_over = 0.5)
+                            sby_adasyn_ratio = 0.5)
   ada_high <- sby_adasyn_hpc(dat, y ~ ., sby_k_adasyn = 3,
-                             sby_ratio_over = 1)
+                             sby_adasyn_ratio = 1)
   expect_equal(nrow(ada_low), 16L)
   expect_equal(nrow(ada_high), 18L)
 
   near_equal <- sby_nearmiss_hpc(dat, y ~ ., sby_k_nearmiss = 3,
-                                 sby_ratio_under = 1)
+                                 sby_nearmiss_ratio = 1)
   near_loose <- sby_nearmiss_hpc(dat, y ~ ., sby_k_nearmiss = 3,
-                                 sby_ratio_under = 0.5)
+                                 sby_nearmiss_ratio = 0.5)
   expect_equal(nrow(near_equal), 8L)
   expect_equal(nrow(near_loose), 6L)
 
   adanear_equal <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
                                    sby_k_nearmiss = 3,
-                                   sby_ratio_over = 0.5,
-                                   sby_ratio_under = 1)
+                                   sby_adasyn_ratio = 0.5,
+                                   sby_nearmiss_ratio = 1)
   adanear_loose <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
                                    sby_k_nearmiss = 3,
-                                   sby_ratio_over = 1,
-                                   sby_ratio_under = 0.5)
+                                   sby_adasyn_ratio = 1,
+                                   sby_nearmiss_ratio = 0.5)
   expect_equal(nrow(adanear_equal), 12L)
   expect_equal(nrow(adanear_loose), 12L)
   expect_equal(sum(adanear_equal$y == "min"), 6L)
@@ -41,19 +41,19 @@ test_that("HPC shortcuts validate sampling ratios before native execution", {
     y = factor(c(rep("min", 4), rep("maj", 10)), levels = c("min", "maj"))
   )
 
-  expect_error(sby_adasyn_hpc(dat, y ~ ., sby_ratio_over = 0),
-               regexp = "sby_ratio_over")
-  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_ratio_under = 0),
-               regexp = "sby_ratio_under")
-  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_ratio_under = -1),
-               regexp = "sby_ratio_under")
-  expect_error(sby_adanear_hpc(dat, y ~ ., sby_ratio_over = -1),
-               regexp = "sby_ratio_over")
-  expect_error(sby_adanear_hpc(dat, y ~ ., sby_ratio_under = -1),
-               regexp = "sby_ratio_under")
-  expect_equal(nrow(sby_nearmiss_hpc(dat, y ~ ., sby_ratio_under = 2)), 12L)
-  expect_equal(nrow(sby_adanear_hpc(dat, y ~ ., sby_ratio_over = 0,
-                                    sby_ratio_under = 0)), nrow(dat))
+  expect_error(sby_adasyn_hpc(dat, y ~ ., sby_adasyn_ratio = 0),
+               regexp = "sby_adasyn_ratio")
+  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_ratio = 0),
+               regexp = "sby_nearmiss_ratio")
+  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_ratio = -1),
+               regexp = "sby_nearmiss_ratio")
+  expect_error(sby_adanear_hpc(dat, y ~ ., sby_adasyn_ratio = -1),
+               regexp = "sby_adasyn_ratio")
+  expect_error(sby_adanear_hpc(dat, y ~ ., sby_nearmiss_ratio = -1),
+               regexp = "sby_nearmiss_ratio")
+  expect_equal(nrow(sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_ratio = 2)), 12L)
+  expect_equal(nrow(sby_adanear_hpc(dat, y ~ ., sby_adasyn_ratio = 0,
+                                    sby_nearmiss_ratio = 0)), nrow(dat))
 })
 
 test_that("sby_adanear_hpc restores original scale and integer predictor types", {
@@ -71,8 +71,8 @@ test_that("sby_adanear_hpc restores original scale and integer predictor types",
     class_col ~ .,
     sby_k_adasyn = 3,
     sby_k_nearmiss = 3,
-    sby_ratio_over = 1,
-    sby_ratio_under = 0.5
+    sby_adasyn_ratio = 1,
+    sby_nearmiss_ratio = 0.5
   )
 
   expect_s3_class(out, "tbl_df")
@@ -100,13 +100,13 @@ test_that("sby_adanear_hpc honors fixed seeds", {
   out1 <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
                           sby_k_nearmiss = 3,
                           sby_seed = 99L,
-                          sby_ratio_over = 1,
-                          sby_ratio_under = 0.5)
+                          sby_adasyn_ratio = 1,
+                          sby_nearmiss_ratio = 0.5)
   out2 <- sby_adanear_hpc(dat, y ~ ., sby_k_adasyn = 3,
                           sby_k_nearmiss = 3,
                           sby_seed = 99L,
-                          sby_ratio_over = 1,
-                          sby_ratio_under = 0.5)
+                          sby_adasyn_ratio = 1,
+                          sby_nearmiss_ratio = 0.5)
 
   expect_identical(out1, out2)
   expect_error(sby_adanear_hpc(dat, y ~ ., sby_seed = 1.5),

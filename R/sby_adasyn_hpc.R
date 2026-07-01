@@ -20,7 +20,7 @@
 #' @param sby_k_adasyn Numero inteiro positivo de vizinhos do ADASYN.
 #'   Padrao: `3`.
 #'
-#' @param sby_ratio_over Fator de expansao da classe minoritaria. Deve ser
+#' @param sby_adasyn_ratio Fator de expansao da classe minoritaria. Deve ser
 #'   estritamente positivo. Padrao: `0.2`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
@@ -36,7 +36,7 @@ sby_adasyn_hpc <- function(
   .data,
   formula,
   sby_k_adasyn = 3,
-  sby_ratio_over         = 0.2,
+  sby_adasyn_ratio         = 0.2,
   sby_config_max_threads = -1,
   sby_seed               = sample.int(10L^5L, 1L)
 ){
@@ -49,10 +49,10 @@ sby_adasyn_hpc <- function(
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
   # --- Validacoes antes de qualquer operacao matricial ---
-  if (!is.numeric(sby_ratio_over) || length(sby_ratio_over) != 1L ||
-      is.na(sby_ratio_over) || sby_ratio_over <= 0) {
+  if (!is.numeric(sby_adasyn_ratio) || length(sby_adasyn_ratio) != 1L ||
+      is.na(sby_adasyn_ratio) || sby_adasyn_ratio <= 0) {
     sby_adanear_abort(
-      "sby_ratio_over deve ser um numero positivo maior que zero.",
+      "sby_adasyn_ratio deve ser um numero positivo maior que zero.",
       call = sys.call()
     )
   }
@@ -106,7 +106,7 @@ sby_adasyn_hpc <- function(
       sby_x_matrix,
       sby_target_factor,
       as.integer(sby_k_adasyn),
-      as.numeric(sby_ratio_over),
+      as.numeric(sby_adasyn_ratio),
       as.integer(sby_total_threads),
       sby_column_names,
       levels(sby_target_factor)

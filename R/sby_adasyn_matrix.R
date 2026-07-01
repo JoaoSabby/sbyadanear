@@ -8,7 +8,7 @@
 sby_adasyn_matrix <- function(
   sby_x_matrix,
   sby_y_vector,
-  sby_ratio_over = 0.2,
+  sby_adasyn_ratio = 0.2,
   sby_knn_over_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -78,7 +78,7 @@ sby_adasyn_matrix <- function(
   )
   sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, collapse::fncol(sby_x_matrix), sby_knn_engine)
 
-  sby_synthetic_count <- sby_compute_minority_expansion_count(sby_y_vector, sby_ratio_over)
+  sby_synthetic_count <- sby_compute_minority_expansion_count(sby_y_vector, sby_adasyn_ratio)
   sby_output_rows <- collapse::fnrow(sby_x_matrix) + sby_synthetic_count
   if(is.finite(sby_max_output_rows) && sby_output_rows > sby_max_output_rows){
     sby_adanear_abort("'sby_max_output_rows' seria excedido pelo ADASYN")

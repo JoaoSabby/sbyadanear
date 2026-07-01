@@ -6,7 +6,7 @@
 sby_nearmiss_index <- function(
   sby_x_matrix,
   sby_y_vector,
-  sby_ratio_under = 1,
+  sby_nearmiss_ratio = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_scaling_info = NULL,
@@ -101,7 +101,7 @@ sby_nearmiss_index <- function(
 
     sby_retained_majority_count <- sby_compute_majority_retention_count(
       sby_target_factor = sby_y_vector,
-      sby_ratio_under = sby_ratio_under,
+      sby_nearmiss_ratio = sby_nearmiss_ratio,
       sby_minority_label = sby_class_roles$sby_minority_label,
       sby_majority_label = sby_class_roles$sby_majority_label
     )

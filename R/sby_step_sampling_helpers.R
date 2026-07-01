@@ -60,8 +60,8 @@ sby_prep_step_sampling <- function(x, training, info, sby_step_name){
     sby_role                    = sby_x$sby_role,
     sby_trained                 = TRUE,
     sby_columns                 = names(sby_selected_columns),
-    sby_ratio_over              = sby_x$sby_ratio_over,
-    sby_ratio_under             = sby_x$sby_ratio_under,
+    sby_adasyn_ratio              = sby_x$sby_adasyn_ratio,
+    sby_nearmiss_ratio             = sby_x$sby_nearmiss_ratio,
     sby_knn_over_k              = sby_x$sby_knn_over_k,
     sby_knn_under_k             = sby_x$sby_knn_under_k,
     sby_seed                    = sby_x$sby_seed,
@@ -156,7 +156,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
       .data = sby_data,
       formula = sby_formula,
       sby_k_adasyn = sby_object$sby_knn_over_k,
-      sby_ratio_over = sby_object$sby_ratio_over,
+      sby_adasyn_ratio = sby_object$sby_adasyn_ratio,
       sby_config_max_threads = sby_object$sby_config_max_threads,
       sby_seed = sby_object$sby_seed
     )
@@ -167,7 +167,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
       .data = sby_data,
       formula = sby_formula,
       sby_k_nearmiss = sby_object$sby_knn_under_k,
-      sby_ratio_under = sby_object$sby_ratio_under,
+      sby_nearmiss_ratio = sby_object$sby_nearmiss_ratio,
       sby_config_max_threads = sby_object$sby_config_max_threads,
       sby_seed = sby_object$sby_seed
     )
@@ -181,8 +181,8 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
       sby_k_nearmiss = sby_object$sby_knn_under_k,
       sby_config_max_threads = sby_object$sby_config_max_threads,
       sby_seed = sby_object$sby_seed,
-      sby_ratio_over = sby_object$sby_ratio_over,
-      sby_ratio_under = sby_object$sby_ratio_under
+      sby_adasyn_ratio = sby_object$sby_adasyn_ratio,
+      sby_nearmiss_ratio = sby_object$sby_nearmiss_ratio
     )
     sby_sampling_result <- list(sby_balanced_data = sby_balanced_data)
   }else if(identical(sby_object$sby_sampling_method, "adasyn")){
@@ -191,7 +191,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
     sby_sampling_result <- sby_adasyn(
       sby_formula             = sby_formula,
       sby_data                = sby_data,
-      sby_ratio_over          = sby_object$sby_ratio_over,
+      sby_adasyn_ratio          = sby_object$sby_adasyn_ratio,
       sby_knn_over_k          = sby_object$sby_knn_over_k,
       sby_seed                = sby_object$sby_seed,
       sby_audit               = TRUE,
@@ -211,7 +211,7 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
     sby_sampling_result <- sby_nearmiss(
       sby_formula             = sby_formula,
       sby_data                = sby_data,
-      sby_ratio_under         = sby_object$sby_ratio_under,
+      sby_nearmiss_ratio         = sby_object$sby_nearmiss_ratio,
       sby_knn_under_k         = sby_object$sby_knn_under_k,
       sby_seed                = sby_object$sby_seed,
       sby_audit               = TRUE,
@@ -231,8 +231,8 @@ sby_bake_step_sampling <- function(object, new_data, sby_step_name){
     sby_sampling_result <- sby_adanear(
       sby_formula             = sby_formula,
       sby_data                = sby_data,
-      sby_ratio_over          = sby_object$sby_ratio_over,
-      sby_ratio_under         = sby_object$sby_ratio_under,
+      sby_adasyn_ratio          = sby_object$sby_adasyn_ratio,
+      sby_nearmiss_ratio         = sby_object$sby_nearmiss_ratio,
       sby_knn_over_k          = sby_object$sby_knn_over_k,
       sby_knn_under_k         = sby_object$sby_knn_under_k,
       sby_seed                = sby_object$sby_seed,
@@ -288,8 +288,8 @@ sby_tidy_step_sampling <- function(x){
   return(data.frame(
     sby_terms               = sby_terms,
     sby_sampling_method     = sby_x$sby_sampling_method,
-    sby_ratio_over          = sby_x$sby_ratio_over,
-    sby_ratio_under         = sby_x$sby_ratio_under,
+    sby_adasyn_ratio          = sby_x$sby_adasyn_ratio,
+    sby_nearmiss_ratio         = sby_x$sby_nearmiss_ratio,
     sby_knn_over_k          = sby_x$sby_knn_over_k,
     sby_knn_under_k         = sby_x$sby_knn_under_k,
     sby_knn_query_chunk_size  = sby_x$sby_knn_query_chunk_size,

@@ -6,19 +6,19 @@
 #'
 #' @param sby_target_factor Fator binario com as classes observadas
 #'
-#' @param sby_ratio_over Fator relativo de expansao da classe minoritaria
+#' @param sby_adasyn_ratio Fator relativo de expansao da classe minoritaria
 #'
 #' @return Quantidade inteira de linhas sinteticas a gerar
 #'
 #' @noRd
-sby_compute_minority_expansion_count <- function(sby_target_factor, sby_ratio_over){
+sby_compute_minority_expansion_count <- function(sby_target_factor, sby_adasyn_ratio){
   
   # Verifica se o fator de expansao e um escalar numerico positivo
-  if(!(is.numeric(sby_ratio_over) && length(sby_ratio_over) == 1L && !is.na(sby_ratio_over) && sby_ratio_over > 0)){
+  if(!(is.numeric(sby_adasyn_ratio) && length(sby_adasyn_ratio) == 1L && !is.na(sby_adasyn_ratio) && sby_adasyn_ratio > 0)){
 
     # Aborta quando o fator de oversampling e invalido
     sby_adanear_abort(
-      sby_message = "'sby_ratio_over' deve ser escalar numerico positivo"
+      sby_message = "'sby_adasyn_ratio' deve ser escalar numerico positivo"
     )
   }
 
@@ -29,7 +29,7 @@ sby_compute_minority_expansion_count <- function(sby_target_factor, sby_ratio_ov
   sby_minority_count <- sby_class_roles$sby_minority_count
   sby_synthetic_count <- max(
     1L,
-    as.integer(floor(sby_minority_count * sby_ratio_over))
+    as.integer(floor(sby_minority_count * sby_adasyn_ratio))
   )
 
   # Retorna quantidade de amostras sinteticas a gerar
