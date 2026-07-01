@@ -20,7 +20,7 @@ run_one <- function(name, n, p, minority_ratio, workers){
   result <- sby_nearmiss_matrix(
     sby_x_matrix = dat$x,
     sby_y_vector = dat$y,
-    sby_under_ratio = 1,
+    sby_ratio_under = 1,
     sby_knn_under_k = 5L,
     sby_seed = 1L,
     sby_knn_algorithm = "brute",

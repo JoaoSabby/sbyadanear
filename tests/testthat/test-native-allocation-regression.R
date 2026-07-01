@@ -15,7 +15,7 @@ test_that("native brute path handles repeated zero-distance rescues", {
   result <- sby_nearmiss_matrix(
     sby_x_matrix = x,
     sby_y_vector = y,
-    sby_under_ratio = 1,
+    sby_ratio_under = 1,
     sby_knn_under_k = 2L,
     sby_seed = 11L,
     sby_knn_algorithm = "brute",
@@ -35,7 +35,7 @@ test_that("RcppParallel brute path returns stable shapes after vector reuse", {
   result <- sby_adasyn_matrix(
     sby_x_matrix = x,
     sby_y_vector = factor(c(rep("minor", 3L), rep("major", 7L))),
-    sby_over_ratio = 0.5,
+    sby_ratio_over = 0.5,
     sby_knn_over_k = 2L,
     sby_seed = 13L,
     sby_knn_algorithm = "brute",

@@ -20,7 +20,7 @@
 #' @param sby_k_nearmiss Numero inteiro positivo de vizinhos do
 #'   NearMiss-1. Padrao: `7`.
 #'
-#' @param sby_under_ratio Razao positiva de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_under_ratio)`, limitado a maioria disponivel.
+#' @param sby_ratio_under Razao positiva de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_ratio_under)`, limitado a maioria disponivel.
 #'   Padrao: `0.5`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
@@ -36,7 +36,7 @@ sby_nearmiss_hpc <- function(
   .data,
   formula,
   sby_k_nearmiss = 7,
-  sby_under_ratio         = 1,
+  sby_ratio_under         = 1,
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L)
 ){
@@ -48,10 +48,10 @@ sby_nearmiss_hpc <- function(
   # respeita a configuracao externa do runtime HPC.
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
-  if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
-      is.na(sby_under_ratio) || sby_under_ratio <= 0) {
+  if (!is.numeric(sby_ratio_under) || length(sby_ratio_under) != 1L ||
+      is.na(sby_ratio_under) || sby_ratio_under <= 0) {
     sby_adanear_abort(
-      "sby_under_ratio deve ser um numero positivo maior que zero.",
+      "sby_ratio_under deve ser um numero positivo maior que zero.",
       call = sys.call()
     )
   }
@@ -102,7 +102,7 @@ sby_nearmiss_hpc <- function(
     sby_x_matrix,
     sby_target_factor,
     as.integer(sby_k_nearmiss),
-    as.numeric(sby_under_ratio),
+    as.numeric(sby_ratio_under),
     as.integer(sby_total_threads),
     sby_column_names,
     levels(sby_target_factor)

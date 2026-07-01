@@ -61,9 +61,9 @@
 #' \min\left(n_{maj}^{disp},
 #' \left\lfloor n_{min}^{(1)} r_u \right\rfloor\right).
 #' }
-#' Assim, `sby_under_ratio = 0.5` retem ate metade do tamanho final da classe
-#' rara, `sby_under_ratio = 1` retem ate a mesma quantidade da classe rara e
-#' `sby_under_ratio = 2` retem ate duas vezes o tamanho da classe rara,
+#' Assim, `sby_ratio_under = 0.5` retem ate metade do tamanho final da classe
+#' rara, `sby_ratio_under = 1` retem ate a mesma quantidade da classe rara e
+#' `sby_ratio_under = 2` retem ate duas vezes o tamanho da classe rara,
 #' limitado a maioria disponivel.
 #'
 #' A logica do pipeline hibrido e:
@@ -92,11 +92,11 @@
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios
 #'   do ADASYN. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
 #'
-#' @param sby_over_ratio Razao nao negativa de aumento da classe rara. Valores
+#' @param sby_ratio_over Razao nao negativa de aumento da classe rara. Valores
 #'   positivos executam ADASYN; zero desativa ADASYN nesta rotina hibrida.
 #'   Padrao: `0.2`.
 #'
-#' @param sby_under_ratio Razao nao negativa de retencao da classe majoritaria
+#' @param sby_ratio_under Razao nao negativa de retencao da classe majoritaria
 #'   em relacao ao tamanho final da classe rara. Valores positivos executam
 #'   NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. Padrao: `1`.
 #'
@@ -110,8 +110,8 @@ sby_adanear_hpc <- function(
   sby_k_nearmiss = 7,
   sby_config_max_threads  = -1,
   sby_seed                = sample.int(10L^5L, 1L),
-  sby_over_ratio          = 0.2,
-  sby_under_ratio         = 1
+  sby_ratio_over          = 0.2,
+  sby_ratio_under         = 1
 ){
   sby_adanear_check_user_interrupt()
 
@@ -122,42 +122,42 @@ sby_adanear_hpc <- function(
   # respeita a configuracao externa do runtime HPC.
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
-  if (!is.numeric(sby_under_ratio) || length(sby_under_ratio) != 1L ||
-      is.na(sby_under_ratio) || sby_under_ratio < 0) {
+  if (!is.numeric(sby_ratio_under) || length(sby_ratio_under) != 1L ||
+      is.na(sby_ratio_under) || sby_ratio_under < 0) {
     sby_adanear_abort(
-      "sby_under_ratio deve ser um numero nao negativo.",
+      "sby_ratio_under deve ser um numero nao negativo.",
       call = sys.call()
     )
   }
 
   # --- Validacoes antes de qualquer operacao matricial ---
-  if (!is.numeric(sby_over_ratio) || length(sby_over_ratio) != 1L ||
-      is.na(sby_over_ratio) || sby_over_ratio < 0) {
+  if (!is.numeric(sby_ratio_over) || length(sby_ratio_over) != 1L ||
+      is.na(sby_ratio_over) || sby_ratio_over < 0) {
     sby_adanear_abort(
-      "sby_over_ratio deve ser um numero nao negativo.",
+      "sby_ratio_over deve ser um numero nao negativo.",
       call = sys.call()
     )
   }
 
-  if(identical(as.numeric(sby_over_ratio), 0) && identical(as.numeric(sby_under_ratio), 0)){
+  if(identical(as.numeric(sby_ratio_over), 0) && identical(as.numeric(sby_ratio_under), 0)){
     return(tibble::as_tibble(.data))
   }
-  if(identical(as.numeric(sby_over_ratio), 0) && isTRUE(sby_under_ratio > 0)){
+  if(identical(as.numeric(sby_ratio_over), 0) && isTRUE(sby_ratio_under > 0)){
     return(sby_nearmiss_hpc(
       .data = .data,
       formula = formula,
       sby_k_nearmiss = sby_k_nearmiss,
-      sby_under_ratio = sby_under_ratio,
+      sby_ratio_under = sby_ratio_under,
       sby_config_max_threads = sby_config_max_threads,
       sby_seed = sby_seed
     ))
   }
-  if(isTRUE(sby_over_ratio > 0) && identical(as.numeric(sby_under_ratio), 0)){
+  if(isTRUE(sby_ratio_over > 0) && identical(as.numeric(sby_ratio_under), 0)){
     return(sby_adasyn_hpc(
       .data = .data,
       formula = formula,
       sby_k_adasyn = sby_k_adasyn,
-      sby_over_ratio = sby_over_ratio,
+      sby_ratio_over = sby_ratio_over,
       sby_config_max_threads = sby_config_max_threads,
       sby_seed = sby_seed
     ))
@@ -218,8 +218,8 @@ sby_adanear_hpc <- function(
       sby_target_factor,
       as.integer(sby_k_adasyn),
       as.integer(sby_k_nearmiss),
-      as.numeric(sby_over_ratio),
-      as.numeric(sby_under_ratio),
+      as.numeric(sby_ratio_over),
+      as.numeric(sby_ratio_under),
       as.integer(sby_total_threads),
       sby_column_names,
       levels(sby_target_factor)
@@ -256,7 +256,7 @@ sby_adanear_hpc <- function(
   }
 
   # O numero de linhas sinteticas deve ser pelo menos 1 (ceiling garantido no C++)
-  # mas se vier zero (over_ratio muito pequeno), o rbind ainda e valido.
+  # mas se vier zero (ratio_over muito pequeno), o rbind ainda e valido.
   sby_final_predictors <- rbind(sby_maj_rows, sby_min_rows, sby_syn_df)
   rownames(sby_final_predictors) <- NULL
 

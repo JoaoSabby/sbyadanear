@@ -6,7 +6,7 @@
 #'
 #' @param sby_target_factor Fator binario com as classes observadas
 #'
-#' @param sby_under_ratio Multiplicador positivo da quantidade minoritaria para definir a maioria retida
+#' @param sby_ratio_under Multiplicador positivo da quantidade minoritaria para definir a maioria retida
 #'
 #' @param sby_minority_label Rotulo fixo opcional da classe minoritaria
 #'
@@ -17,17 +17,17 @@
 #' @noRd
 sby_compute_majority_retention_count <- function(
   sby_target_factor,
-  sby_under_ratio,
+  sby_ratio_under,
   sby_minority_label = NULL,
   sby_majority_label = NULL
 ){
   
   # Verifica se a razao alvo e positiva
-  if(!(is.numeric(sby_under_ratio) && length(sby_under_ratio) == 1L && !is.na(sby_under_ratio) && sby_under_ratio > 0)){
+  if(!(is.numeric(sby_ratio_under) && length(sby_ratio_under) == 1L && !is.na(sby_ratio_under) && sby_ratio_under > 0)){
 
     # Aborta quando a razao de undersampling e invalida
     sby_adanear_abort(
-      sby_message = "'sby_under_ratio' deve ser escalar numerico maior que zero"
+      sby_message = "'sby_ratio_under' deve ser escalar numerico maior que zero"
     )
   }
 
@@ -48,11 +48,11 @@ sby_compute_majority_retention_count <- function(
   sby_minority_count <- sby_class_roles$sby_minority_count
   sby_majority_count <- sby_class_roles$sby_majority_count
 
-  # Interpreta sby_under_ratio como multiplicador da quantidade minoritaria
+  # Interpreta sby_ratio_under como multiplicador da quantidade minoritaria
   # final disponivel para o NearMiss-1. Exemplo: 1.0 iguala maioria a
   # minoria; 0.5 retem metade da minoria; 2.0 retem ate duas vezes a
   # minoria, limitado a maioria disponivel.
-  sby_target_majority_count <- floor(sby_minority_count * sby_under_ratio)
+  sby_target_majority_count <- floor(sby_minority_count * sby_ratio_under)
 
   # Limita a retencao ao total majoritario disponivel para evitar indices ausentes
   sby_retained_count <- min(
@@ -65,7 +65,7 @@ sby_compute_majority_retention_count <- function(
 
     # Aborta quando a configuracao removeria toda a classe majoritaria
     sby_adanear_abort(
-      sby_message = "'sby_under_ratio' reteve zero linhas"
+      sby_message = "'sby_ratio_under' reteve zero linhas"
     )
   }
 

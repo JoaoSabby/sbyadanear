@@ -11,7 +11,7 @@
 #' sby_adasyn(
 #'   sby_formula,
 #'   sby_data,
-#'   sby_over_ratio = 0.2,
+#'   sby_ratio_over = 0.2,
 #'   sby_knn_over_k = 5L,
 #'   sby_seed = sample.int(10L^5L, 1L),
 #'   sby_audit = FALSE,
@@ -36,7 +36,7 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. A escala e a distribuição das colunas preditoras influenciam diretamente a geração sintética, embora o pacote aplique padronização Z-score antes da busca.
 #'
-#' @param sby_over_ratio Valor numérico escalar que controla a expansão relativa da classe minoritária. O padrão é `0.2`, indicando uma geração sintética moderada; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética para evitar abortos por arredondamento. Valores maiores aumentam a expansão da minoria, mas também elevam o risco de criar amostras sintéticas em regiões ruidosas.
+#' @param sby_ratio_over Valor numérico escalar que controla a expansão relativa da classe minoritária. O padrão é `0.2`, indicando uma geração sintética moderada; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética para evitar abortos por arredondamento. Valores maiores aumentam a expansão da minoria, mas também elevam o risco de criar amostras sintéticas em regiões ruidosas.
 #'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados para estimar a dificuldade local de cada observação minoritária no critério ADASYN. O padrão é `5L`. Valores maiores tornam a estimativa de dificuldade mais estável e global; valores menores enfatizam estruturas locais e podem reagir fortemente a outliers.
 #'
@@ -170,7 +170,7 @@
 sby_adasyn <- function(
   sby_formula,
   sby_data,
-  sby_over_ratio = 0.2,
+  sby_ratio_over = 0.2,
   sby_knn_over_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -212,7 +212,7 @@ sby_adasyn <- function(
       formula = sby_formula,
       sby_k_adasyn = sby_knn_over_k,
       sby_seed = sby_seed,
-      sby_over_ratio = sby_over_ratio
+      sby_ratio_over = sby_ratio_over
     ))
   }
 
@@ -225,7 +225,7 @@ sby_adasyn <- function(
   sby_matrix_result <- sby_adasyn_matrix(
     sby_x_matrix = sby_x_matrix,
     sby_y_vector = sby_target_factor,
-    sby_over_ratio = sby_over_ratio,
+    sby_ratio_over = sby_ratio_over,
     sby_knn_over_k = sby_knn_over_k,
     sby_seed = sby_seed,
     sby_audit = sby_audit,

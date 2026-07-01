@@ -34,7 +34,7 @@ test_that("sby_adasyn_matrix increases only the minority class", {
   storage.mode(x) <- "double"
   y <- factor(c(rep("minor", 6), rep("major", 24)), levels = c("minor", "major"))
 
-  out <- sby_adasyn_matrix(x, y, sby_over_ratio = 0.5, sby_seed = 11, sby_knn_engine = "FNN")
+  out <- sby_adasyn_matrix(x, y, sby_ratio_over = 0.5, sby_seed = 11, sby_knn_engine = "FNN")
 
   expect_equal(unname(out$sby_input_class_distribution), c(6L, 24L))
   expect_equal(unname(out$sby_output_class_distribution), c(9L, 24L))
@@ -48,8 +48,8 @@ test_that("sby_nearmiss_index agrees with sby_nearmiss_matrix retained rows", {
   storage.mode(x) <- "double"
   y <- factor(c(rep("minor", 8), rep("major", 32)), levels = c("minor", "major"))
 
-  idx <- sby_nearmiss_index(x, y, sby_under_ratio = 0.5, sby_seed = 9, sby_knn_engine = "FNN")
-  mat <- sby_nearmiss_matrix(x, y, sby_under_ratio = 0.5, sby_seed = 9, sby_knn_engine = "FNN", sby_return_index = TRUE)
+  idx <- sby_nearmiss_index(x, y, sby_ratio_under = 0.5, sby_seed = 9, sby_knn_engine = "FNN")
+  mat <- sby_nearmiss_matrix(x, y, sby_ratio_under = 0.5, sby_seed = 9, sby_knn_engine = "FNN", sby_return_index = TRUE)
 
   expect_identical(idx$sby_retained_index, mat$sby_retained_index)
   expect_equal(mat$sby_x_matrix, x[idx$sby_retained_index, , drop = FALSE])
@@ -64,8 +64,8 @@ test_that("sby_adanear_matrix preserves original class roles across stages", {
 
   out <- sby_adanear_matrix(
     x, y,
-    sby_over_ratio = 1.5,
-    sby_under_ratio = 1,
+    sby_ratio_over = 1.5,
+    sby_ratio_under = 1,
     sby_seed = 7,
     sby_knn_engine = "FNN",
     sby_audit = TRUE
@@ -100,16 +100,16 @@ test_that("tabular wrappers keep class distributions compatible with matrix API"
   dat <- tibble::as_tibble(as.data.frame(x))
   dat$TARGET <- y
 
-  mat_ada <- sby_adasyn_matrix(x, y, sby_over_ratio = 0.4, sby_seed = 4, sby_knn_engine = "FNN")
-  tab_ada <- sby_adasyn(TARGET ~ ., dat, sby_over_ratio = 0.4, sby_seed = 4, sby_knn_engine = "FNN")
+  mat_ada <- sby_adasyn_matrix(x, y, sby_ratio_over = 0.4, sby_seed = 4, sby_knn_engine = "FNN")
+  tab_ada <- sby_adasyn(TARGET ~ ., dat, sby_ratio_over = 0.4, sby_seed = 4, sby_knn_engine = "FNN")
   expect_equal(unname(table(tab_ada$TARGET)), unname(mat_ada$sby_output_class_distribution))
 
-  mat_near <- sby_nearmiss_matrix(x, y, sby_under_ratio = 0.5, sby_seed = 5, sby_knn_engine = "FNN")
-  tab_near <- sby_nearmiss(TARGET ~ ., dat, sby_under_ratio = 0.5, sby_seed = 5, sby_knn_engine = "FNN")
+  mat_near <- sby_nearmiss_matrix(x, y, sby_ratio_under = 0.5, sby_seed = 5, sby_knn_engine = "FNN")
+  tab_near <- sby_nearmiss(TARGET ~ ., dat, sby_ratio_under = 0.5, sby_seed = 5, sby_knn_engine = "FNN")
   expect_equal(unname(table(tab_near$TARGET)), unname(mat_near$sby_output_class_distribution))
 
-  mat_adanear <- sby_adanear_matrix(x, y, sby_over_ratio = 0.4, sby_under_ratio = 0.5, sby_seed = 6, sby_knn_engine = "FNN")
-  tab_adanear <- sby_adanear(TARGET ~ ., dat, sby_over_ratio = 0.4, sby_under_ratio = 0.5, sby_seed = 6, sby_knn_engine = "FNN")
+  mat_adanear <- sby_adanear_matrix(x, y, sby_ratio_over = 0.4, sby_ratio_under = 0.5, sby_seed = 6, sby_knn_engine = "FNN")
+  tab_adanear <- sby_adanear(TARGET ~ ., dat, sby_ratio_over = 0.4, sby_ratio_under = 0.5, sby_seed = 6, sby_knn_engine = "FNN")
   expect_equal(unname(table(tab_adanear$TARGET)), unname(mat_adanear$sby_output_class_distribution))
 })
 
@@ -130,7 +130,7 @@ test_that("sby_nearmiss_index exposes operational scale without full audit", {
 
   idx <- sby_nearmiss_index(
     x, y,
-    sby_under_ratio = 0.5,
+    sby_ratio_under = 0.5,
     sby_seed = 19,
     sby_knn_engine = "FNN",
     sby_return_scaling_info = TRUE,
@@ -203,12 +203,12 @@ test_that("tabular wrappers preserve original rows and restore only synthetic ro
   )
   dat$TARGET <- factor(c(rep("minor", 8), rep("major", 24)), levels = c("minor", "major"))
 
-  ada <- sby_adasyn(TARGET ~ ., dat, sby_over_ratio = 0.5, sby_seed = 31, sby_knn_engine = "FNN")
+  ada <- sby_adasyn(TARGET ~ ., dat, sby_ratio_over = 0.5, sby_seed = 31, sby_knn_engine = "FNN")
   expect_identical(as.data.frame(ada[seq_len(nrow(dat)), names(dat)[1:3]]), dat[, 1:3])
   expect_type(ada$int_col, "integer")
   expect_type(ada$bin_col, "integer")
 
-  near_audit <- sby_nearmiss(TARGET ~ ., dat, sby_under_ratio = 0.5, sby_seed = 32, sby_knn_engine = "FNN", sby_audit = TRUE)
+  near_audit <- sby_nearmiss(TARGET ~ ., dat, sby_ratio_under = 0.5, sby_seed = 32, sby_knn_engine = "FNN", sby_audit = TRUE)
   expect_identical(
     as.data.frame(near_audit$sby_balanced_data[, names(dat)[1:3]]),
     dat[near_audit$sby_retained_index, 1:3, drop = FALSE]

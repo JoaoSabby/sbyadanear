@@ -128,7 +128,7 @@ RunCase <- function(methodName, testData, workerCount, repetitionIndex){
     resultObject <- sby_adasyn(
       sby_formula = TARGET ~ .,
       sby_data = testData,
-      sby_over_ratio = 0.50,
+      sby_ratio_over = 0.50,
       sby_knn_over_k = 5L,
       sby_seed = seedValue,
       sby_audit = FALSE,
@@ -143,7 +143,7 @@ RunCase <- function(methodName, testData, workerCount, repetitionIndex){
     resultObject <- sby_nearmiss(
       sby_formula = TARGET ~ .,
       sby_data = testData,
-      sby_under_ratio = 0.80,
+      sby_ratio_under = 0.80,
       sby_knn_under_k = 5L,
       sby_seed = seedValue,
       sby_audit = FALSE,
@@ -158,8 +158,8 @@ RunCase <- function(methodName, testData, workerCount, repetitionIndex){
     resultObject <- sby_adanear(
       sby_formula = TARGET ~ .,
       sby_data = testData,
-      sby_over_ratio = 0.50,
-      sby_under_ratio = 0.80,
+      sby_ratio_over = 0.50,
+      sby_ratio_under = 0.80,
       sby_knn_over_k = 5L,
       sby_knn_under_k = 5L,
       sby_seed = seedValue,

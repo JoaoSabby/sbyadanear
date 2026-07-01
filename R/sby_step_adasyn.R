@@ -105,7 +105,7 @@
 #'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`.
 #'
-#' @param sby_over_ratio Valor numérico escalar positivo que controla a expansão relativa da classe minoritária. Em bases pequenas, valores positivos geram ao menos uma linha sintética para evitar abortos por arredondamento.
+#' @param sby_ratio_over Valor numérico escalar positivo que controla a expansão relativa da classe minoritária. Em bases pequenas, valores positivos geram ao menos uma linha sintética para evitar abortos por arredondamento.
 #'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN.
 #'
@@ -144,7 +144,7 @@ sby_step_adasyn <- function(
   role = NA,
   trained = FALSE,
   columns = NULL,
-  sby_over_ratio = 0.2,
+  sby_ratio_over = 0.2,
   sby_knn_over_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -216,8 +216,8 @@ sby_step_adasyn <- function(
       sby_role                    = role,
       sby_trained                 = trained,
       sby_columns                 = columns,
-      sby_over_ratio              = sby_over_ratio,
-      sby_under_ratio             = NA_real_,
+      sby_ratio_over              = sby_ratio_over,
+      sby_ratio_under             = NA_real_,
       sby_knn_over_k              = sby_knn_over_k,
       sby_knn_under_k             = NA_integer_,
       sby_seed                    = sby_seed,

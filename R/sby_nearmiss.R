@@ -10,7 +10,7 @@
 #' sby_nearmiss(
 #'   sby_formula,
 #'   sby_data,
-#'   sby_under_ratio = 1,
+#'   sby_ratio_under = 1,
 #'   sby_knn_under_k = 5L,
 #'   sby_seed = sample.int(10L^5L, 1L),
 #'   sby_audit = FALSE,
@@ -37,7 +37,7 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esses dados definem o espaço no qual as observações majoritárias serão ranqueadas por proximidade à classe minoritária.
 #'
-#' @param sby_under_ratio Valor numérico escalar maior que zero que define a quantidade de registros majoritários retidos em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_under_ratio)`, limitado à maioria disponível. O padrão `1` retém até a mesma quantidade da classe rara; `0.5` retém até metade; `2` retém até duas vezes.
+#' @param sby_ratio_under Valor numérico escalar maior que zero que define a quantidade de registros majoritários retidos em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_ratio_under)`, limitado à maioria disponível. O padrão `1` retém até a mesma quantidade da classe rara; `0.5` retém até metade; `2` retém até duas vezes.
 #'
 #' @param sby_knn_under_k Número inteiro positivo de vizinhos minoritários usados para calcular a distância média do critério NearMiss-1. O padrão é `5L`. Valores maiores reduzem variância do ranqueamento; valores menores focalizam a fronteira local e podem selecionar exemplos muito próximos de ruído minoritário.
 #'
@@ -179,7 +179,7 @@
 sby_nearmiss <- function(
   sby_formula,
   sby_data,
-  sby_under_ratio = 1,
+  sby_ratio_under = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -229,7 +229,7 @@ sby_nearmiss <- function(
       .data = sby_data,
       formula = sby_formula,
       sby_k_nearmiss = sby_knn_under_k,
-      sby_under_ratio = sby_under_ratio
+      sby_ratio_under = sby_ratio_under
     ))
   }
 
@@ -244,7 +244,7 @@ sby_nearmiss <- function(
   sby_matrix_result <- sby_nearmiss_matrix(
     sby_x_matrix = sby_x_matrix,
     sby_y_vector = sby_target_factor,
-    sby_under_ratio = sby_under_ratio,
+    sby_ratio_under = sby_ratio_under,
     sby_knn_under_k = sby_knn_under_k,
     sby_seed = sby_seed,
     sby_audit = sby_audit,

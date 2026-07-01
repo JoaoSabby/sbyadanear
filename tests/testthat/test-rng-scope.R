@@ -10,14 +10,14 @@ test_that("sby_adasyn_matrix preserves caller RNG state", {
   out1 <- sby_adasyn_matrix(
     x,
     y,
-    sby_over_ratio = 0.5,
+    sby_ratio_over = 0.5,
     sby_seed = 42L,
     sby_knn_engine = "FNN"
   )
   out2 <- sby_adasyn_matrix(
     x,
     y,
-    sby_over_ratio = 0.5,
+    sby_ratio_over = 0.5,
     sby_seed = 42L,
     sby_knn_engine = "FNN"
   )
@@ -40,14 +40,14 @@ test_that("sby_nearmiss_index deterministic route does not consume RNG", {
   idx1 <- sby_nearmiss_index(
     x,
     y,
-    sby_under_ratio = 0.5,
+    sby_ratio_under = 0.5,
     sby_seed = 10L,
     sby_knn_engine = "FNN"
   )
   idx2 <- sby_nearmiss_index(
     x,
     y,
-    sby_under_ratio = 0.5,
+    sby_ratio_under = 0.5,
     sby_seed = 999L,
     sby_knn_engine = "FNN"
   )
