@@ -1,5 +1,50 @@
 #' Aplicar subamostragem NearMiss-1 em dados binários
 #'
+#' @title Subamostragem NearMiss-1 para classificação binária
+#' @name sby_nearmiss
+#' @concept desbalanceamento de classes
+#' @concept NearMiss
+#' @concept subamostragem informada por vizinhos
+#'
+#' @section Fluxo operacional da função externa:
+#' O processo executado pode ser representado como:
+#' \deqn{\text{dados} \rightarrow \text{seleção por fórmula} \rightarrow Z=(X-\mu)/\sigma \rightarrow d_k(m,S_{min}) \rightarrow \operatorname{rank}(m) \rightarrow \text{retenção majoritária}.}
+#' A função valida os dados, padroniza os preditores, calcula distâncias entre
+#' observações majoritárias e a classe minoritária e retém as observações
+#' majoritárias mais próximas da fronteira definida por NearMiss-1.
+#'
+#' @section Modelo matemático NearMiss-1:
+#' Para cada observação majoritária \eqn{x_m \in S_{maj}}, sejam
+#' \eqn{N_k^{min}(x_m)} os \eqn{k} vizinhos mais próximos pertencentes à classe
+#' minoritária. O escore de retenção é a distância média:
+#' \deqn{D_m = \frac{1}{k}\sum_{x_j \in N_k^{min}(x_m)} d(x_m,x_j).}
+#' A regra NearMiss-1 ordena os majoritários por \eqn{D_m} crescente e retém
+#' \deqn{M^*=\min\{n_{maj},\lfloor n_{min}\rho_{under}\rfloor\}}
+#' observações, em que \eqn{\rho_{under}} é `sby_nearmiss_ratio`. Portanto, o
+#' método preserva exemplos majoritários adjacentes à minoria, favorecendo uma
+#' amostra balanceada concentrada na região de separação entre classes.
+#'
+#' @section Exemplo visual do cálculo:
+#' \preformatted{
+#' maioria m_j -> k vizinhos minoritários -> média D_j -> ordenação crescente
+#'                                                               |
+#'                                                               v
+#'                                                  primeiros M* majoritários
+#' }
+#'
+#' @note NearMiss-1 pode aumentar a dificuldade aparente do problema por reter
+#' observações majoritárias próximas da minoria. Essa característica é desejável
+#' para treino discriminativo, mas deve ser avaliada por validação externa.
+#'
+#' @seealso [sby_adasyn()], [sby_adanear()], [sby_nearmiss_matrix()], [sby_nearmiss_index()]
+#'
+#' @examples
+#' dados <- data.frame(y = factor(c(rep("min", 8), rep("maj", 24))),
+#'                     x1 = c(rnorm(8, 0), rnorm(24, 1)),
+#'                     x2 = c(rnorm(8, 0), rnorm(24, 1)))
+#' set.seed(1)
+#' sby_nearmiss(y ~ x1 + x2, dados, sby_nearmiss_ratio = 1, sby_seed = 7)
+#'
 #' @description
 #' `sby_nearmiss()` executa subamostragem da classe majoritária pelo critério
 #' NearMiss-1, retendo observações majoritárias que apresentam menor distância
@@ -166,7 +211,16 @@
 #' @references
 #' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
 #' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE.
+#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#'
+#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
+#' a case study involving information extraction. In *Proceedings of the ICML
+#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#'
+#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
+#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
+#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
+#' doi:10.1186/s40854-023-00558-3.
 #'
 #' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
 #' nearest neighbor search using Hierarchical Navigable Small World graphs.

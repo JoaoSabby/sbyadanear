@@ -1,5 +1,59 @@
 #' Aplicar sobreamostragem ADASYN em dados binários
 #'
+#' @title Sobreamostragem adaptativa ADASYN para classificação binária
+#' @name sby_adasyn
+#' @concept desbalanceamento de classes
+#' @concept ADASYN
+#' @concept sobreamostragem adaptativa
+#'
+#' @section Fluxo operacional da função externa:
+#' O processo executado pode ser lido como o encadeamento abaixo:
+#' \deqn{\text{dados} \rightarrow \text{seleção por fórmula} \rightarrow Z=(X-\mu)/\sigma \rightarrow kNN \rightarrow r_i \rightarrow g_i \rightarrow X_{syn} \rightarrow \text{tibble final}.}
+#' Em termos algorítmicos, a função valida a fórmula, separa alvo e preditores,
+#' padroniza os preditores, identifica classes minoritária e majoritária, estima
+#' a dificuldade local de cada observação minoritária e distribui a geração
+#' sintética proporcionalmente a essa dificuldade.
+#'
+#' @section Modelo matemático ADASYN:
+#' Seja \eqn{S_{min}=\{x_i: y_i=c_{min}\}} e \eqn{S_{maj}=\{x_i: y_i=c_{maj}\}}.
+#' Para cada \eqn{x_i \in S_{min}}, calcula-se a proporção de vizinhos
+#' majoritários nos \eqn{k} vizinhos mais próximos:
+#' \deqn{r_i = \frac{\#\{x_j \in N_k(x_i): y_j=c_{maj}\}}{k}.}
+#' As dificuldades são normalizadas por \eqn{\hat r_i=r_i/\sum_l r_l}. O número
+#' aproximado de sintéticos atribuídos ao ponto \eqn{i} é
+#' \deqn{g_i \approx \hat r_i\,G,\quad G=\left\lceil n_{min}\,\rho_{over}\right\rceil,}
+#' em que \eqn{\rho_{over}} é `sby_adasyn_ratio`. Cada ponto sintético é uma
+#' interpolação aleatória entre uma observação minoritária e um de seus vizinhos
+#' minoritários:
+#' \deqn{x_{syn}=x_i + \lambda (x_{zi}-x_i),\quad \lambda\sim U(0,1).}
+#' Assim, regiões com maior mistura local entre classes recebem mais amostras,
+#' o que desloca capacidade de aprendizado para áreas consideradas difíceis.
+#'
+#' @section Exemplo visual do cálculo:
+#' \preformatted{
+#' Entrada binária -> padronização -> vizinhos de cada minoria
+#'       |                 |                  |
+#'       v                 v                  v
+#' contagens          distâncias          r_i = maioria/k
+#'       \____________________ distribuição g_i ____________________/
+#'                                |
+#'                                v
+#'                    interpolações minoritárias sintéticas
+#' }
+#'
+#' @note A função pressupõe preditores numéricos densos. Preditores categóricos
+#' devem ser codificados antes da chamada. Valores sintéticos são produzidos no
+#' espaço padronizado e revertidos para a escala original quando aplicável.
+#'
+#' @seealso [sby_nearmiss()], [sby_adanear()], [sby_adasyn_matrix()]
+#'
+#' @examples
+#' dados <- data.frame(y = factor(c(rep("min", 8), rep("maj", 24))),
+#'                     x1 = c(rnorm(8, 0), rnorm(24, 1)),
+#'                     x2 = c(rnorm(8, 0), rnorm(24, 1)))
+#' set.seed(1)
+#' sby_adasyn(y ~ x1 + x2, dados, sby_adasyn_ratio = 0.25, sby_seed = 7)
+#'
 #' @description
 #' `sby_adasyn()` executa sobreamostragem adaptativa da classe minoritária em um
 #' problema binário, gerando observações sintéticas em regiões nas quais a classe
@@ -157,7 +211,16 @@
 #' @references
 #' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
 #' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE.
+#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#'
+#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
+#' a case study involving information extraction. In *Proceedings of the ICML
+#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#'
+#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
+#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
+#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
+#' doi:10.1186/s40854-023-00558-3.
 #'
 #' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
 #' nearest neighbor search using Hierarchical Navigable Small World graphs.
