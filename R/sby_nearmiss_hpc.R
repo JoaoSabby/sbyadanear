@@ -29,6 +29,34 @@
 #' @param sby_seed Semente inteira para reproducibilidade. Padrao:
 #'   `sample.int(10L^5L, 1L)`.
 #'
+#' @concept balanceamento de classes
+#' @concept ADASYN
+#' @concept NearMiss
+#'
+#' @details
+#' Esta interface executa a mesma família de modelos geométricos descrita nas
+#' funções tabulares, usando matrizes numéricas densas e fatores binários para
+#' reduzir cópias e facilitar integração com pipelines de alto desempenho.
+#'
+#' @references
+#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
+#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
+#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#'
+#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
+#' a case study involving information extraction. In *Proceedings of the ICML
+#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#'
+#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
+#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
+#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
+#' doi:10.1186/s40854-023-00558-3.
+#'
+#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
+#' nearest neighbor search using Hierarchical Navigable Small World graphs.
+#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
+#' 824-836.
+#'
 #' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
 #'
 #' @export

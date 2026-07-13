@@ -1,5 +1,58 @@
 #' Executar balanceamento combinado ADASYN e NearMiss-1
 #'
+#' @title Pipeline híbrido ADANEAR com ADASYN seguido de NearMiss-1
+#' @name sby_adanear
+#' @concept ADANEAR
+#' @concept ADASYN
+#' @concept NearMiss
+#' @concept balanceamento híbrido
+#'
+#' @section Fluxo operacional da função externa:
+#' O fluxo híbrido é sequencial e auditável:
+#' \deqn{\text{dados brutos} \rightarrow Z \rightarrow \text{ADASYN}(Z,Y) \rightarrow (Z^+,Y^+) \rightarrow \text{NearMiss-1}(Z^+,Y^+) \rightarrow \text{dados balanceados}.}
+#' Primeiro, a classe minoritária é expandida por interpolação adaptativa; depois,
+#' a classe majoritária original é reduzida por proximidade à minoria no espaço
+#' resultante. Com isso, o pipeline combina cobertura de regiões minoritárias
+#' difíceis e concentração da maioria na fronteira de decisão.
+#'
+#' @section Modelo matemático combinado:
+#' A etapa ADASYN estima \eqn{r_i} pela fração de vizinhos majoritários em torno
+#' de cada minoria e gera \eqn{G=\lceil n_{min}\rho_{over}\rceil} exemplos
+#' sintéticos distribuídos por \eqn{g_i \approx G r_i/\sum_l r_l}. A etapa
+#' NearMiss-1, aplicada após a expansão, calcula para cada majoritário
+#' \deqn{D_m = k^{-1}\sum_{x_j \in N_k^{min}(x_m)} d(x_m,x_j)}
+#' e retém \eqn{\min(n_{maj},\lfloor n_{min}^{+}\rho_{under}\rfloor)} registros
+#' majoritários. O símbolo \eqn{n_{min}^{+}} representa o tamanho da minoria
+#' depois da sobreamostragem.
+#'
+#' @section Diagrama didático:
+#' \preformatted{
+#'  [X, y]
+#'    |-- validação e Z-score -----------------------------------|
+#'    v                                                          |
+#'  ADASYN: r_i -> g_i -> x_syn                                  |
+#'    v                                                          |
+#'  base expandida (minoria original + sintética + maioria)       |
+#'    v                                                          |
+#'  NearMiss-1: D_m -> ranking -> retenção majoritária -----------|
+#'    v
+#'  tibble balanceado final
+#' }
+#'
+#' @note `sby_adanear()` é a interface recomendada quando se deseja reproduzir o
+#' encadeamento de sobreamostragem e subamostragem descrito no framework de
+#' preparação de dados para churn bancário de Brito et al. (2024).
+#'
+#' @seealso [sby_adasyn()], [sby_nearmiss()], [sby_adanear_matrix()]
+#'
+#' @examples
+#' dados <- data.frame(y = factor(c(rep("min", 8), rep("maj", 24))),
+#'                     x1 = c(rnorm(8, 0), rnorm(24, 1)),
+#'                     x2 = c(rnorm(8, 0), rnorm(24, 1)))
+#' set.seed(1)
+#' sby_adanear(y ~ x1 + x2, dados, sby_adasyn_ratio = 0.25,
+#'             sby_nearmiss_ratio = 1, sby_seed = 7)
+#'
 #' @description
 #' `sby_adanear()` executa um pipeline híbrido de balanceamento para problemas
 #' binários: primeiro aplica ADASYN para expandir adaptativamente a classe
@@ -162,7 +215,16 @@
 #' @references
 #' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
 #' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE.
+#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#'
+#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
+#' a case study involving information extraction. In *Proceedings of the ICML
+#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#'
+#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
+#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
+#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
+#' doi:10.1186/s40854-023-00558-3.
 #'
 #' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
 #' nearest neighbor search using Hierarchical Navigable Small World graphs.
