@@ -20,8 +20,10 @@
 #' @param sby_adasyn_k Numero inteiro positivo de vizinhos do ADASYN.
 #'   Padrao: `3`.
 #'
-#' @param sby_adasyn_ratio Fator de expansao da classe minoritaria. Deve ser
-#'   estritamente positivo. Padrao: `0.2`.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da
+#'   classe rara. `0.4`, por exemplo, adiciona 40% de registros sintéticos e
+#'   preserva 100% dos raros originais; nunca reduz a classe rara. Deve ser
+#'   estritamente positivo. Padrão: `0.2`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
 #'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
@@ -78,7 +80,7 @@ sby_adasyn_hpc <- function(
 
   # --- Validacoes antes de qualquer operacao matricial ---
   if (!is.numeric(sby_adasyn_ratio) || length(sby_adasyn_ratio) != 1L ||
-      is.na(sby_adasyn_ratio) || sby_adasyn_ratio <= 0) {
+      is.na(sby_adasyn_ratio) || !is.finite(sby_adasyn_ratio) || sby_adasyn_ratio <= 0) {
     sby_adanear_abort(
       "sby_adasyn_ratio deve ser um numero positivo maior que zero.",
       call = sys.call()
@@ -193,6 +195,14 @@ sby_adasyn_hpc <- function(
   sby_balanced_data <- collapse::fselect(
     .x = sby_balanced_data,
     sby_original_column_order
+  )
+
+  sby_assert_minority_not_reduced(
+    sby_input_target = sby_target_vector,
+    sby_output_target = sby_balanced_data[[sby_target_name]],
+    sby_context = "sby_adasyn_hpc()",
+    sby_minority_label = sby_class_counts$sby_minority_label,
+    sby_input_count = sby_class_counts$sby_minority_count
   )
 
   return(sby_balanced_data)

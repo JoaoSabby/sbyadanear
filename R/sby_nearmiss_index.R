@@ -67,9 +67,16 @@ sby_nearmiss_index <- function(
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
+  sby_fixed_roles <- !is.null(sby_fixed_minority_label) &&
+    !is.null(sby_fixed_majority_label)
+  sby_validation_minority_count <- if(isTRUE(sby_fixed_roles)){
+    sum(as.character(sby_y_vector) == as.character(sby_fixed_minority_label))
+  }else{
+    sby_class_info_input$sby_minority_count
+  }
   # NearMiss-1 calcula medias de distancia ate k vizinhos minoritarios; com
   # menos de duas observacoes minoritarias o ranqueamento e degenerado.
-  if(sby_class_info_input$sby_minority_count < 2L){
+  if(sby_validation_minority_count < 2L){
     sby_adanear_abort("'sby_y_vector' precisa de ao menos 2 observacoes na classe minoritaria para NearMiss-1")
   }
 
@@ -113,7 +120,8 @@ sby_nearmiss_index <- function(
     sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine)
   }
 
-  if(identical(sby_class_info_input$sby_minority_count, sby_class_info_input$sby_majority_count)){
+  if(!isTRUE(sby_fixed_roles) &&
+     identical(sby_class_info_input$sby_minority_count, sby_class_info_input$sby_majority_count)){
     sby_retained_index <- seq_len(collapse::fnrow(sby_x_matrix))
     sby_selected_majority_index <- integer(0L)
   }else{
@@ -197,6 +205,9 @@ sby_nearmiss_index <- function(
       }
     }
     sby_retained_index <- sort(c(sby_minority_index, sby_selected_majority_index))
+    if(!all(sby_minority_index %in% sby_retained_index)){
+      sby_adanear_abort("Falha interna do NearMiss: registros da classe rara seriam removidos")
+    }
   }
 
   sby_y_out <- sby_y_vector[sby_retained_index]

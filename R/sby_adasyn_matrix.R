@@ -156,6 +156,13 @@ sby_adasyn_matrix <- function(
     sby_output_scale <- "z_score"
   }
   sby_y_out <- as.factor(sby_adasyn_result$y)
+  sby_assert_minority_not_reduced(
+    sby_input_target = sby_y_vector,
+    sby_output_target = sby_y_out,
+    sby_context = "sby_adasyn_matrix()",
+    sby_minority_label = sby_class_info_input$sby_minority_label,
+    sby_input_count = sby_class_info_input$sby_minority_count
+  )
   sby_class_info_output <- sby_binary_class_counts_fast(sby_y_out)
 
   sby_diagnostics <- list(

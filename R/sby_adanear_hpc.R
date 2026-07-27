@@ -92,9 +92,11 @@
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios
 #'   do ADASYN. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
 #'
-#' @param sby_adasyn_ratio Razao nao negativa de aumento da classe rara. Valores
-#'   positivos executam ADASYN; zero desativa ADASYN nesta rotina hibrida.
-#'   Padrao: `0.2`.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da
+#'   classe rara. `0.4`, por exemplo, adiciona 40% de registros sintéticos e
+#'   preserva 100% dos raros originais; nunca reduz a classe rara. Valores
+#'   positivos executam ADASYN; zero desativa ADASYN nesta rotina híbrida.
+#'   Padrão: `0.2`.
 #'
 #' @param sby_nearmiss_ratio Razao nao negativa de retencao da classe majoritaria
 #'   em relacao ao tamanho final da classe rara. Valores positivos executam
@@ -160,7 +162,7 @@ sby_adanear_hpc <- function(
 
   # --- Validacoes antes de qualquer operacao matricial ---
   if (!is.numeric(sby_adasyn_ratio) || length(sby_adasyn_ratio) != 1L ||
-      is.na(sby_adasyn_ratio) || sby_adasyn_ratio < 0) {
+      is.na(sby_adasyn_ratio) || !is.finite(sby_adasyn_ratio) || sby_adasyn_ratio < 0) {
     sby_adanear_abort(
       "sby_adasyn_ratio deve ser um numero nao negativo.",
       call = sys.call()
@@ -283,8 +285,8 @@ sby_adanear_hpc <- function(
     sby_syn_df <- sby_original_predictor_data[0L, , drop = FALSE]
   }
 
-  # O numero de linhas sinteticas deve ser pelo menos 1 (ceiling garantido no C++)
-  # mas se vier zero (adasyn_ratio muito pequeno), o rbind ainda e valido.
+  # O numero de linhas sinteticas deve ser pelo menos 1 (piso minimo garantido
+  # no C++), mas o rbind permanece valido mesmo diante de retorno defensivo vazio.
   sby_final_predictors <- rbind(sby_maj_rows, sby_min_rows, sby_syn_df)
   rownames(sby_final_predictors) <- NULL
 
@@ -316,6 +318,14 @@ sby_adanear_hpc <- function(
   sby_balanced_data <- collapse::fselect(
     .x = sby_balanced_data,
     sby_original_column_order
+  )
+
+  sby_assert_minority_not_reduced(
+    sby_input_target = sby_target_vector,
+    sby_output_target = sby_balanced_data[[sby_target_name]],
+    sby_context = "sby_adanear_hpc()",
+    sby_minority_label = sby_class_counts$sby_minority_label,
+    sby_input_count = sby_class_counts$sby_minority_count
   )
 
   return(sby_balanced_data)

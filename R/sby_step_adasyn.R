@@ -105,7 +105,7 @@
 #'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`.
 #'
-#' @param sby_adasyn_ratio Valor numérico escalar positivo que controla a expansão relativa da classe minoritária. Em bases pequenas, valores positivos geram ao menos uma linha sintética para evitar abortos por arredondamento.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre usa `1 + sby_adasyn_ratio`: `0.4` torna-se multiplicador final `1.4`, preservando todos os raros originais e acrescentando os sintéticos necessários.
 #'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados pela etapa ADASYN.
 #'

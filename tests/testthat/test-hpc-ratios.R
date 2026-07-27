@@ -12,6 +12,8 @@ test_that("HPC shortcuts honor configurable sampling ratios", {
                              sby_adasyn_ratio = 1)
   expect_equal(nrow(ada_low), 16L)
   expect_equal(nrow(ada_high), 18L)
+  expect_equal(sum(ada_low$y == "min"), 6L)
+  expect_gte(sum(ada_low$y == "min"), sum(dat$y == "min"))
 
   near_equal <- sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_k = 3,
                                  sby_nearmiss_ratio = 1)

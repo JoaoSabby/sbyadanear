@@ -66,7 +66,7 @@ sby_adanear_matrix <- function(
   if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
-  if(!(is.numeric(sby_adasyn_ratio) && length(sby_adasyn_ratio) == 1L && !is.na(sby_adasyn_ratio) && sby_adasyn_ratio >= 0)){
+  if(!(is.numeric(sby_adasyn_ratio) && length(sby_adasyn_ratio) == 1L && !is.na(sby_adasyn_ratio) && is.finite(sby_adasyn_ratio) && sby_adasyn_ratio >= 0)){
     sby_adanear_abort("'sby_adasyn_ratio' deve ser escalar numerico nao negativo")
   }
   if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L && !is.na(sby_nearmiss_ratio) && sby_nearmiss_ratio >= 0)){
@@ -248,6 +248,16 @@ sby_adanear_matrix <- function(
       sby_diagnostics = sby_under_diagnostics
     )
   }
+
+  sby_assert_minority_not_reduced(
+    sby_input_target = sby_y_vector,
+    sby_output_target = sby_final_y,
+    sby_context = "sby_adanear_matrix()",
+    sby_minority_label = sby_original_roles$sby_minority_label,
+    sby_input_count = as.integer(
+      sby_class_info_input$sby_class_counts[sby_original_roles$sby_minority_label]
+    )
+  )
 
   sby_class_info_output <- sby_binary_class_counts_fast(sby_final_y)
   sby_diagnostics <- list(

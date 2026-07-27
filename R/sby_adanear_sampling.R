@@ -17,7 +17,8 @@
 #'
 #' @section Modelo matemático combinado:
 #' A etapa ADASYN estima \eqn{r_i} pela fração de vizinhos majoritários em torno
-#' de cada minoria e gera \eqn{G=\lceil n_{min}\rho_{over}\rceil} exemplos
+#' de cada minoria, calcula \eqn{n_{min}^{final}=\lfloor n_{min}(1+\rho_{over})\rfloor}
+#' e gera apenas a diferença entre a quantidade final e a quantidade original
 #' sintéticos distribuídos por \eqn{g_i \approx G r_i/\sum_l r_l}. A etapa
 #' NearMiss-1, aplicada após a expansão, calcula para cada majoritário
 #' \deqn{D_m = k^{-1}\sum_{x_j \in N_k^{min}(x_m)} d(x_m,x_j)}
@@ -90,7 +91,7 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esse objeto define o espaço comum no qual serão calculadas tanto a dificuldade adaptativa do ADASYN quanto a proximidade NearMiss-1.
 #'
-#' @param sby_adasyn_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, valores positivos executam ADASYN e podem gerar ao menos uma linha sintética antes da subamostragem; `0` desativa ADASYN nesta rotina híbrida. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da classe rara antes do NearMiss. O cálculo sempre usa `1 + sby_adasyn_ratio`: `0.4` torna-se multiplicador final `1.4`, nunca `0.4`. O padrão é `0.2`; `0` desativa ADASYN. NearMiss atua somente sobre a maioria.
 #'
 #' @param sby_nearmiss_ratio Valor numérico escalar não negativo que controla a retenção da classe majoritária em relação ao tamanho final da classe rara. Valores positivos executam NearMiss-1 com alvo `floor(n_minoria_final * sby_nearmiss_ratio)`, limitado à maioria disponível; `0` desativa NearMiss-1 nesta rotina híbrida.
 #'
