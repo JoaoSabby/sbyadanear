@@ -48,7 +48,7 @@
 #'
 #' @param columns Vetor de caracteres ou `NULL` com o nome da coluna de desfecho resolvida durante `prep()`. O padrão é `NULL`, indicando que a seleção ainda não foi treinada. Esse metadado define qual variável será removida dos preditores e usada como alvo no momento do balanceamento.
 #'
-#' @param sby_adasyn_ratio Valor numérico escalar que controla a intensidade da sobreamostragem ADASYN antes da etapa NearMiss. O padrão é `0.2`; em bases pequenas, valores positivos executam ADASYN e podem gerar ao menos uma linha sintética antes da subamostragem; `0` desativa ADASYN nesta rotina híbrida. Valores maiores podem melhorar cobertura da minoria, mas também propagam ruído em regiões ambíguas.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da classe rara antes do NearMiss. O cálculo sempre usa `1 + sby_adasyn_ratio`: `0.4` torna-se multiplicador final `1.4`, preservando os raros originais. O padrão é `0.2`; `0` desativa ADASYN. NearMiss atua somente sobre a maioria.
 #'
 #' @param sby_nearmiss_ratio Valor numérico escalar não negativo que controla a retenção da classe majoritária em relação ao tamanho final da classe rara. Valores positivos executam NearMiss-1 com alvo `floor(n_minoria_final * sby_nearmiss_ratio)`, limitado à maioria disponível; `0` desativa NearMiss-1 nesta etapa híbrida.
 #'

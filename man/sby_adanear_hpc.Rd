@@ -2,20 +2,20 @@
 \alias{sby_adanear_hpc}
 \title{Atalho HPC do pipeline combinado ADASYN e NearMiss-1}
 \usage{
-sby_adanear_hpc(.data, formula, sby_k_adasyn = 3,
-  sby_k_nearmiss = 7, sby_config_max_threads = -1,
-  sby_seed = sample.int(10L^5L, 1L), sby_over_ratio = 0.2,
-  sby_under_ratio = 1)
+sby_adanear_hpc(.data, formula, sby_adasyn_k = 3,
+  sby_nearmiss_k = 7, sby_config_max_threads = -1,
+  sby_seed = sample.int(10L^5L, 1L), sby_adasyn_ratio = 0.2,
+  sby_nearmiss_ratio = 1)
 }
 \arguments{
 \item{.data}{Data frame, tibble ou matriz com a coluna de desfecho e os preditores numericos.}
 \item{formula}{Formula no formato alvo ~ preditores.}
-\item{sby_k_adasyn}{Numero inteiro positivo de vizinhos da etapa ADASYN. O padrao e 3.}
-\item{sby_k_nearmiss}{Numero inteiro positivo de vizinhos da etapa NearMiss-1. O padrao e 7.}
+\item{sby_adasyn_k}{Numero inteiro positivo de vizinhos da etapa ADASYN. O padrao e 3.}
+\item{sby_nearmiss_k}{Numero inteiro positivo de vizinhos da etapa NearMiss-1. O padrao e 7.}
 \item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. O padrao -1 detecta os nucleos fisicos disponiveis.}
 \item{sby_seed}{Valor numerico inteiro utilizado para inicializar o gerador de numeros pseudoaleatorios da etapa ADASYN no motor HPC. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. O padrao e \code{sample.int(10L^5L, 1L)}.}
-\item{sby_over_ratio}{Razao nao negativa de aumento da classe rara. Valores positivos executam ADASYN; zero desativa ADASYN nesta rotina hibrida. O padrao e 0.2.}
-\item{sby_under_ratio}{Razao nao negativa de retencao da classe majoritaria em relacao ao tamanho final da classe rara. Valores positivos executam NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. O padrao e 1.}
+\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
+\item{sby_nearmiss_ratio}{Razao nao negativa de retencao da classe majoritaria em relacao ao tamanho final da classe rara. Valores positivos executam NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. O padrao e 1.}
 }
 \description{
 Atalho de alto desempenho do pipeline combinado de balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no espaco padronizado, usando estatisticas via MKL VSL, distancias por \code{cblas_sgemm} e pesos de interpolacao gerados por \code{Rcpp::runif()} sob controle da semente local.
@@ -53,7 +53,7 @@ Formalmente:
 \end{cases}}
 Quando \eqn{r_u > 0}, a quantidade-alvo de registros majoritarios retidos e:
 \deqn{n_{maj}^{ret} = \min\left(n_{maj}^{disp}, \left\lfloor n_{min}^{(1)} r_u \right\rfloor\right).}
-Assim, \code{sby_under_ratio = 0.5} retem ate metade do tamanho final da classe rara, \code{sby_under_ratio = 1} retem ate a mesma quantidade da classe rara e \code{sby_under_ratio = 2} retem ate duas vezes o tamanho da classe rara, limitado a maioria disponivel.
+Assim, \code{sby_nearmiss_ratio = 0.5} retem ate metade do tamanho final da classe rara, \code{sby_nearmiss_ratio = 1} retem ate a mesma quantidade da classe rara e \code{sby_nearmiss_ratio = 2} retem ate duas vezes o tamanho da classe rara, limitado a maioria disponivel.
 
 A logica do pipeline hibrido e:
 \itemize{

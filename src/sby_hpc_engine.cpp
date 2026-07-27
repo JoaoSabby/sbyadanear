@@ -458,11 +458,15 @@ static int sby_run_adasyn_stage(
     }
   }
 
-  // Numero de sinteticas: floor(n_min * over_ratio), minimo 1.
-  // Mantem a semantica historica de expandir a minoria sem reduzir
-  // observacoes raras originais.
-  int synthetic_count = (int) std::floor((double) n_min * over_ratio);
-  if(synthetic_count < 1) synthetic_count = 1;
+  // O ratio ADASYN e sempre somado a 1 para determinar o tamanho final da
+  // classe rara. Somente a diferenca em relacao aos originais e sintetizada.
+  double final_minority_double = std::floor((double) n_min * (1.0 + over_ratio));
+  if(final_minority_double > (double) INT_MAX){
+    Rcpp::stop("quantidade final ADASYN excede o limite suportado");
+  }
+  int final_minority_count = (int) final_minority_double;
+  if(final_minority_count < n_min + 1) final_minority_count = n_min + 1;
+  int synthetic_count = final_minority_count - n_min;
 
   int effective_k = k_neighbor;
   if(effective_k > n_min - 1) effective_k = n_min - 1;

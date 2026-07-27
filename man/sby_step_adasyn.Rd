@@ -11,7 +11,7 @@ sby_step_adasyn(
   role = NA,
   trained = FALSE,
   columns = NULL,
-  sby_over_ratio = 0.2,
+  sby_adasyn_ratio = 0.2,
   sby_knn_over_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -47,7 +47,7 @@ sby_step_adasyn(
 \item{sby_knn_query_chunk_size}{Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é \code{1000L}. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.}
 \item{skip}{Indicador lógico escalar que define se a etapa deve ser ignorada em novos dados.}
 \item{id}{Identificador recipes da etapa.}
-\item{sby_over_ratio}{Valor numérico escalar positivo que controla a expansão relativa da classe minoritária. Em bases pequenas, valores positivos geram ao menos uma linha sintética para evitar abortos por arredondamento.}
+\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
 \item{sby_knn_over_k}{Número inteiro positivo de vizinhos usados pela etapa ADASYN.}
 }
 \details{

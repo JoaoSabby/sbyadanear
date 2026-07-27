@@ -6,18 +6,18 @@
 \title{Adicionar etapas recipes HPC de balanceamento}
 \usage{
 sby_step_adasyn_hpc(recipe, ..., role = NA, trained = FALSE, columns = NULL,
-  sby_over_ratio = 0.2, sby_k_adasyn = 3L, sby_config_max_threads = -1L,
+  sby_adasyn_ratio = 0.2, sby_adasyn_k = 3L, sby_config_max_threads = -1L,
   sby_seed = sample.int(10L^5L, 1L), sby_audit = FALSE,
   sby_restore_types = TRUE, skip = TRUE, id = recipes::rand_id("adasyn_hpc"))
 
 sby_step_nearmiss_hpc(recipe, ..., role = NA, trained = FALSE, columns = NULL,
-  sby_under_ratio = 1, sby_k_nearmiss = 7L, sby_config_max_threads = -1L,
+  sby_nearmiss_ratio = 1, sby_nearmiss_k = 7L, sby_config_max_threads = -1L,
   sby_seed = sample.int(10L^5L, 1L), sby_audit = FALSE,
   sby_restore_types = TRUE, skip = TRUE, id = recipes::rand_id("nearmiss_hpc"))
 
 sby_step_adanear_hpc(recipe, ..., role = NA, trained = FALSE, columns = NULL,
-  sby_over_ratio = 0.2, sby_under_ratio = 1, sby_k_adasyn = 3L,
-  sby_k_nearmiss = 7L, sby_config_max_threads = -1L,
+  sby_adasyn_ratio = 0.2, sby_nearmiss_ratio = 1, sby_adasyn_k = 3L,
+  sby_nearmiss_k = 7L, sby_config_max_threads = -1L,
   sby_seed = sample.int(10L^5L, 1L), sby_audit = FALSE,
   sby_restore_types = TRUE, skip = TRUE, id = recipes::rand_id("adanear_hpc"))
 }
@@ -27,10 +27,10 @@ sby_step_adanear_hpc(recipe, ..., role = NA, trained = FALSE, columns = NULL,
 \item{role}{Papel armazenado na etapa.}
 \item{trained}{Indicador interno de treinamento da etapa.}
 \item{columns}{Coluna de desfecho resolvida durante \code{prep()}.}
-\item{sby_over_ratio}{Razao de sobreamostragem ADASYN.}
-\item{sby_under_ratio}{Razao de retencao NearMiss-1.}
-\item{sby_k_adasyn}{Numero inteiro positivo de vizinhos para ADASYN.}
-\item{sby_k_nearmiss}{Numero inteiro positivo de vizinhos para NearMiss-1.}
+\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
+\item{sby_nearmiss_ratio}{Razao de retencao NearMiss-1.}
+\item{sby_adasyn_k}{Numero inteiro positivo de vizinhos para ADASYN.}
+\item{sby_nearmiss_k}{Numero inteiro positivo de vizinhos para NearMiss-1.}
 \item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. \code{-1} detecta os nucleos fisicos disponiveis.}
 \item{sby_seed}{Semente inteira.}
 \item{sby_audit}{Indicador logico que retorna uma lista com \code{sby_balanced_data} quando \code{TRUE}.}

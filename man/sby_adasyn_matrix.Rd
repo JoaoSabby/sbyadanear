@@ -3,7 +3,7 @@
 \alias{sby_adasyn_matrix}
 \title{Aplicar ADASYN sobre matrix double densa}
 \usage{
-sby_adasyn_matrix(sby_x_matrix, sby_y_vector, sby_over_ratio = 0.2,
+sby_adasyn_matrix(sby_x_matrix, sby_y_vector, sby_adasyn_ratio = 0.2,
   sby_knn_over_k = 5L, sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE, sby_audit_level = c("none", "light", "full"),
   sby_return_scaled = FALSE, sby_return_original_scale = TRUE,
@@ -18,7 +18,7 @@ sby_adasyn_matrix(sby_x_matrix, sby_y_vector, sby_over_ratio = 0.2,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa de preditores. Matrizes esparsas não são aceitas.}
 \item{sby_y_vector}{Fator binário alinhado às linhas de \code{sby_x_matrix}.}
-\item{sby_over_ratio}{Multiplicador relativo da classe minoritária para gerar linhas sintéticas; não é a razão final minoria/maioria.}
+\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
 \item{sby_knn_over_k}{Número de vizinhos usados na dificuldade local do ADASYN.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Controle de auditoria: \code{none}, \code{light} ou \code{full}.}

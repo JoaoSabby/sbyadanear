@@ -2,7 +2,7 @@
 \alias{sby_nearmiss_matrix}
 \title{Aplicar NearMiss-1 sobre matrix double densa}
 \usage{
-sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
+sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_nearmiss_ratio = 1,
   sby_knn_under_k = 5L, sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE, sby_audit_level = c("none", "light", "full"),
   sby_return_index = TRUE, sby_return_scaled = FALSE,
@@ -18,7 +18,7 @@ sby_nearmiss_matrix(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa de preditores.}
 \item{sby_y_vector}{Fator binário alinhado às linhas.}
-\item{sby_under_ratio}{Razão positiva de retenção da classe majoritária em relação ao tamanho da classe rara. O alvo é \code{floor(n_minoria * sby_under_ratio)}, limitado à maioria disponível.}
+\item{sby_nearmiss_ratio}{Razão positiva de retenção da classe majoritária em relação ao tamanho da classe rara. O alvo é \code{floor(n_minoria * sby_nearmiss_ratio)}, limitado à maioria disponível.}
 \item{sby_knn_under_k}{Número de vizinhos minoritários usados no NearMiss-1.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Controle de auditoria.}
