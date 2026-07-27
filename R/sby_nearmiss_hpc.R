@@ -77,11 +77,17 @@ sby_nearmiss_hpc <- function(
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
   if (!is.numeric(sby_nearmiss_ratio) || length(sby_nearmiss_ratio) != 1L ||
-      is.na(sby_nearmiss_ratio) || sby_nearmiss_ratio <= 0) {
+      is.na(sby_nearmiss_ratio) || !is.finite(sby_nearmiss_ratio) ||
+      sby_nearmiss_ratio < 0) {
     sby_adanear_abort(
-      "sby_nearmiss_ratio deve ser um numero positivo maior que zero.",
+      "sby_nearmiss_ratio deve ser um numero nao negativo.",
       call = sys.call()
     )
+  }
+
+  # Retorna os dados intactos quando a reducao majoritaria esta desativada
+  if(sby_nearmiss_ratio == 0){
+    return(tibble::as_tibble(.data))
   }
 
   sby_formula_data            <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)

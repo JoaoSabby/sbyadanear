@@ -254,6 +254,18 @@ sby_nearmiss <- function(
 ){
   sby_adanear_check_user_interrupt()
 
+  # Valida a taxa antes de extrair ou converter qualquer matriz preditora
+  if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L &&
+       !is.na(sby_nearmiss_ratio) && is.finite(sby_nearmiss_ratio)) ||
+     sby_nearmiss_ratio < 0){
+    stop("'sby_nearmiss_ratio' nao pode ser negativo ou invalido", call. = FALSE)
+  }
+
+  # Preserva integralmente o data frame quando a etapa esta desativada
+  if(sby_nearmiss_ratio == 0){
+    return(sby_data)
+  }
+
   sby_formula_data <- sby_extract_formula_data(sby_formula = sby_formula, sby_data = sby_data)
   sby_predictor_data <- sby_formula_data$sby_predictor_data
   sby_original_predictor_data <- sby_predictor_data

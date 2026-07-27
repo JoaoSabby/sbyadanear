@@ -72,6 +72,31 @@ sby_adasyn_matrix <- function(
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
+
+  # Valida a taxa e calcula a quantidade sintetica antes de preparar KNN
+  sby_synthetic_count <- sby_compute_minority_expansion_count(
+    sby_y_vector,
+    sby_adasyn_ratio
+  )
+
+  # Retorna a matriz intacta sem escala, KNN ou geracao quando a taxa e zero
+  if(sby_synthetic_count == 0L){
+    return(list(
+      sby_x_matrix = sby_x_matrix,
+      sby_y_vector = sby_y_vector,
+      sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
+      sby_class_ratio_output = sby_class_info_input$sby_class_ratio,
+      sby_input_class_distribution = sby_class_info_input$sby_class_counts,
+      sby_output_class_distribution = sby_class_info_input$sby_class_counts,
+      sby_diagnostics = list(
+        sby_method = "adasyn_skipped",
+        sby_input_rows = collapse::fnrow(sby_x_matrix),
+        sby_output_rows = collapse::fnrow(sby_x_matrix),
+        sby_generated_rows = 0L,
+        sby_skipped = TRUE
+      )
+    ))
+  }
   # ADASYN exige ao menos duas observacoes na classe minoritaria para que
   # exista uma vizinhanca minoritaria valida na interpolacao sintetica.
   # A API tabular ja rejeita esse caso via sby_validate_sampling_inputs;
@@ -106,7 +131,6 @@ sby_adasyn_matrix <- function(
   )
   sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, collapse::fncol(sby_x_matrix), sby_knn_engine)
 
-  sby_synthetic_count <- sby_compute_minority_expansion_count(sby_y_vector, sby_adasyn_ratio)
   sby_output_rows <- collapse::fnrow(sby_x_matrix) + sby_synthetic_count
   if(is.finite(sby_max_output_rows) && sby_output_rows > sby_max_output_rows){
     sby_adanear_abort("'sby_max_output_rows' seria excedido pelo ADASYN")

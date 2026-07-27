@@ -38,6 +38,15 @@ test_that("a quantidade final ADASYN sempre usa um mais o ratio", {
   expect_equal(generated, 2L)
 })
 
+test_that("ratios nulos produzem inercia e negativos sao rejeitados", {
+  target <- factor(c(rep("rare", 5), rep("common", 12)))
+
+  expect_equal(sby_compute_minority_expansion_count(target, 0), 0L)
+  expect_equal(sby_compute_majority_retention_count(target, 0), 12L)
+  expect_error(sby_compute_minority_expansion_count(target, -1), "negativo")
+  expect_error(sby_compute_majority_retention_count(target, -0.5), "negativo")
+})
+
 test_that("ADASYN e ADANEAR rejeitam qualquer reducao da classe rara", {
   input <- factor(c(rep("rare", 4), rep("common", 10)))
   preserved <- factor(c(rep("rare", 5), rep("common", 6)))
