@@ -43,10 +43,14 @@ test_that("HPC shortcuts validate sampling ratios before native execution", {
     y = factor(c(rep("min", 4), rep("maj", 10)), levels = c("min", "maj"))
   )
 
-  expect_error(sby_adasyn_hpc(dat, y ~ ., sby_adasyn_ratio = 0),
-               regexp = "sby_adasyn_ratio")
-  expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_ratio = 0),
-               regexp = "sby_nearmiss_ratio")
+  expect_identical(
+    as.data.frame(sby_adasyn_hpc(dat, y ~ ., sby_adasyn_ratio = 0)),
+    dat
+  )
+  expect_identical(
+    as.data.frame(sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_ratio = 0)),
+    dat
+  )
   expect_error(sby_nearmiss_hpc(dat, y ~ ., sby_nearmiss_ratio = -1),
                regexp = "sby_nearmiss_ratio")
   expect_error(sby_adanear_hpc(dat, y ~ ., sby_adasyn_ratio = -1),

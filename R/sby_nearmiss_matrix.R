@@ -71,6 +71,37 @@ sby_nearmiss_matrix <- function(
     sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
   }
   sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
+
+  # Valida a taxa antes de preparar escala ou busca de vizinhos
+  sby_retained_count <- sby_compute_majority_retention_count(
+    sby_y_vector,
+    sby_nearmiss_ratio,
+    sby_fixed_minority_label,
+    sby_fixed_majority_label
+  )
+
+  # Retorna a matriz e todos os indices quando o NearMiss esta desativado
+  if(sby_nearmiss_ratio == 0){
+    sby_result <- list(
+      sby_x_matrix = sby_x_matrix,
+      sby_y_vector = sby_y_vector,
+      sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
+      sby_class_ratio_output = sby_class_info_input$sby_class_ratio,
+      sby_input_class_distribution = sby_class_info_input$sby_class_counts,
+      sby_output_class_distribution = sby_class_info_input$sby_class_counts,
+      sby_diagnostics = list(
+        sby_method = "nearmiss_skipped",
+        sby_input_rows = collapse::fnrow(sby_x_matrix),
+        sby_output_rows = collapse::fnrow(sby_x_matrix),
+        sby_retained_majority_rows = sby_retained_count,
+        sby_skipped = TRUE
+      )
+    )
+    if(isTRUE(sby_return_index) || isTRUE(sby_audit_full)){
+      sby_result$sby_retained_index <- seq_len(collapse::fnrow(sby_x_matrix))
+    }
+    return(sby_result)
+  }
   if(isTRUE(sby_memory_guard)){
     sby_check_dense_memory_budget(collapse::fnrow(sby_x_matrix), collapse::fncol(sby_x_matrix), 2L, Inf, "sby_nearmiss_matrix")
   }

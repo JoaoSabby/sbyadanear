@@ -33,6 +33,20 @@ sby_prep_step_sampling <- function(x, training, info, sby_step_name){
   sby_training <- training
   sby_info     <- info
 
+  # Identifica a inercia configurada para cada metodo de amostragem
+  sby_ratio_bypass <- switch(
+    sby_x$sby_sampling_method,
+    adasyn = identical(as.numeric(sby_x$sby_adasyn_ratio), 0),
+    adasyn_hpc = identical(as.numeric(sby_x$sby_adasyn_ratio), 0),
+    nearmiss = identical(as.numeric(sby_x$sby_nearmiss_ratio), 0),
+    nearmiss_hpc = identical(as.numeric(sby_x$sby_nearmiss_ratio), 0),
+    adanear = identical(as.numeric(sby_x$sby_adasyn_ratio), 0) &&
+      identical(as.numeric(sby_x$sby_nearmiss_ratio), 0),
+    adanear_hpc = identical(as.numeric(sby_x$sby_adasyn_ratio), 0) &&
+      identical(as.numeric(sby_x$sby_nearmiss_ratio), 0),
+    FALSE
+  )
+
   # Verifica se ha solicitacao de interrupcao antes da selecao de colunas
   sby_adanear_check_user_interrupt()
 
@@ -75,7 +89,7 @@ sby_prep_step_sampling <- function(x, training, info, sby_step_name){
     sby_knn_hnsw_m              = sby_x$sby_knn_hnsw_m,
     sby_knn_hnsw_ef             = sby_x$sby_knn_hnsw_ef,
     sby_knn_query_chunk_size  = sby_x$sby_knn_query_chunk_size,
-    sby_skip                    = sby_x$sby_skip,
+    sby_skip                    = isTRUE(sby_x$sby_skip) || sby_ratio_bypass,
     sby_id                      = sby_x$sby_id
   ))
 }

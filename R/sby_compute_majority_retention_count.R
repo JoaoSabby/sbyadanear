@@ -22,13 +22,19 @@ sby_compute_majority_retention_count <- function(
   sby_majority_label = NULL
 ){
   
-  # Verifica se a razao alvo e positiva
-  if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L && !is.na(sby_nearmiss_ratio) && sby_nearmiss_ratio > 0)){
+  # Verifica se a razao alvo e um escalar numerico finito
+  if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L &&
+       !is.na(sby_nearmiss_ratio) && is.finite(sby_nearmiss_ratio))){
 
     # Aborta quando a razao de undersampling e invalida
     sby_adanear_abort(
-      sby_message = "'sby_nearmiss_ratio' deve ser escalar numerico maior que zero"
+      sby_message = "'sby_nearmiss_ratio' deve ser escalar numerico finito"
     )
+  }
+
+  # Interrompe explicitamente fatores negativos de retencao
+  if(sby_nearmiss_ratio < 0){
+    stop("'sby_nearmiss_ratio' nao pode ser negativo", call. = FALSE)
   }
 
   # Identifica papeis de classe para calcular os tamanhos atuais
@@ -47,6 +53,11 @@ sby_compute_majority_retention_count <- function(
   }
   sby_minority_count <- sby_class_roles$sby_minority_count
   sby_majority_count <- sby_class_roles$sby_majority_count
+
+  # Mantem toda a maioria quando o NearMiss esta desativado
+  if(sby_nearmiss_ratio == 0){
+    return(as.integer(sby_majority_count))
+  }
 
   # Interpreta sby_nearmiss_ratio como multiplicador da quantidade minoritaria
   # final disponivel para o NearMiss-1. Exemplo: 1.0 iguala maioria a
