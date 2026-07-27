@@ -200,7 +200,9 @@ sby_adasyn_hpc <- function(
   sby_assert_minority_not_reduced(
     sby_input_target = sby_target_vector,
     sby_output_target = sby_balanced_data[[sby_target_name]],
-    sby_context = "sby_adasyn_hpc()"
+    sby_context = "sby_adasyn_hpc()",
+    sby_minority_label = sby_class_counts$sby_minority_label,
+    sby_input_count = sby_class_counts$sby_minority_count
   )
 
   return(sby_balanced_data)

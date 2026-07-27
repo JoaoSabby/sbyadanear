@@ -252,7 +252,11 @@ sby_adanear_matrix <- function(
   sby_assert_minority_not_reduced(
     sby_input_target = sby_y_vector,
     sby_output_target = sby_final_y,
-    sby_context = "sby_adanear_matrix()"
+    sby_context = "sby_adanear_matrix()",
+    sby_minority_label = sby_original_roles$sby_minority_label,
+    sby_input_count = as.integer(
+      sby_class_info_input$sby_class_counts[sby_original_roles$sby_minority_label]
+    )
   )
 
   sby_class_info_output <- sby_binary_class_counts_fast(sby_final_y)
