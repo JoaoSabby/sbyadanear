@@ -4,7 +4,7 @@
 \usage{
 sby_balance_matrix(sby_x_matrix, sby_y_vector,
   sby_strategy = c("none", "weight", "adasyn", "nearmiss", "adanear", "adanearWeight"),
-  sby_over_ratio = 0.2, sby_under_ratio = 1, sby_knn_over_k = 5L,
+  sby_adasyn_ratio = 0.2, sby_nearmiss_ratio = 1, sby_knn_over_k = 5L,
   sby_knn_under_k = 5L, sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE, sby_audit_level = c("none", "light", "full"),
   sby_return_index = TRUE, sby_return_scaled = FALSE,
@@ -20,7 +20,7 @@ sby_balance_matrix(sby_x_matrix, sby_y_vector,
 \item{sby_x_matrix}{Objeto matricial. Para \code{none} e \code{weight} pode ser esparso; para balanceamento físico deve ser matrix double densa.}
 \item{sby_y_vector}{Fator binário alinhado às linhas.}
 \item{sby_strategy}{Estratégia: \code{none}, \code{weight}, \code{adasyn}, \code{nearmiss}, \code{adanear} ou \code{adanearWeight}.}
-\item{sby_over_ratio, sby_under_ratio}{Controles de sobreamostragem e subamostragem. Para estratégias híbridas, zero pula a etapa correspondente; para estratégias exclusivas ADASYN/NearMiss, a razão da etapa chamada deve ser positiva.}
+\item{sby_adasyn_ratio, sby_nearmiss_ratio}{No ADASYN, o cálculo sempre soma \code{1} ao ratio: \code{0.4} torna-se o multiplicador final \code{1.4}, nunca um redutor para \code{0.4}. A razão NearMiss controla somente a retenção da classe majoritária.}
 \item{sby_knn_over_k, sby_knn_under_k}{Números de vizinhos por etapa.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Auditoria none/light/full.}

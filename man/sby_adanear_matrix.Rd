@@ -2,8 +2,8 @@
 \alias{sby_adanear_matrix}
 \title{Aplicar ADASYN seguido de NearMiss-1}
 \usage{
-sby_adanear_matrix(sby_x_matrix, sby_y_vector, sby_over_ratio = 0.2,
-  sby_under_ratio = 1, sby_knn_over_k = 5L, sby_knn_under_k = 5L,
+sby_adanear_matrix(sby_x_matrix, sby_y_vector, sby_adasyn_ratio = 0.2,
+  sby_nearmiss_ratio = 1, sby_knn_over_k = 5L, sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L), sby_audit = FALSE,
   sby_audit_level = c("none", "light", "full"), sby_return_scaled = FALSE,
   sby_return_original_scale = TRUE,
@@ -17,7 +17,7 @@ sby_adanear_matrix(sby_x_matrix, sby_y_vector, sby_over_ratio = 0.2,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa de preditores.}
 \item{sby_y_vector}{Fator binário.}
-\item{sby_over_ratio, sby_under_ratio}{Controles não negativos de expansão ADASYN e retenção NearMiss. Em ADANEAR, \code{sby_over_ratio = 0} pula ADASYN e \code{sby_under_ratio = 0} pula NearMiss-1; valores positivos executam a etapa correspondente.}
+\item{sby_adasyn_ratio, sby_nearmiss_ratio}{No ADASYN, o cálculo sempre soma \code{1} ao ratio: \code{0.4} torna-se o multiplicador final \code{1.4}, nunca um redutor para \code{0.4}. A razão NearMiss controla somente a retenção da classe majoritária.}
 \item{sby_knn_over_k, sby_knn_under_k}{Vizinhos usados nas duas etapas.}
 \item{sby_seed}{Semente reprodutível.}
 \item{sby_audit, sby_audit_level}{Auditoria none/light/full.}

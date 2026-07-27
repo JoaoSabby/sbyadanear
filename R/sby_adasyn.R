@@ -21,8 +21,9 @@
 #' \deqn{r_i = \frac{\#\{x_j \in N_k(x_i): y_j=c_{maj}\}}{k}.}
 #' As dificuldades são normalizadas por \eqn{\hat r_i=r_i/\sum_l r_l}. O número
 #' aproximado de sintéticos atribuídos ao ponto \eqn{i} é
-#' \deqn{g_i \approx \hat r_i\,G,\quad G=\left\lceil n_{min}\,\rho_{over}\right\rceil,}
-#' em que \eqn{\rho_{over}} é `sby_adasyn_ratio`. Cada ponto sintético é uma
+#' \deqn{g_i \approx \hat r_i\,G,\quad n_{min}^{final}=\lfloor n_{min}(1+\rho_{over})\rfloor,\quad G=n_{min}^{final}-n_{min},}
+#' em que \eqn{\rho_{over}} é `sby_adasyn_ratio` e o multiplicador aplicado à
+#' classe rara é sempre \eqn{1+\rho_{over}}. Cada ponto sintético é uma
 #' interpolação aleatória entre uma observação minoritária e um de seus vizinhos
 #' minoritários:
 #' \deqn{x_{syn}=x_i + \lambda (x_{zi}-x_i),\quad \lambda\sim U(0,1).}
@@ -90,7 +91,7 @@
 #'
 #' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. A escala e a distribuição das colunas preditoras influenciam diretamente a geração sintética, embora o pacote aplique padronização Z-score antes da busca.
 #'
-#' @param sby_adasyn_ratio Valor numérico escalar que controla a expansão relativa da classe minoritária. O padrão é `0.2`, indicando uma geração sintética moderada; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética para evitar abortos por arredondamento. Valores maiores aumentam a expansão da minoria, mas também elevam o risco de criar amostras sintéticas em regiões ruidosas.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma `1` ao valor informado: `n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))`. Portanto, `0.4` usa o multiplicador final `1.4`, nunca `0.4`, preservando os raros originais e acrescentando os sintéticos necessários. Para todo valor positivo, gera-se no mínimo um sintético. O padrão é `0.2`.
 #'
 #' @param sby_knn_over_k Número inteiro positivo de vizinhos usados para estimar a dificuldade local de cada observação minoritária no critério ADASYN. O padrão é `5L`. Valores maiores tornam a estimativa de dificuldade mais estável e global; valores menores enfatizam estruturas locais e podem reagir fortemente a outliers.
 #'

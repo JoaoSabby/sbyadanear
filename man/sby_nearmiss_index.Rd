@@ -2,7 +2,7 @@
 \alias{sby_nearmiss_index}
 \title{Selecionar índices NearMiss-1}
 \usage{
-sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
+sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_nearmiss_ratio = 1,
   sby_knn_under_k = 5L, sby_seed = sample.int(10L^5L, 1L),
   sby_scaling_info = NULL, sby_input_already_scaled = FALSE,
   sby_fixed_minority_label = NULL, sby_fixed_majority_label = NULL,
@@ -17,7 +17,7 @@ sby_nearmiss_index(sby_x_matrix, sby_y_vector, sby_under_ratio = 1,
 \arguments{
 \item{sby_x_matrix}{Matrix double densa usada para calcular os índices.}
 \item{sby_y_vector}{Fator binário.}
-\item{sby_under_ratio, sby_knn_under_k}{Controles NearMiss.}
+\item{sby_nearmiss_ratio, sby_knn_under_k}{Controles NearMiss.}
 \item{sby_seed}{Semente mantida por compatibilidade de API. A rota NearMiss-1 exata e deterministica e nao consome RNG.}
 \item{sby_scaling_info, sby_input_already_scaled}{Reuso de escala.}
 \item{sby_fixed_minority_label, sby_fixed_majority_label}{Papéis fixos de classe.}

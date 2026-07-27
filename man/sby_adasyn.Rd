@@ -12,7 +12,7 @@ com dados intermediários, escala, classes e diagnósticos.
 sby_adasyn(
   sby_formula,
   sby_data,
-  sby_over_ratio = 0.2,
+  sby_adasyn_ratio = 0.2,
   sby_knn_over_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -38,7 +38,7 @@ sby_adasyn(
 \arguments{
 \item{sby_formula}{Fórmula no formato \code{alvo ~ preditores} usada para identificar uma única coluna de desfecho binário e as colunas preditoras numéricas em \code{sby_data}. O lado direito deve referenciar apenas colunas já existentes; transformações, interações e offsets precisam ser materializados antes da chamada. Use \code{alvo ~ .} para selecionar todos os demais campos como preditores.}
 \item{sby_data}{Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em \code{sby_formula}.}
-\item{sby_over_ratio}{Valor numérico escalar positivo que controla a expansão relativa da classe minoritária. O padrão é \code{0.2}; em bases pequenas, qualquer valor positivo gera ao menos uma linha sintética para evitar abortos por arredondamento. Valores maiores aumentam a expansão da minoria, mas também elevam o risco de criar amostras sintéticas em regiões ruidosas.}
+\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
 \item{sby_knn_over_k}{Número inteiro positivo de vizinhos usados para estimar a dificuldade local de cada observação minoritária no critério ADASYN. O padrão é \code{5L}. Valores maiores tornam a estimativa de dificuldade mais estável e global; valores menores enfatizam estruturas locais e podem reagir fortemente a outliers.}
 \item{sby_seed}{Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é \code{sample.int(10L^5L, 1L)}, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para reproduzir exatamente os vizinhos empatados, as escolhas de interpolação e as matrizes sintéticas geradas. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final.}
 \item{sby_audit}{Indicador lógico escalar que controla o formato do retorno. O padrão é \code{FALSE}, retornando apenas o conjunto balanceado final. Quando \code{TRUE}, a função retorna uma lista com diagnósticos, parâmetros resolvidos e artefatos intermediários úteis para validação metodológica e depuração.}

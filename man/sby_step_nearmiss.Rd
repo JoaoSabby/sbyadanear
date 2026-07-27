@@ -11,7 +11,7 @@ sby_step_nearmiss(
   role = NA,
   trained = FALSE,
   columns = NULL,
-  sby_under_ratio = 1,
+  sby_nearmiss_ratio = 1,
   sby_knn_under_k = 5L,
   sby_seed = sample.int(10L^5L, 1L),
   sby_audit = FALSE,
@@ -47,7 +47,7 @@ sby_step_nearmiss(
 \item{sby_knn_query_chunk_size}{Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é \code{1000L}. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.}
 \item{skip}{Indicador lógico escalar que define se a etapa deve ser ignorada em novos dados.}
 \item{id}{Identificador recipes da etapa.}
-\item{sby_under_ratio}{Valor numérico escalar maior que zero que controla a quantidade de registros majoritários retidos pelo NearMiss-1 em relação ao tamanho da classe rara. O alvo é \code{floor(n_minoria * sby_under_ratio)}, limitado à maioria disponível.}
+\item{sby_nearmiss_ratio}{Valor numérico escalar maior que zero que controla a quantidade de registros majoritários retidos pelo NearMiss-1 em relação ao tamanho da classe rara. O alvo é \code{floor(n_minoria * sby_nearmiss_ratio)}, limitado à maioria disponível.}
 \item{sby_knn_under_k}{Número inteiro positivo de vizinhos usados pela etapa NearMiss-1.}
 }
 \details{

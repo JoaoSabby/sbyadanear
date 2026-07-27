@@ -11,7 +11,7 @@
 #' @param role Papel armazenado na etapa.
 #' @param trained Indicador interno de treinamento da etapa.
 #' @param columns Coluna de desfecho resolvida durante `prep()`.
-#' @param sby_adasyn_ratio Razao de sobreamostragem ADASYN.
+#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da classe rara. O motor sempre soma `1`: `0.4` torna-se o multiplicador final `1.4`, nunca uma redução para `0.4`.
 #' @param sby_nearmiss_ratio Razao de retencao NearMiss-1.
 #' @param sby_adasyn_k Numero inteiro positivo de vizinhos para ADASYN.
 #' @param sby_nearmiss_k Numero inteiro positivo de vizinhos para NearMiss-1.
