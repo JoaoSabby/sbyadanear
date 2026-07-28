@@ -120,10 +120,6 @@ sby_adasyn_hpc <- function(
 
   sby_type_info <- sby_infer_numeric_column_types(sby_original_predictor_data)
 
-  # Indices 1-based das linhas da minoria
-  sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
-  sby_minority_idx       <- which(as.integer(sby_target_factor) == sby_minority_level_int)
-
   sby_adasyn_k <- sby_validate_positive_integer_scalar(
     sby_adasyn_k, "sby_adasyn_k"
   )

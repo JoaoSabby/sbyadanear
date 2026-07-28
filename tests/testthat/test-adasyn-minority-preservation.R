@@ -105,6 +105,111 @@ test_that("NearMiss preserva o papel raro original apos ADASYN inverter contagen
   expect_gte(sum(out$sby_y_vector == "rare"), sum(dat$y == "rare"))
 })
 
+test_that("os papeis de classe expoem codigos de nivel que indexam o factor", {
+  # Regressao: as rotas HPC selecionam as linhas raras por codigo de nivel.
+  # Quando o campo nao existia, as.integer(NULL) produzia integer(0) e o
+  # which() devolvia zero linhas, descartando toda a classe rara original.
+  y <- factor(c(rep("rare", 4), rep("common", 10)),
+              levels = c("rare", "common"))
+  roles <- sby_binary_class_counts_fast(y)
+
+  expect_type(roles$sby_minority_level, "integer")
+  expect_type(roles$sby_majority_level, "integer")
+  expect_length(roles$sby_minority_level, 1L)
+  expect_length(roles$sby_majority_level, 1L)
+  expect_identical(
+    levels(y)[roles$sby_minority_level], roles$sby_minority_label
+  )
+  expect_identical(
+    levels(y)[roles$sby_majority_level], roles$sby_majority_label
+  )
+  expect_equal(
+    sum(as.integer(y) == roles$sby_minority_level), roles$sby_minority_count
+  )
+  expect_equal(
+    sum(as.integer(y) == roles$sby_majority_level), roles$sby_majority_count
+  )
+
+  # Tambem vale quando a classe rara nao e o primeiro nivel do factor.
+  y_inv <- factor(c(rep("common", 10), rep("rare", 4)),
+                  levels = c("common", "rare"))
+  roles_inv <- sby_binary_class_counts_fast(y_inv)
+  expect_identical(roles_inv$sby_minority_label, "rare")
+  expect_equal(sum(as.integer(y_inv) == roles_inv$sby_minority_level), 4L)
+})
+
+test_that("as rotas HPC tratam sby_adasyn_ratio como acrescimo sobre a rara", {
+  skip_if_not(sby_adanear_hpc_available())
+  set.seed(2024)
+  dat <- data.frame(
+    id = seq_len(50) * 1.0,
+    x1 = c(rnorm(10, -3), rnorm(40, 3)),
+    y = factor(c(rep("rare", 10), rep("common", 40)),
+               levels = c("rare", "common"))
+  )
+  rare_ids <- dat$id[dat$y == "rare"]
+
+  # ratio 0.4 vira 1.4: floor(10 * 1.4) = 14 raras, ou seja 4 sinteticas.
+  adanear_out <- sby_adanear_hpc(
+    dat, y ~ ., sby_adasyn_k = 3, sby_nearmiss_k = 3,
+    sby_adasyn_ratio = 0.4, sby_nearmiss_ratio = 1, sby_seed = 42L
+  )
+  adasyn_out <- sby_adasyn_hpc(
+    dat, y ~ ., sby_adasyn_k = 3, sby_adasyn_ratio = 0.4, sby_seed = 42L
+  )
+
+  expect_equal(sum(adanear_out$y == "rare"), floor(10 * 1.4))
+  expect_equal(sum(adasyn_out$y == "rare"), floor(10 * 1.4))
+
+  # Nenhuma linha rara original pode desaparecer da saida.
+  expect_true(all(rare_ids %in% adanear_out$id[adanear_out$y == "rare"]))
+  expect_true(all(rare_ids %in% adasyn_out$id[adasyn_out$y == "rare"]))
+
+  # NearMiss atua apenas na maioria: floor(14 * 1) comuns retidos.
+  expect_equal(sum(adanear_out$y == "common"), 14L)
+})
+
+test_that("sby_nearmiss_hpc reduz somente a maioria e preserva toda a rara", {
+  skip_if_not(sby_adanear_hpc_available())
+  set.seed(2025)
+  dat <- data.frame(
+    id = seq_len(50) * 1.0,
+    x1 = c(rnorm(10, -3), rnorm(40, 3)),
+    y = factor(c(rep("rare", 10), rep("common", 40)),
+               levels = c("rare", "common"))
+  )
+  rare_ids <- dat$id[dat$y == "rare"]
+
+  out <- sby_nearmiss_hpc(
+    dat, y ~ ., sby_nearmiss_k = 3, sby_nearmiss_ratio = 0.5, sby_seed = 42L
+  )
+
+  expect_equal(sum(out$y == "rare"), 10L)
+  expect_true(all(rare_ids %in% out$id[out$y == "rare"]))
+  expect_equal(sum(out$y == "common"), floor(10 * 0.5))
+})
+
+test_that("sby_adasyn_ratio igual a zero mantem a classe rara inalterada no HPC", {
+  skip_if_not(sby_adanear_hpc_available())
+  set.seed(2026)
+  dat <- data.frame(
+    id = seq_len(50) * 1.0,
+    x1 = c(rnorm(10, -3), rnorm(40, 3)),
+    y = factor(c(rep("rare", 10), rep("common", 40)),
+               levels = c("rare", "common"))
+  )
+  rare_ids <- dat$id[dat$y == "rare"]
+
+  out <- sby_adanear_hpc(
+    dat, y ~ ., sby_adasyn_k = 3, sby_nearmiss_k = 3,
+    sby_adasyn_ratio = 0, sby_nearmiss_ratio = 1, sby_seed = 42L
+  )
+
+  expect_equal(sum(out$y == "rare"), 10L)
+  expect_true(all(rare_ids %in% out$id[out$y == "rare"]))
+  expect_equal(sum(out$y == "common"), 10L)
+})
+
 test_that("NearMiss nao troca nem ignora papeis quando ADASYN iguala as classes", {
   dat <- data.frame(
     x1 = c(-4, -3, -2, -1, seq_len(6)),
