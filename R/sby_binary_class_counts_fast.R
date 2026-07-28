@@ -38,6 +38,15 @@ sby_binary_class_counts_fast <- function(sby_y_vector){
     )
   }
 
+  # Com contagens empatadas, which.min() e which.max() devolvem o mesmo nivel e
+  # os papeis de classe colapsam em silencio. Aborta com a mesma mensagem de
+  # sby_get_binary_class_roles() para que as duas rotas tenham o mesmo contrato.
+  if(sby_counts[[1L]] == sby_counts[[2L]]){
+    sby_adanear_abort(
+      sby_message = "As rotinas de sampling requerem classes desbalanceadas"
+    )
+  }
+
   sby_minority_position <- which.min(sby_counts)
   sby_majority_position <- which.max(sby_counts)
 

@@ -3,16 +3,17 @@
 #' @description
 #' `sby_adanear_hpc()` e o atalho de alto desempenho do pipeline combinado de
 #' balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no
-#' espaco padronizado, usando MKL VSL para estatisticas, cblas_sgemm para
-#' distancias e pesos de interpolacao gerados por `Rcpp::runif()` sob controle da semente local. A despadronizacao das
-#' sinteticas ocorre inteiramente no C++ via FMA AVX-512. A reconstrucao final
-#' do tibble acontece na camada R, preservando os tipos originais das colunas.
+#' espaco padronizado, com estatisticas populacionais por laco SIMD paralelo,
+#' distancias exatas por `sgemm` (oneMKL quando ligado, BLAS do R caso contrario)
+#' e pesos de interpolacao gerados por `Rcpp::runif()` sob controle da semente
+#' local. A despadronizacao das sinteticas ocorre inteiramente no C++ com FMA
+#' vetorizado. A reconstrucao final do tibble acontece na camada R, preservando
+#' os tipos originais das colunas.
 #'
 #' @details
-#' Controla temporariamente apenas `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e
-#' `MKL_NUM_STRIPES`, restaurando os valores originais por `on.exit()` inflexivel.
-#' O ambiente e configurado antes de qualquer operacao matricial para garantir
-#' que o MKL leia os valores corretos desde o primeiro kernel.
+#' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
+#' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
+#' motor nativo salva e restaura `omp_get_max_threads()` em torno do kernel.
 #'
 #' Regras formais das razoes de reamostragem:
 #'
@@ -42,8 +43,9 @@
 #' e a classe rara apos ADASYN tem aproximadamente
 #' \deqn{n_{min}^{(1)} = n_{min}^{(0)} + n_{syn}
 #' \approx n_{min}^{(0)}(1 + r_o).}
-#' Em bases pequenas, valores positivos podem gerar ao menos uma linha
-#' sintetica, conforme a politica interna de arredondamento.
+#' Nao existe piso minimo: em bases pequenas, razoes positivas cujo produto
+#' \eqn{n_{min}^{(0)} r_o} fica abaixo de 1 geram zero linhas sinteticas, e a
+#' classe rara permanece intacta.
 #'
 #' A etapa NearMiss-1 e executada se, e somente se,
 #' \deqn{r_u > 0.}
@@ -153,7 +155,8 @@ sby_adanear_hpc <- function(
   sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
 
   if (!is.numeric(sby_nearmiss_ratio) || length(sby_nearmiss_ratio) != 1L ||
-      is.na(sby_nearmiss_ratio) || sby_nearmiss_ratio < 0) {
+      is.na(sby_nearmiss_ratio) || !is.finite(sby_nearmiss_ratio) ||
+      sby_nearmiss_ratio < 0) {
     sby_adanear_abort(
       "sby_nearmiss_ratio deve ser um numero nao negativo.",
       call = sys.call()
@@ -285,8 +288,9 @@ sby_adanear_hpc <- function(
     sby_syn_df <- sby_original_predictor_data[0L, , drop = FALSE]
   }
 
-  # O numero de linhas sinteticas deve ser pelo menos 1 (piso minimo garantido
-  # no C++), mas o rbind permanece valido mesmo diante de retorno defensivo vazio.
+  # Nao ha piso minimo de sinteticas: razoes pequenas demais para render uma
+  # linha inteira produzem zero sinteticas, como na rota classica em R. O rbind
+  # permanece valido com `sby_syn_df` vazio.
   sby_final_predictors <- rbind(sby_maj_rows, sby_min_rows, sby_syn_df)
   rownames(sby_final_predictors) <- NULL
 
@@ -315,9 +319,12 @@ sby_adanear_hpc <- function(
     names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
   }
 
+  # Reordena apenas as colunas que o balanceamento de fato devolveu. Formulas
+  # que selecionam um subconjunto de preditores produzem menos colunas do que
+  # `.data` tinha, e pedir a `fselect()` uma coluna ausente aborta a chamada.
   sby_balanced_data <- collapse::fselect(
     .x = sby_balanced_data,
-    sby_original_column_order
+    intersect(sby_original_column_order, names(sby_balanced_data))
   )
 
   sby_assert_minority_not_reduced(

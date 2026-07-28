@@ -16,49 +16,39 @@ test_that("mkl env vars are readable and config object is valid", {
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "2")
 })
 
-test_that("hpc env control restores threading and stripe variables", {
+test_that("hpc env control captures and restores threading variables", {
   withr::local_envvar(c(
     MKL_NUM_THREADS = "3",
     OMP_NUM_THREADS = "4",
-    MKL_NUM_STRIPES = "7",
     KMP_AFFINITY = "server-value"
   ))
 
   expect_identical(
     sbyadanear:::sby_hpc_env_keys(),
-    c("MKL_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_STRIPES")
+    c("MKL_NUM_THREADS", "OMP_NUM_THREADS")
   )
 
   previous <- sbyadanear:::sby_hpc_capture_env()
-  sbyadanear:::sby_hpc_apply_env(sby_total_threads = 2L)
-  expect_identical(Sys.getenv("MKL_NUM_THREADS"), "2")
-  expect_identical(Sys.getenv("OMP_NUM_THREADS"), "2")
-  expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "2")
-  expect_identical(Sys.getenv("KMP_AFFINITY"), "server-value")
+  Sys.setenv(MKL_NUM_THREADS = "2", OMP_NUM_THREADS = "2")
 
   sbyadanear:::sby_hpc_restore_env(previous)
   expect_identical(Sys.getenv("MKL_NUM_THREADS"), "3")
   expect_identical(Sys.getenv("OMP_NUM_THREADS"), "4")
-  expect_identical(Sys.getenv("MKL_NUM_STRIPES"), "7")
   expect_identical(Sys.getenv("KMP_AFFINITY"), "server-value")
 })
 
+test_that("hpc thread resolver honours cgroup cpu quotas", {
+  quota <- sbyadanear:::sby_hpc_cgroup_cpu_quota()
+  expect_true(is.na(quota) || (is.integer(quota) && quota >= 1L))
 
-test_that("mkl stripe resolver adapts to class shape and matrix size", {
-  expect_identical(
-    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L),
-    4L
-  )
-  expect_identical(
-    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L, 200L, 100L, 10L),
-    8L
-  )
-  expect_identical(
-    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L, 1000000L, 100L, 10L),
-    16L
-  )
-  expect_identical(
-    sbyadanear:::sby_hpc_resolve_mkl_num_stripes(16L, 100L, 250L, 10L),
-    1L
-  )
+  threads <- sbyadanear:::sby_hpc_resolve_threads(-1L)
+  expect_true(is.integer(threads) && threads >= 1L)
+  if (!is.na(quota)) {
+    expect_lte(threads, quota)
+  }
+
+  # Um teto explicito nunca e ultrapassado, e entradas invalidas caem no
+  # comportamento automatico em vez de propagar NA para o motor nativo.
+  expect_lte(sbyadanear:::sby_hpc_resolve_threads(1L), 1L)
+  expect_true(sbyadanear:::sby_hpc_resolve_threads(NA_integer_) >= 1L)
 })

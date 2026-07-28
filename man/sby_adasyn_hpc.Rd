@@ -15,7 +15,7 @@ sby_adasyn_hpc(.data, formula, sby_adasyn_k = 3,
 \item{sby_seed}{Semente inteira para o gerador de numeros pseudoaleatorios. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. O padrao e \code{sample.int(10L^5L, 1L)}.}
 }
 \description{
-Atalho de alto desempenho do oversampling ADASYN. Gera as linhas sinteticas no espaco padronizado usando estatisticas via MKL VSL, distancias por \code{cblas_sgemm} e pesos de interpolacao gerados por \code{Rcpp::runif()} sob controle da semente local.
+Atalho de alto desempenho do oversampling ADASYN. Gera as linhas sinteticas no espaco padronizado usando estatisticas populacionais por laco SIMD paralelo, distancias exatas por \code{sgemm} (oneMKL quando ligado, BLAS do R caso contrario) e pesos de interpolacao gerados por \code{Rcpp::runif()} sob controle da semente local. A alocacao das sinteticas e ponderada pela densidade majoritaria local de cada ponto raro, como no ADASYN classico.
 }
 \details{
 A funcao substitui internamente a rota denominada "native" como caminho rapido do ADASYN. O estado de RNG do chamador e preservado: a funcao aplica \code{sby_seed} apenas durante a chamada nativa e restaura \code{RNGkind()} e \code{.Random.seed} ao final. O runtime MKL/OpenMP deve ser configurado externamente.

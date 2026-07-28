@@ -1,11 +1,27 @@
+# ==========================================================================
+# sbyadanear - configuracao de compilacao dos kernels nativos (Windows)
+#
+# O alvo primario do motor HPC e Linux com Intel oneAPI. No Windows mantemos
+# apenas o essencial: OpenMP pelas macros do R e a BLAS/LAPACK do proprio R
+# como backend do sgemm usado pelo kernel Fortran.
+# ==========================================================================
+
 CXX_STD = CXX23
 OBJECTS = sbyadanear.o sbyadanear_rcppparallel.o sby_native_engine.o sby_hpc_engine.o sby_hpc_engine_f.o
 
-PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
-PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL=1
-PKG_CPPFLAGS += -DSBYADANEAR_CASCADELAKE_NATIVE=1
 PKG_CPPFLAGS += -DSBY_ASSUME_NO_NA=1
 PKG_CPPFLAGS += -DSBY_PREFERRED_FEATURES=100
+
+SBY_OPENMP_FORTRAN = $(SHLIB_OPENMP_FCFLAGS)
+ifeq ($(strip $(SBY_OPENMP_FORTRAN)),)
+SBY_OPENMP_FORTRAN = $(SHLIB_OPENMP_FFLAGS)
+endif
+
+PKG_CXXFLAGS += $(SHLIB_OPENMP_CXXFLAGS)
+PKG_FFLAGS   += $(SBY_OPENMP_FORTRAN)
+PKG_FCFLAGS  += $(SBY_OPENMP_FORTRAN)
+
+PKG_LIBS += $(BLAS_LIBS) $(SHLIB_OPENMP_CXXFLAGS) $(FLIBS)
 
 PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::CxxFlags())")
 PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::RcppParallelLibs())")

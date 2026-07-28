@@ -12,10 +12,10 @@ Documento de planejamento e rastreio. Marcar [X] cada item concluido.
 
 ## Parte B - Implementacao R (atalho HPC)
 
-- [X] Criar R/sby_adanear_hpc.R com assinatura exata e on.exit de restauro de ambiente.
+- [X] Criar R/sby_adanear_hpc.R com assinatura exata, sem sobrescrever variaveis de ambiente do runtime.
 - [X] Criar R/sby_adasyn_hpc.R (atalho ADASYN puro no espaco padronizado).
 - [X] Criar R/sby_nearmiss_hpc.R (atalho NearMiss-1 puro).
-- [X] Helper R/sby_hpc_env.R: captura/injeta/restaura somente MKL_NUM_THREADS, OMP_NUM_THREADS e MKL_NUM_STRIPES.
+- [X] Helper R/sby_hpc_env.R: captura e restaura somente MKL_NUM_THREADS e OMP_NUM_THREADS, e resolve o numero de threads respeitando cotas de cgroup.
 - [X] Helper R/sby_hpc_native_available.R: verifica simbolos HPC carregados, com fallback transparente para a rota classica.
 - [X] Roteamento: a rota "native" passa a delegar para o atalho HPC quando os simbolos existem; funcoes originais continuam acessiveis.
 
@@ -44,7 +44,7 @@ Documento de planejamento e rastreio. Marcar [X] cada item concluido.
 - [X] Logica livre da dupla normalizacao: ADASYN atua diretamente na matriz padronizada.
 - [X] FMA (Fused Multiply-Add) garantido via diretivas SIMD no Fortran para a reversao do z-score.
 - [X] Montagem Zero-Copy do Tibble/data.frame efetuada diretamente no C++ (Rcpp::List).
-- [X] Controle temporario de MKL_NUM_THREADS, OMP_NUM_THREADS e MKL_NUM_STRIPES com restauro ao final.
+- [X] Contagem de threads do kernel limitada a chamada corrente por guarda RAII que salva e restaura omp_get_max_threads().
 - [X] Substituicao do calculo de distancias pela rotina sgemm bloqueada.
 - [X] Retornos e documentacao completamente livres do caractere travessao.
 
@@ -57,7 +57,7 @@ Documento de planejamento e rastreio. Marcar [X] cada item concluido.
 ## Parte G - Parecer Intel oneMKL e ajustes de desempenho adicionais
 
 - [X] Conferido o guia Intel de uso do oneMKL com extensoes R: manter linkagem oneMKL opcional em `src/Makevars` e nao sobrescrever variaveis de ambiente globais ja carregadas pelo servidor do cliente.
-- [X] Conferido o guia Intel de threading: o pacote controla somente `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e `MKL_NUM_STRIPES` durante a rotina e restaura os valores originais ao final.
+- [X] Conferido o guia Intel de threading: o pacote nao altera variaveis de ambiente do runtime na rota HPC; o teto de threads vale so para a chamada corrente e `omp_get_max_threads()` e restaurado ao final.
 - [X] Conferidas as recomendacoes Intel de leading dimensions: o kernel `sby_pairwise_sqdist_sgemm_f` agora calcula leading dimensions single precision alinhadas a 64 bytes, evita multiplos exatos de grandes potencias de 2 e usa buffers acolchoados para A/B; C tambem e acolchoada quando a duplicacao da matriz de distancia fica limitada.
 - [X] Conferido o contrato `sgemm`: os valores `lda`, `ldb` e `ldc` continuam respeitando os minimos exigidos por `m`, `n` e `k`, com padding apenas acima desses minimos.
 - [X] Conferida a recomendacao de problemas pequenos: `MKL_DIRECT_CALL` foi avaliado, mas nao aplicado porque o kernel critico chama `cblas_sgemm` via interface Fortran direta e o gargalo informado e de processamento massivo, nao de micro-GEMMs repetidos.

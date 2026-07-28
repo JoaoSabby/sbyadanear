@@ -1,11 +1,93 @@
+# ==========================================================================
+# sbyadanear - configuracao de compilacao dos kernels nativos
+#
+# Requer GNU make (ja declarado em SystemRequirements).
+#
+# Este arquivo declara apenas o que o pacote precisa consumir; a escolha do
+# compilador (gcc/gfortran ou icx/ifx) e das flags globais de otimizacao
+# continua sendo responsabilidade do ~/.R/Makevars do usuario.
+#
+# Pontos importantes:
+#   - OpenMP entra pelas macros SHLIB_OPENMP_* do R. Sem elas os
+#     "#pragma omp" do C++ e os "!$omp" do Fortran sao ignorados pelo
+#     compilador e sby_config_max_threads vira um no-op.
+#   - O kernel Fortran usa a interface BLAS padrao (sgemm). Isso permite
+#     ligar oneMKL quando disponivel e cair para a BLAS do R caso contrario,
+#     sem depender da interface CBLAS (que a BLAS de referencia do R nao tem).
+# ==========================================================================
+
 CXX_STD = CXX23
 OBJECTS = sbyadanear.o sbyadanear_rcppparallel.o sby_native_engine.o sby_hpc_engine.o sby_hpc_engine_f.o
 
-PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL_OPTIONAL=1
-PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL=1
-PKG_CPPFLAGS += -DSBYADANEAR_CASCADELAKE_NATIVE=1
 PKG_CPPFLAGS += -DSBY_ASSUME_NO_NA=1
 PKG_CPPFLAGS += -DSBY_PREFERRED_FEATURES=100
+
+# --------------------------------------------------------------------------
+# OpenMP
+# --------------------------------------------------------------------------
+# O R exporta SHLIB_OPENMP_FFLAGS para Fortran (P_FCFLAGS = PKG_FFLAGS na
+# maioria das versoes, portanto .f90 tambem consome PKG_FFLAGS). Algumas
+# instalacoes exportam SHLIB_OPENMP_FCFLAGS; usamos o que existir.
+SBY_OPENMP_FORTRAN = $(SHLIB_OPENMP_FCFLAGS)
+ifeq ($(strip $(SBY_OPENMP_FORTRAN)),)
+SBY_OPENMP_FORTRAN = $(SHLIB_OPENMP_FFLAGS)
+endif
+
+PKG_CXXFLAGS += $(SHLIB_OPENMP_CXXFLAGS)
+PKG_FFLAGS   += $(SBY_OPENMP_FORTRAN)
+PKG_FCFLAGS  += $(SBY_OPENMP_FORTRAN)
+
+# --------------------------------------------------------------------------
+# Flags de arquitetura (Intel Cascade Lake)
+# --------------------------------------------------------------------------
+# Detectadas por sondagem do compilador para nao quebrar builds em maquinas
+# sem AVX-512 nem em toolchains que desconhecem a flag. Sobrescreva com
+# SBYADANEAR_ARCH_FLAGS="..." ou desligue com SBYADANEAR_NO_ARCH_FLAGS=1.
+ifeq ($(strip $(SBYADANEAR_NO_ARCH_FLAGS)),)
+SBYADANEAR_ARCH_FLAGS ?= $(shell \
+  if echo 'int main(void){return 0;}' | $(CC) -march=cascadelake -mtune=cascadelake -x c - -o /dev/null > /dev/null 2>&1; then \
+    echo '-march=cascadelake -mtune=cascadelake'; \
+  elif echo 'int main(void){return 0;}' | $(CC) -xCORE-AVX512 -qopt-zmm-usage=high -x c - -o /dev/null > /dev/null 2>&1; then \
+    echo '-xCORE-AVX512 -qopt-zmm-usage=high'; \
+  else \
+    echo ''; \
+  fi)
+endif
+
+PKG_CXXFLAGS += $(SBYADANEAR_ARCH_FLAGS)
+PKG_FFLAGS   += $(SBYADANEAR_ARCH_FLAGS)
+PKG_FCFLAGS  += $(SBYADANEAR_ARCH_FLAGS)
+
+# --------------------------------------------------------------------------
+# Intel oneAPI MKL (opcional)
+# --------------------------------------------------------------------------
+# A macro SBYADANEAR_ONEAPI_MKL so e definida quando a biblioteca e de fato
+# ligada, para que o relatorio de compilacao nao anuncie MKL inexistente.
+SBY_MKL_ROOT = $(MKLROOT)
+ifeq ($(strip $(SBY_MKL_ROOT)),)
+ifneq ($(strip $(ONEAPI_ROOT)),)
+SBY_MKL_ROOT = $(ONEAPI_ROOT)/mkl/latest
+endif
+endif
+
+SBY_MKL_LIB_DIR =
+ifneq ($(strip $(SBY_MKL_ROOT)),)
+SBY_MKL_LIB_DIR = $(firstword $(wildcard $(SBY_MKL_ROOT)/lib/intel64 $(SBY_MKL_ROOT)/lib))
+endif
+
+SBY_MKL_RT =
+ifneq ($(strip $(SBY_MKL_LIB_DIR)),)
+SBY_MKL_RT = $(firstword $(wildcard $(SBY_MKL_LIB_DIR)/libmkl_rt.so*))
+endif
+
+ifneq ($(strip $(SBY_MKL_RT)),)
+PKG_CPPFLAGS += -DSBYADANEAR_ONEAPI_MKL=1 -I$(SBY_MKL_ROOT)/include
+PKG_LIBS     += -L$(SBY_MKL_LIB_DIR) -Wl,-rpath,$(SBY_MKL_LIB_DIR) -lmkl_rt -lpthread -lm -ldl
+else
+PKG_LIBS     += $(BLAS_LIBS)
+endif
+
+PKG_LIBS += $(SHLIB_OPENMP_CXXFLAGS) $(FLIBS)
 
 PKG_CPPFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::CxxFlags())")
 PKG_LIBS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "suppressPackageStartupMessages(library(RcppParallel)); cat(RcppParallel::RcppParallelLibs())")

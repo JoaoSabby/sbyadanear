@@ -20,8 +20,10 @@ por zero-copy diretamente em C++.
 \details{
 A funcao substitui internamente a rota denominada "native" como caminho rapido do
 NearMiss-1. Quando o motor HPC consolidado nao esta disponivel, recorre de forma
-transparente a \code{sby_nearmiss()} com \code{sby_knn_engine = "native"}. Apenas \code{MKL_NUM_THREADS}, \code{OMP_NUM_THREADS} e \code{MKL_NUM_STRIPES} sao controladas
-temporariamente e restauradas por um bloco \code{on.exit()} inflexivel.
+transparente a \code{sby_nearmiss()} com \code{sby_knn_engine = "native"}. As variaveis de
+ambiente do runtime MKL/OpenMP nao sao alteradas; o numero de threads vale
+apenas para a chamada corrente, com \code{omp_get_max_threads()} salvo e
+restaurado em torno do kernel nativo.
 }
 \value{Tibble balanceado com classe \code{c("tbl_df", "tbl", "data.frame")}.}
 \seealso{\code{\link{sby_nearmiss}}, \code{\link{sby_adanear_hpc}}, \code{\link{sby_adasyn_hpc}}}

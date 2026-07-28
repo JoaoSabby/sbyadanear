@@ -1,4 +1,4 @@
-#' Capturar, injetar e restaurar threads MKL e OpenMP para a rota HPC
+#' Capturar e restaurar threads MKL e OpenMP para a rota HPC
 #'
 #' @details
 #' A funcao implementa uma unidade interna do fluxo de balanceamento com contrato
@@ -15,9 +15,50 @@
 sby_hpc_env_keys <- function(){
   c(
     "MKL_NUM_THREADS",
-    "OMP_NUM_THREADS",
-    "MKL_NUM_STRIPES"
+    "OMP_NUM_THREADS"
   )
+}
+
+# Teto de CPUs imposto pelo cgroup corrente, em NA quando nao ha limite.
+# parallel::detectCores() enxerga a maquina inteira e ignora containers e slices
+# do systemd, o que faz o motor abrir dezenas de threads dentro de uma cota de
+# poucos nucleos e degradar o desempenho por oversubscription.
+sby_hpc_cgroup_cpu_quota <- function(){
+  sby_read_first_line <- function(sby_path){
+    if(!file.exists(sby_path)){
+      return(NA_character_)
+    }
+    tryCatch(
+      readLines(sby_path, n = 1L, warn = FALSE)[1L],
+      error = function(sby_error) NA_character_
+    )
+  }
+
+  # cgroup v2: "<quota|max> <period>"
+  sby_v2 <- sby_read_first_line("/sys/fs/cgroup/cpu.max")
+  if(!is.na(sby_v2)){
+    sby_parts <- strsplit(trimws(sby_v2), "[[:space:]]+")[[1L]]
+    if(length(sby_parts) == 2L && !identical(sby_parts[[1L]], "max")){
+      sby_quota  <- suppressWarnings(as.numeric(sby_parts[[1L]]))
+      sby_period <- suppressWarnings(as.numeric(sby_parts[[2L]]))
+      if(!is.na(sby_quota) && !is.na(sby_period) && sby_quota > 0 && sby_period > 0){
+        return(max(1L, as.integer(floor(sby_quota / sby_period))))
+      }
+    }
+  }
+
+  # cgroup v1: quota e period em arquivos separados, quota -1 quando ilimitada.
+  sby_quota  <- suppressWarnings(as.numeric(
+    sby_read_first_line("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
+  ))
+  sby_period <- suppressWarnings(as.numeric(
+    sby_read_first_line("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
+  ))
+  if(!is.na(sby_quota) && !is.na(sby_period) && sby_quota > 0 && sby_period > 0){
+    return(max(1L, as.integer(floor(sby_quota / sby_period))))
+  }
+
+  NA_integer_
 }
 
 # Resolve o numero de threads efetivo para o motor HPC
@@ -35,59 +76,15 @@ sby_hpc_resolve_threads <- function(sby_config_max_threads = -1L){
     sby_detected <- 1L
   }
 
+  sby_quota <- sby_hpc_cgroup_cpu_quota()
+  if(!is.na(sby_quota) && sby_quota >= 1L){
+    sby_detected <- min(sby_detected, sby_quota)
+  }
+
   if(sby_config_max_threads > 0L){
     return(min(sby_config_max_threads, sby_detected))
   }
   return(sby_detected)
-}
-
-# Resolve uma sugestao adaptativa para MKL_NUM_STRIPES em GEMM column-major.
-sby_hpc_resolve_mkl_num_stripes <- function(
-  sby_total_threads,
-  sby_majority_count = NA_integer_,
-  sby_minority_count = NA_integer_,
-  sby_column_count = NA_integer_
-){
-  sby_total_threads <- suppressWarnings(as.integer(sby_total_threads)[1L])
-  if(is.na(sby_total_threads) || sby_total_threads < 1L){
-    sby_total_threads <- 1L
-  }
-  if(sby_total_threads < 2L){
-    return(1L)
-  }
-
-  sby_majority_count <- suppressWarnings(as.integer(sby_majority_count)[1L])
-  sby_minority_count <- suppressWarnings(as.integer(sby_minority_count)[1L])
-  sby_column_count <- suppressWarnings(as.integer(sby_column_count)[1L])
-
-  # Limite 2D seguro para matrizes sem informacao de forma: distribui o
-  # paralelismo sem criar stripes demais em cargas pequenas ou balanceadas.
-  sby_default_stripes <- max(1L, as.integer(ceiling(sqrt(sby_total_threads))))
-
-  if(!is.na(sby_majority_count) && !is.na(sby_minority_count) &&
-     sby_majority_count > 0L && sby_minority_count > 0L){
-    sby_shape_ratio <- sby_majority_count / sby_minority_count
-
-    # Heuristica conservadora para detectar matrizes FP32 que tendem a exceder
-    # uma cache L3 compartilhada aproximada de 35 MB em topologias duplas.
-    sby_is_large_matrix <- FALSE
-    if(!is.na(sby_column_count) && sby_column_count > 0L){
-      sby_matrix_bytes <- as.double(sby_majority_count) * as.double(sby_column_count) * 4
-      sby_is_large_matrix <- sby_matrix_bytes > 35000000
-    }
-
-    if(sby_shape_ratio >= 2){
-      if(sby_is_large_matrix || sby_shape_ratio > 100){
-        return(sby_total_threads)
-      }
-      return(max(1L, as.integer(ceiling(sby_total_threads / 2))))
-    }
-    if(sby_shape_ratio <= 0.5){
-      return(1L)
-    }
-  }
-
-  sby_default_stripes
 }
 
 # Captura o estado anterior das variaveis controladas usando unset = NA
@@ -98,40 +95,6 @@ sby_hpc_capture_env <- function(){
     sby_keys
   )
   return(sby_previous)
-}
-
-# Injeta numero de threads MKL/OpenMP e uma sugestao de stripes para GEMM
-sby_hpc_apply_env <- function(
-  sby_total_threads,
-  sby_majority_count = NA_integer_,
-  sby_minority_count = NA_integer_,
-  sby_column_count = NA_integer_
-){
-  sby_total_threads <- suppressWarnings(as.integer(sby_total_threads)[1L])
-  if(is.na(sby_total_threads) || sby_total_threads < 1L){
-    sby_total_threads <- 1L
-  }
-  sby_num_stripes <- sby_hpc_resolve_mkl_num_stripes(
-    sby_total_threads = sby_total_threads,
-    sby_majority_count = sby_majority_count,
-    sby_minority_count = sby_minority_count,
-    sby_column_count = sby_column_count
-  )
-
-  sby_temporary_env <- c(
-    MKL_NUM_THREADS = as.character(sby_total_threads),
-    OMP_NUM_THREADS = as.character(sby_total_threads),
-    MKL_NUM_STRIPES = as.character(sby_num_stripes)
-  )
-
-  do.call(Sys.setenv, as.list(sby_temporary_env))
-
-  message(
-    "sbyadanear HPC: variaveis de ambiente temporarias: ",
-    paste(names(sby_temporary_env), sby_temporary_env, sep = "=", collapse = ", ")
-  )
-
-  invisible(sby_temporary_env)
 }
 
 # Restaura o ambiente original, removendo as variaveis que nao existiam antes

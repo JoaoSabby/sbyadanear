@@ -2,15 +2,20 @@
 #'
 #' @description
 #' `sby_adasyn_hpc()` e o atalho de alto desempenho do oversampling ADASYN.
-#' Executa todo o processamento no espaco padronizado com estatisticas via MKL VSL, distancias por cblas_sgemm e pesos de interpolacao gerados por `Rcpp::runif()` sob controle da semente local.
-#' A despadronizacao das sinteticas ocorre inteiramente no C++ via FMA AVX-512.
+#' Executa todo o processamento no espaco padronizado: estatisticas populacionais
+#' por laco SIMD paralelo, distancias exatas por `sgemm` (oneMKL quando ligado,
+#' BLAS do R caso contrario) e pesos de interpolacao gerados por `Rcpp::runif()`
+#' sob controle da semente local.
+#' A alocacao das sinteticas segue o ADASYN classico, ponderada pela densidade
+#' majoritaria local de cada ponto raro.
+#' A despadronizacao das sinteticas ocorre inteiramente no C++ com FMA vetorizado.
 #' A reconstrucao final do tibble acontece na camada R, preservando os tipos
 #' originais das colunas.
 #'
 #' @details
-#' Controla temporariamente apenas `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e
-#' `MKL_NUM_STRIPES`, restaurando os valores originais por `on.exit()` inflexivel.
-#' O ambiente e configurado antes de qualquer operacao matricial.
+#' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
+#' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
+#' motor nativo salva e restaura `omp_get_max_threads()` em torno do kernel.
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
@@ -193,9 +198,12 @@ sby_adasyn_hpc <- function(
     names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
   }
 
+  # Reordena apenas as colunas que o balanceamento de fato devolveu. Formulas
+  # que selecionam um subconjunto de preditores produzem menos colunas do que
+  # `.data` tinha, e pedir a `fselect()` uma coluna ausente aborta a chamada.
   sby_balanced_data <- collapse::fselect(
     .x = sby_balanced_data,
-    sby_original_column_order
+    intersect(sby_original_column_order, names(sby_balanced_data))
   )
 
   sby_assert_minority_not_reduced(
