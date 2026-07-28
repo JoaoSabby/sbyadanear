@@ -2,15 +2,16 @@
 #'
 #' @description
 #' `sby_nearmiss_hpc()` e o atalho de alto desempenho do undersampling NearMiss-1.
-#' Ranqueia e retem as linhas majoritarias estritamente no espaco padronizado via
-#' MKL VSL e cblas_sgemm. O C++ retorna apenas os indices das linhas retidas;
-#' a reconstrucao do tibble ocorre na camada R diretamente a partir dos dados
-#' originais, sem aritmética alguma.
+#' Ranqueia e retem as linhas majoritarias estritamente no espaco padronizado,
+#' com distancias exatas por `sgemm` (oneMKL quando ligado, BLAS do R caso
+#' contrario). O C++ retorna apenas os indices das linhas retidas; a reconstrucao
+#' do tibble ocorre na camada R diretamente a partir dos dados originais, sem
+#' aritmética alguma. Somente linhas da classe majoritaria sao descartadas.
 #'
 #' @details
-#' Controla temporariamente apenas `MKL_NUM_THREADS`, `OMP_NUM_THREADS` e
-#' `MKL_NUM_STRIPES`, restaurando os valores originais por `on.exit()` inflexivel.
-#' O ambiente e configurado antes de qualquer operacao matricial.
+#' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
+#' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
+#' motor nativo salva e restaura `omp_get_max_threads()` em torno do kernel.
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
@@ -181,9 +182,12 @@ sby_nearmiss_hpc <- function(
     names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
   }
 
+  # Reordena apenas as colunas que o balanceamento de fato devolveu. Formulas
+  # que selecionam um subconjunto de preditores produzem menos colunas do que
+  # `.data` tinha, e pedir a `fselect()` uma coluna ausente aborta a chamada.
   sby_balanced_data <- collapse::fselect(
     .x = sby_balanced_data,
-    sby_original_column_order
+    intersect(sby_original_column_order, names(sby_balanced_data))
   )
 
   sby_assert_minority_not_reduced(

@@ -90,7 +90,8 @@ sby_hpc_cpu_report <- function(){
       "runtime_ok confirma que a CPU anuncia AVX-512/AVX2/FMA.",
       "compile_ok confirma que o pacote foi compilado com -march=cascadelake e macros AVX-512.",
       "openmp_ok confirma que os loops Fortran/C++ foram ligados com OpenMP.",
-      "binary_scan com zmm/vfmadd TRUE e a prova adicional no binario nativo."
+      "binary_scan com zmm/vfmadd TRUE e a prova adicional no binario nativo.",
+      "compile_report$mkl_linked confirma que o oneMKL foi de fato ligado; FALSE indica que o sgemm veio da BLAS do R."
     )
   )
 }

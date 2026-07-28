@@ -470,3 +470,50 @@ Sys.setenv(
 
 Quando o processo for unico e computacionalmente intenso, aumentar threads pode
 ser util, dependendo do hardware e do backend numerico.
+
+### Rota HPC em servidores NUMA de dois sockets
+
+As funcoes `sby_adasyn_hpc()`, `sby_nearmiss_hpc()` e `sby_adanear_hpc()` nao
+alteram variaveis de ambiente do runtime: o argumento `sby_config_max_threads`
+vale apenas para a chamada corrente, e o motor nativo salva e restaura
+`omp_get_max_threads()` em torno do kernel. A politica de afinidade e de memoria
+fica inteiramente sob controle do usuario, e o pacote nao a sobrescreve.
+
+Em maquinas de dois sockets (por exemplo, dois Intel Cascade Lake), o custo
+dominante do kNN exato e o trafego de memoria entre nos NUMA. Fixe as threads e
+distribua as paginas antes de iniciar o R:
+
+```sh
+export OMP_PROC_BIND=close
+export OMP_PLACES=cores
+numactl --interleave=all Rscript minha_analise.R
+```
+
+`OMP_PROC_BIND=close` com `OMP_PLACES=cores` mantem as threads de um mesmo time
+no socket onde os dados foram tocados pela primeira vez; `numactl
+--interleave=all` espalha as matrizes grandes pelos dois nos, evitando saturar o
+controlador de memoria de um unico socket. Os buffers internos do motor sao
+inicializados por *first touch* paginado e paralelo, de modo a respeitar essa
+politica em vez de concentrar todas as paginas na thread mestre.
+
+Deixe `sby_config_max_threads = -1` para que o pacote detecte os nucleos
+disponiveis. A deteccao respeita cotas de cgroup (v1 e v2), portanto o valor
+correto tambem e usado dentro de containers e de slices do systemd.
+
+### Compilacao com oneMKL e AVX-512
+
+O `src/Makevars` consome OpenMP pelas macros `SHLIB_OPENMP_*` do R (C++ e
+Fortran) e detecta as flags de arquitetura sondando o compilador: usa
+`-march=cascadelake -mtune=cascadelake` no GCC/Clang e `-xCORE-AVX512
+-qopt-zmm-usage=high` no toolchain Intel. Sobrescreva com
+`SBYADANEAR_ARCH_FLAGS="..."` ou desligue com `SBYADANEAR_NO_ARCH_FLAGS=1`.
+
+O oneMKL e ligado automaticamente quando `MKLROOT` (ou `ONEAPI_ROOT`) aponta
+para uma instalacao com `libmkl_rt`; caso contrario o pacote cai na BLAS do R.
+O kernel Fortran usa a interface Fortran padrao do BLAS (`sgemm`), e nao CBLAS,
+justamente para que esse fallback continue valido. Confirme o que foi de fato
+ligado com:
+
+```r
+sby_hpc_cpu_report()$compile_report$mkl_linked
+```

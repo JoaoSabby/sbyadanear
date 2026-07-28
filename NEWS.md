@@ -1,21 +1,90 @@
 # sbyadanear 0.4.0 (em desenvolvimento)
 
+## Correcoes do motor HPC
+
+* Compilacao: `src/Makevars` e `src/Makevars.win` passam a propagar
+  `$(SHLIB_OPENMP_CXXFLAGS)` e `$(SHLIB_OPENMP_FCFLAGS)`/`$(SHLIB_OPENMP_FFLAGS)`
+  para C++, Fortran e link. Sem isso, todo `#pragma omp` e todo `!$omp` eram
+  descartados em silencio e `sby_config_max_threads` nao tinha efeito algum.
+* Compilacao: o oneMKL agora e de fato ligado (`-lmkl_rt`) quando `MKLROOT` ou
+  `ONEAPI_ROOT` apontam para uma instalacao valida. A macro
+  `SBYADANEAR_ONEAPI_MKL` so e definida nesse caso, e `sby_hpc_cpu_report()`
+  expoe `compile_report$mkl_linked` para auditoria. Sem MKL, o pacote liga
+  `$(BLAS_LIBS)`.
+* Compilacao: as flags de arquitetura Cascade Lake sao detectadas por sondagem
+  do compilador (`-march=cascadelake` no GCC/Clang, `-xCORE-AVX512` no Intel),
+  com escape por `SBYADANEAR_ARCH_FLAGS` e `SBYADANEAR_NO_ARCH_FLAGS`.
+* ADASYN: a alocacao das linhas sinteticas no motor HPC era round-robin sobre a
+  minoria. Agora segue o ADASYN classico, ponderada pela fracao de vizinhos
+  majoritarios de cada ponto raro (`r_i`), com o mesmo desempate por maior
+  residuo da rota em R. Pontos raros sem vizinhanca majoritaria deixam de
+  receber sinteticas.
+* ADASYN e NearMiss: `Rcpp::runif()` passa a ser chamado sob `Rcpp::RNGScope`,
+  o que restabelece a reprodutibilidade por `sby_seed` nas rotas HPC.
+* Threads: `omp_set_num_threads()` era global e permanente. O motor agora usa um
+  guarda RAII que restaura `omp_get_max_threads()` ao sair da chamada.
+* Contagens: o motor HPC nao arredonda mais para cima uma linha sintetica nem um
+  registro majoritario quando a razao pedida resulta em zero. O comportamento
+  passa a ser identico ao da rota classica em R; `sby_nearmiss_ratio` que zera a
+  maioria agora aborta com mensagem explicita.
+* kNN: a busca exata deixa de preencher com o indice 1 quando encontra menos de
+  `k` candidatos validos. As posicoes nao preenchidas usam sentinela `-1` e a
+  chamada aborta em vez de enviesar as sinteticas para a primeira linha.
+* Distancias: as normas `||A||^2` e `||B||^2` sao acumuladas em precisao dupla.
+  Em float32, o cancelamento da identidade euclidiana produzia distancias
+  negativas que o clamp em zero mascarava, invertendo a ordem dos vizinhos.
+* Formulas: `sby_adanear_hpc()`, `sby_adasyn_hpc()` e `sby_nearmiss_hpc()`
+  reordenam apenas as colunas presentes na saida. Formulas diferentes de
+  `y ~ .` abortavam em `collapse::fselect()`.
+* Validacao: `sby_nearmiss_ratio` em `sby_adanear_hpc()` agora rejeita `Inf`,
+  como ja fazia `sby_adasyn_ratio`.
+* Validacao: `sby_binary_class_counts_fast()` aborta com classes perfeitamente
+  balanceadas, em vez de deixar `which.min()` e `which.max()` colapsarem no
+  mesmo nivel. A mensagem e a mesma de `sby_get_binary_class_roles()`.
+* Documentacao: removidas as mencoes a MKL VSL, `cblas_sgemm` e ao restauro de
+  variaveis de ambiente por `on.exit()`, que nao correspondiam ao codigo.
+  `cascade_lake_native` no relatorio de compilacao passa a refletir as macros
+  AVX-512 reais do compilador.
+
+## Desempenho do motor HPC
+
+* O laco de manutencao do top-k do ADASYN era serial; agora e paralelo em
+  OpenMP, como o equivalente do NearMiss.
+* A blocagem do `sgemm` passa a ter piso de tile e a particionar as duas
+  dimensoes, trocando milhares de chamadas finas por poucas chamadas densas.
+* Os buffers deixam de ser zerados em paralelo logo antes de serem sobrescritos
+  por `beta = 0`. O *first touch* NUMA e feito por pagina, sem inicializar todos
+  os elementos.
+* Os blocos de distancia sao orientados como (referencia x consulta), o que
+  torna contigua a leitura do laco interno tanto no kNN quanto no NearMiss.
+* A despadronizacao das sinteticas escreve direto na matriz de saida, sem buffer
+  intermediario nem copia.
+* `sby_hpc_resolve_threads()` respeita cotas de cgroup v1 e v2, evitando
+  oversubscription em containers. Removidos o resolvedor morto de
+  `MKL_NUM_STRIPES` e o injetor de ambiente que nenhuma rota chamava.
+* README com orientacao NUMA para servidores de dois sockets
+  (`OMP_PROC_BIND`, `OMP_PLACES`, `numactl --interleave=all`).
+
 ## Atalho HPC (oneAPI, AVX-512)
 
 * Novas funcoes exportadas `sby_adanear_hpc()`, `sby_adasyn_hpc()` e
   `sby_nearmiss_hpc()`. Cada uma e um atalho de alto desempenho que executa o
   fluxo estritamente no espaco padronizado, eliminando a dupla normalizacao, e
   monta o tibble final por zero-copy diretamente em C++ via `Rcpp::List`.
-* O motor HPC consolidado usa a Vector Statistics Library para as estatisticas
-  iniciais, `cblas_sgemm` para a matriz de distancias
-  (`D^2 = ||A||^2 + ||B||^2 - 2 A B^T`), `vdrnguniform` para a interpolacao do
-  ADASYN e laco SIMD com FMA (`vfmadd213ps`) para a reversao do z-score.
+* O motor HPC consolidado usa lacos SIMD paralelos para as estatisticas
+  iniciais, `sgemm` para a matriz de distancias
+  (`D^2 = ||A||^2 + ||B||^2 - 2 A B^T`), `Rcpp::runif()` sob `RNGScope` para a
+  interpolacao do ADASYN e laco SIMD com FMA para a reversao do z-score. A
+  interface Fortran padrao do BLAS e usada de proposito, para que o oneMKL seja
+  aproveitado quando disponivel sem tornar a BLAS do R um caminho invalido.
 * As consultas KNN internas e o NearMiss usam blocagem/streaming de SGEMM
   com top-k incremental para evitar materializar matrizes de distancia completas
   quando os blocos excedem o orcamento interno de memoria.
-* As tres funcoes controlam temporariamente apenas `MKL_NUM_THREADS`,
-  `OMP_NUM_THREADS` e `MKL_NUM_STRIPES`, restaurando os valores originais por um bloco `on.exit()`
-  inflexivel. As demais variaveis de ambiente ficam sob controle do servidor.
+* As tres funcoes nao alteram variaveis de ambiente do runtime MKL/OpenMP. O
+  numero de threads pedido em `sby_config_max_threads` vale apenas para a
+  chamada corrente: o motor nativo salva e restaura `omp_get_max_threads()` em
+  torno do kernel. A politica de afinidade e de memoria fica sob controle do
+  servidor.
 * O atalho HPC substitui internamente a rota `sby_knn_engine = "native"` como
   caminho rapido quando o motor consolidado esta compilado e carregado. As
   funcoes originais `sby_adanear()`, `sby_adasyn()` e `sby_nearmiss()` continuam

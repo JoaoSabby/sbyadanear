@@ -18,7 +18,7 @@ sby_adanear_hpc(.data, formula, sby_adasyn_k = 3,
 \item{sby_nearmiss_ratio}{Razao nao negativa de retencao da classe majoritaria em relacao ao tamanho final da classe rara. Valores positivos executam NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. O padrao e 1.}
 }
 \description{
-Atalho de alto desempenho do pipeline combinado de balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no espaco padronizado, usando estatisticas via MKL VSL, distancias por \code{cblas_sgemm} e pesos de interpolacao gerados por \code{Rcpp::runif()} sob controle da semente local.
+Atalho de alto desempenho do pipeline combinado de balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no espaco padronizado, usando estatisticas populacionais por laco SIMD paralelo, distancias exatas por \code{sgemm} (oneMKL quando ligado, BLAS do R caso contrario) e pesos de interpolacao gerados por \code{Rcpp::runif()} sob controle da semente local.
 }
 \details{
 A funcao substitui internamente a rota denominada "native" como caminho rapido. O estado de RNG do chamador e preservado: a funcao aplica \code{sby_seed} apenas durante a chamada nativa e restaura \code{RNGkind()} e \code{.Random.seed} ao final. O runtime MKL/OpenMP deve ser configurado externamente.
@@ -41,7 +41,7 @@ Quando \eqn{r_o > 0}, o numero de registros sinteticos e aproximadamente:
 \deqn{n_{syn} = \left\lfloor n_{min}^{(0)} r_o \right\rfloor}
 e a classe rara apos ADASYN tem aproximadamente:
 \deqn{n_{min}^{(1)} = n_{min}^{(0)} + n_{syn} \approx n_{min}^{(0)}(1 + r_o).}
-Em bases pequenas, valores positivos podem gerar ao menos uma linha sintetica, conforme a politica interna de arredondamento.
+Nao existe piso minimo: em bases pequenas, razoes positivas cujo produto \eqn{n_{min}^{(0)} r_o} fica abaixo de 1 geram zero linhas sinteticas, e a classe rara permanece intacta.
 
 A etapa NearMiss-1 e executada se, e somente se:
 \deqn{r_u > 0.}
