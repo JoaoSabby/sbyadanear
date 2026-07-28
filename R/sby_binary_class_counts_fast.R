@@ -2,7 +2,8 @@
 #'
 #' @param sby_y_vector Fator binario sem ausentes
 #'
-#' @return Lista com contagens nomeadas, papeis de classe e razao maioria/minoria
+#' @return Lista com contagens nomeadas, papeis de classe, codigos inteiros de
+#' nivel (`sby_minority_level`/`sby_majority_level`) e razao maioria/minoria
 #'
 #' @noRd
 sby_binary_class_counts_fast <- function(sby_y_vector){
@@ -44,6 +45,10 @@ sby_binary_class_counts_fast <- function(sby_y_vector){
     sby_class_counts = sby_counts,
     sby_minority_label = sby_levels[[sby_minority_position]],
     sby_majority_label = sby_levels[[sby_majority_position]],
+    # Codigos inteiros de nivel: as rotas HPC indexam o factor por codigo, do
+    # mesmo modo que sby_resolve_minority_role() no motor C++.
+    sby_minority_level = as.integer(sby_minority_position),
+    sby_majority_level = as.integer(sby_majority_position),
     sby_minority_count = as.integer(sby_counts[[sby_minority_position]]),
     sby_majority_count = as.integer(sby_counts[[sby_majority_position]]),
     sby_class_ratio = as.numeric(sby_counts[[sby_majority_position]] / sby_counts[[sby_minority_position]])

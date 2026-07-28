@@ -53,6 +53,17 @@
 
 ## Correcoes
 
+* `sby_adanear_hpc()` e `sby_nearmiss_hpc()` voltaram a preservar integralmente
+  a classe rara original. As duas rotas selecionavam as linhas raras por
+  `sby_class_counts$sby_minority_level`, um campo que `sby_binary_class_counts_fast()`
+  nunca devolveu; `as.integer(NULL)` produzia `integer(0)`, o `which()` devolvia
+  zero indices e a saida ficava apenas com a maioria retida mais as sinteticas.
+  Em `sby_adanear_hpc()` isso disparava a pos-condicao
+  `sby_assert_minority_not_reduced()` (por exemplo, entrada = 2874 e
+  saida = 1149 com `sby_adasyn_ratio = 0.4`); em `sby_nearmiss_hpc()`, que nao
+  tinha essa verificacao, a perda era silenciosa. A funcao de contagem agora
+  expoe `sby_minority_level` e `sby_majority_level` e `sby_nearmiss_hpc()`
+  tambem valida a pos-condicao.
 * A engine `native` agora preserva `sby_knn_query_chunk_size` mesmo quando
   `sby_exclude_self = TRUE`, passando o offset global da query para o kernel C++
   para remover self-neighbors corretamente sem forcar uma consulta unica gigante.
