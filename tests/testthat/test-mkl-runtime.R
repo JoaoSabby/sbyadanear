@@ -52,3 +52,84 @@ test_that("hpc thread resolver honours cgroup cpu quotas", {
   expect_lte(sbyadanear:::sby_hpc_resolve_threads(1L), 1L)
   expect_true(sbyadanear:::sby_hpc_resolve_threads(NA_integer_) >= 1L)
 })
+
+test_that("hpc thread resolver honours the process affinity", {
+  affinity <- sbyadanear:::sby_hpc_affinity()
+  expect_type(affinity, "integer")
+  if (length(affinity)) {
+    expect_lte(sbyadanear:::sby_hpc_resolve_threads(8L), length(affinity))
+  }
+})
+
+test_that("cpu report exposes affinity, runtime limits and thread environment", {
+  report <- sby_hpc_cpu_report()
+  expect_true(all(c(
+    "affinity_cpus", "affinity_cpu_count", "openmp_max_threads",
+    "mkl_max_threads", "requested_threads", "effective_threads",
+    "affinity_warning", "hpc_environment"
+  ) %in% names(report)))
+  expect_true(all(c(
+    "MKL_NUM_THREADS", "MKL_DOMAIN_NUM_THREADS", "OMP_NUM_THREADS"
+  ) %in% names(report$hpc_environment)))
+})
+
+test_that("an affinity restricted to one CPU resolves eight threads to one", {
+  expect_identical(
+    sbyadanear:::sby_hpc_effective_thread_limit(
+      sby_requested = 8L,
+      sby_physical = 48L,
+      sby_quota = NA_integer_,
+      sby_affinity_count = 1L
+    ),
+    1L
+  )
+})
+
+test_that("native thread guard applies limits and restores runtime state", {
+  skip_if_not(sby_adanear_hpc_available())
+  before <- sbyadanear:::sby_call_native("sby_hpc_compile_report_cpp")
+  available <- before$affinity_cpu_count
+  if (is.null(available) || is.na(available)) available <- parallel::detectCores()
+
+  for (threads in c(1L, 2L, 8L)) {
+    probe <- sbyadanear:::sby_call_native(
+      "sby_hpc_thread_probe_cpp", threads, FALSE
+    )
+    if (isTRUE(before$openmp)) {
+      expect_identical(as.integer(probe$openmp_max_threads),
+                       min(threads, as.integer(available)))
+    }
+    if (isTRUE(before$mkl_linked)) {
+      expect_identical(as.integer(probe$mkl_max_threads),
+                       min(threads, as.integer(available)))
+    } else {
+      expect_true(is.na(probe$mkl_max_threads))
+    }
+  }
+
+  after <- sbyadanear:::sby_call_native("sby_hpc_compile_report_cpp")
+  expect_identical(after$openmp_max_threads, before$openmp_max_threads)
+  expect_identical(after$mkl_max_threads, before$mkl_max_threads)
+
+  expect_error(
+    sbyadanear:::sby_call_native("sby_hpc_thread_probe_cpp", 1L, TRUE),
+    "kernel abortado"
+  )
+  after_abort <- sbyadanear:::sby_call_native("sby_hpc_compile_report_cpp")
+  expect_identical(after_abort$openmp_max_threads, before$openmp_max_threads)
+  expect_identical(after_abort$mkl_max_threads, before$mkl_max_threads)
+})
+
+test_that("oneMKL local limit takes precedence without changing its environment", {
+  skip_if_not(sby_adanear_hpc_available())
+  report <- sbyadanear:::sby_call_native("sby_hpc_compile_report_cpp")
+  skip_if_not(isTRUE(report$mkl_linked))
+  withr::local_envvar(c(
+    MKL_NUM_THREADS = "46",
+    MKL_DOMAIN_NUM_THREADS = "BLAS=46"
+  ))
+  probe <- sbyadanear:::sby_call_native("sby_hpc_thread_probe_cpp", 2L, FALSE)
+  expect_identical(as.integer(probe$mkl_max_threads), 2L)
+  expect_identical(Sys.getenv("MKL_NUM_THREADS"), "46")
+  expect_identical(Sys.getenv("MKL_DOMAIN_NUM_THREADS"), "BLAS=46")
+})

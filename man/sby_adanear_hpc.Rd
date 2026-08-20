@@ -12,7 +12,7 @@ sby_adanear_hpc(.data, formula, sby_adasyn_k = 3,
 \item{formula}{Formula no formato alvo ~ preditores.}
 \item{sby_adasyn_k}{Numero inteiro positivo de vizinhos da etapa ADASYN. O padrao e 3.}
 \item{sby_nearmiss_k}{Numero inteiro positivo de vizinhos da etapa NearMiss-1. O padrao e 7.}
-\item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. O padrao -1 detecta os nucleos fisicos disponiveis.}
+\item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. O padrao -1 detecta os nucleos fisicos disponiveis. O limite vale para OpenMP e para a oneMKL da chamada corrente, quando ligada.}
 \item{sby_seed}{Valor numerico inteiro utilizado para inicializar o gerador de numeros pseudoaleatorios da etapa ADASYN no motor HPC. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. O padrao e \code{sample.int(10L^5L, 1L)}.}
 \item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
 \item{sby_nearmiss_ratio}{Razao nao negativa de retencao da classe majoritaria em relacao ao tamanho final da classe rara. Valores positivos executam NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. O padrao e 1.}
@@ -21,7 +21,7 @@ sby_adanear_hpc(.data, formula, sby_adasyn_k = 3,
 Atalho de alto desempenho do pipeline combinado de balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no espaco padronizado, usando estatisticas populacionais por laco SIMD paralelo, distancias exatas por \code{sgemm} (oneMKL quando ligado, BLAS do R caso contrario) e pesos de interpolacao gerados por \code{Rcpp::runif()} sob controle da semente local.
 }
 \details{
-A funcao substitui internamente a rota denominada "native" como caminho rapido. O estado de RNG do chamador e preservado: a funcao aplica \code{sby_seed} apenas durante a chamada nativa e restaura \code{RNGkind()} e \code{.Random.seed} ao final. O runtime MKL/OpenMP deve ser configurado externamente.
+A funcao substitui internamente a rota denominada "native" como caminho rapido. O estado de RNG do chamador e preservado. O limite solicitado vale para OpenMP e para a configuracao local da oneMKL durante a chamada; ambos sao restaurados ao final e variaveis de ambiente nao sao alteradas.
 
 Regras formais das razoes de reamostragem:
 

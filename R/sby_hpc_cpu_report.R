@@ -11,6 +11,9 @@
 #' * `compile_report`: macros gravadas no binario nativo durante a compilacao.
 #' * `binary_scan`: busca opcional por mnemonicos AVX-512/FMA no `.so` com
 #'   `objdump`, quando a ferramenta esta instalada no sistema.
+#' O retorno tambem registra a afinidade efetiva, limites OpenMP/oneMKL,
+#' variaveis de ambiente e a ultima configuracao de threads resolvida pelo
+#' motor neste processo.
 #'
 #' Para a meta do cliente, considere OK quando `runtime_ok`, `compile_ok` e
 #' `openmp_ok` forem `TRUE`. `binary_scan$has_zmm_or_avx512` e uma evidencia
@@ -76,7 +79,22 @@ sby_hpc_cpu_report <- function(){
     )
   }
 
-  sby_env_keys <- c("MKL_NUM_THREADS", "OMP_NUM_THREADS")
+  sby_env_keys <- c("MKL_NUM_THREADS", "MKL_DOMAIN_NUM_THREADS", "OMP_NUM_THREADS")
+  sby_affinity_cpus <- sby_hpc_affinity()
+  sby_affinity_count <- if(length(sby_affinity_cpus)) length(sby_affinity_cpus) else NA_integer_
+  sby_openmp_limit <- if(is.list(sby_compile_report)) sby_compile_report$openmp_max_threads else NA_integer_
+  sby_mkl_limit <- if(is.list(sby_compile_report)) sby_compile_report$mkl_max_threads else NA_integer_
+  sby_requested <- sby_adanear_state$sby_hpc_last_requested_threads
+  if(is.null(sby_requested)) sby_requested <- NA_integer_
+  sby_effective <- sby_adanear_state$sby_hpc_last_effective_threads
+  if(is.null(sby_effective)) sby_effective <- NA_integer_
+  sby_affinity_warning <- if(!is.na(sby_affinity_count) && !is.na(sby_requested) &&
+                              sby_requested > sby_affinity_count){
+    sprintf("A configuracao solicitada de %d threads excede as %d CPUs permitidas pela afinidade.",
+            sby_requested, sby_affinity_count)
+  }else{
+    NA_character_
+  }
 
   list(
     runtime_ok = all(sby_runtime_flags),
@@ -84,6 +102,13 @@ sby_hpc_cpu_report <- function(){
     openmp_ok = sby_openmp_ok,
     runtime_flags = sby_runtime_flags,
     compile_report = sby_compile_report,
+    affinity_cpus = sby_affinity_cpus,
+    affinity_cpu_count = sby_affinity_count,
+    openmp_max_threads = sby_openmp_limit,
+    mkl_max_threads = sby_mkl_limit,
+    requested_threads = sby_requested,
+    effective_threads = sby_effective,
+    affinity_warning = sby_affinity_warning,
     binary_scan = sby_binary_scan,
     hpc_environment = Sys.getenv(sby_env_keys, unset = NA),
     guidance = c(

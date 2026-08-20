@@ -6,8 +6,9 @@ sobreamostragem **ADASYN**, subamostragem **NearMiss-1** e um pipeline híbrido
 **ADASYN + NearMiss-1** chamado `sby_adanear()`.
 
 Internamente, as rotinas trabalham com matrizes numéricas, padronização Z-score,
-consultas KNN configuráveis, fallback com `Rfast` e kernels nativos em C para
-partes críticas quando disponíveis.
+consultas KNN configuráveis e kernels nativos em C++, C e Fortran para partes
+críticas quando disponíveis. O motor HPC consolidado usa `sgemm` da BLAS do R
+ou da oneMKL opcional.
 
 ## Estado da API
 
@@ -41,9 +42,9 @@ Preditores devem ser numéricos, finitos e densos. Matrizes esparsas do pacote
 bases grandes. Colunas constantes também são rejeitadas porque a padronização
 Z-score exige desvio padrão positivo.
 
-Para bases pequenas, `sby_over_ratio` positivo sempre gera ao menos uma linha
-sintética; use uma razão positiva explícita e uma `sby_seed` inteira para
-reprodutibilidade.
+O número de linhas sintéticas é `floor(n_minoria * sby_over_ratio)`. Portanto,
+em bases pequenas uma razão positiva pode gerar zero linhas. Use uma razão
+adequada ao tamanho da minoria e uma `sby_seed` inteira para reprodutibilidade.
 
 ## KNN, métricas e engines
 
@@ -238,7 +239,30 @@ sby_step_adanear(
 ```
 
 Por padrão, as etapas usam `skip = TRUE`, pois alteram o número de linhas do
-conjunto processado e normalmente devem ser aplicadas apenas no treinamento
+conjunto processado e normalmente devem ser aplicadas apenas no treinamento.
+
+## Atalhos do motor HPC
+
+Para matrizes densas em servidores com OpenMP e, opcionalmente, oneMKL, o pacote
+oferece `sby_adasyn_hpc()`, `sby_nearmiss_hpc()` e `sby_adanear_hpc()`. Essas
+interfaces preservam nomes e tipos de colunas e o estado de RNG do chamador. O
+argumento `sby_config_max_threads` limita os loops OpenMP e todas as chamadas
+oneMKL feitas durante a chamada corrente:
+
+```r
+sby_hpc_result <- sby_adanear_hpc(
+  .data = sby_data,
+  formula = sby_y ~ .,
+  sby_adasyn_ratio = 0.5,
+  sby_nearmiss_ratio = 1,
+  sby_config_max_threads = 8L,
+  sby_seed = 123L
+)
+```
+
+O limite efetivo é o mínimo entre o valor solicitado, núcleos físicos, cota de
+cgroup e CPUs permitidas pela afinidade. Os atalhos não modificam
+`MKL_NUM_THREADS`, `MKL_DOMAIN_NUM_THREADS` ou `OMP_NUM_THREADS`.
 
 ## Exemplo rápido com `sby_adanear()`
 
@@ -398,7 +422,7 @@ R CMD check sbyadanear_0.3.0.tar.gz
 - `NAMESPACE`: funções exportadas, métodos S3 e carregamento da biblioteca
   nativa.
 - `R/`: funções R, helpers internos e métodos S3 das etapas `recipes`.
-- `src/sbyadanear.c`: kernels nativos em C compilados na instalação do pacote.
+- `src/`: kernels nativos em C++, C e Fortran compilados na instalação do pacote.
 - `man/`: documentação gerada a partir dos blocos roxygen2.
 
 ## Validação recomendada
@@ -447,6 +471,7 @@ Para diagnostico dentro do container:
 ```r
 Sys.getenv("OMP_NUM_THREADS")
 Sys.getenv("MKL_NUM_THREADS")
+Sys.getenv("MKL_DOMAIN_NUM_THREADS")
 ```
 
 Se `RhpcBLASctl` estiver instalado no ambiente:
@@ -475,9 +500,10 @@ ser util, dependendo do hardware e do backend numerico.
 
 As funcoes `sby_adasyn_hpc()`, `sby_nearmiss_hpc()` e `sby_adanear_hpc()` nao
 alteram variaveis de ambiente do runtime: o argumento `sby_config_max_threads`
-vale apenas para a chamada corrente, e o motor nativo salva e restaura
-`omp_get_max_threads()` em torno do kernel. A politica de afinidade e de memoria
-fica inteiramente sob controle do usuario, e o pacote nao a sobrescreve.
+vale apenas para a chamada corrente. O guard nativo salva e restaura o limite
+OpenMP e, quando ligada, a configuracao local da oneMKL. A politica de afinidade
+e de memoria fica sob controle do usuario; o pacote apenas consulta a mascara
+efetiva para evitar criar mais threads do que CPUs permitidas.
 
 Em maquinas de dois sockets (por exemplo, dois Intel Cascade Lake), o custo
 dominante do kNN exato e o trafego de memoria entre nos NUMA. Fixe as threads e
@@ -498,7 +524,19 @@ politica em vez de concentrar todas as paginas na thread mestre.
 
 Deixe `sby_config_max_threads = -1` para que o pacote detecte os nucleos
 disponiveis. A deteccao respeita cotas de cgroup (v1 e v2), portanto o valor
-correto tambem e usado dentro de containers e de slices do systemd.
+correto tambem e usado dentro de containers e de slices do systemd. Em Linux,
+a deteccao tambem respeita `sched_getaffinity()`: um processo fixado em uma CPU
+usa uma thread efetiva mesmo quando `sby_config_max_threads = 8L`.
+
+Use `sby_hpc_cpu_report()` para auditar CPUs permitidas, quantidade permitida,
+limites OpenMP/oneMKL, variaveis de ambiente, capacidades de compilacao e um
+aviso quando o limite atual exceder a afinidade:
+
+```r
+report <- sby_hpc_cpu_report()
+report[c("affinity_cpus", "affinity_cpu_count", "openmp_max_threads",
+         "mkl_max_threads", "hpc_environment", "affinity_warning")]
+```
 
 ### Compilacao com oneMKL e AVX-512
 
