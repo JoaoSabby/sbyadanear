@@ -15,7 +15,7 @@
 #' @param sby_nearmiss_ratio Razao de retencao NearMiss-1.
 #' @param sby_adasyn_k Numero inteiro positivo de vizinhos para ADASYN.
 #' @param sby_nearmiss_k Numero inteiro positivo de vizinhos para NearMiss-1.
-#' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1` detecta os nucleos fisicos disponiveis.
+#' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1` detecta os nucleos fisicos disponiveis. O limite vale para OpenMP e para a oneMKL da chamada corrente, quando ligada.
 #' @param sby_seed Semente inteira.
 #' @param sby_audit Indicador logico que retorna uma lista com `sby_balanced_data` quando `TRUE`.
 #' @param sby_restore_types Mantido para compatibilidade com metadados da etapa.

@@ -7,7 +7,7 @@ Authors@R:
 Description: Implementa rotinas de balanceamento para classificacao binaria
     desbalanceada com ADASYN, NearMiss-1 e fluxo combinado ADASYN +
     NearMiss-1. As funcoes operam sobre preditores numericos, usam busca
-    KNN configuravel e podem utilizar kernels nativos em C quando disponiveis.
+    KNN configuravel e podem utilizar kernels nativos em C++, C e Fortran.
 License: MIT + file LICENSE
 URL: https://github.com/JoaoSabby/sbyadanear
 BugReports: https://github.com/JoaoSabby/sbyadanear/issues

@@ -57,12 +57,18 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#if defined(__linux__)
+#include <sched.h>
+#endif
 #if defined(_MSC_VER)
 #include <malloc.h>
 #endif
 
 #ifdef _OPENMP
 #include <omp.h>
+#endif
+#if defined(SBYADANEAR_ONEAPI_MKL)
+#include <mkl.h>
 #endif
 
 
@@ -287,43 +293,73 @@ static int sby_resolve_native_threads(SEXP max_threads){
   return requested;
 }
 
-// omp_set_num_threads muda o estado global do runtime OpenMP e vale para todo o
-// processo, nao apenas para a chamada corrente. Sem restauracao, um unico
-// sby_max_threads baixo contaminava permanentemente qualquer outro codigo
-// paralelo da sessao R. O guard salva o valor anterior e o repoe na saida,
-// inclusive quando a chamada aborta por excecao.
-class sby_omp_thread_guard {
+// O guard limita conjuntamente os loops OpenMP e, quando ligado, o estado local
+// da oneMKL. Ambos os valores anteriores sao restaurados inclusive quando a
+// chamada aborta por excecao; a configuracao global da oneMKL nunca e alterada.
+class sby_thread_guard {
 public:
-  explicit sby_omp_thread_guard(SEXP max_threads){
-#ifdef _OPENMP
+  explicit sby_thread_guard(SEXP max_threads){
     int requested = sby_resolve_native_threads(max_threads);
     if(requested > 0){
+#ifdef _OPENMP
       previous_ = omp_get_max_threads();
       omp_set_num_threads(requested);
-      active_ = true;
-    }
-#else
-    (void) max_threads;
+      openmp_active_ = true;
 #endif
+#if defined(SBYADANEAR_ONEAPI_MKL)
+      mkl_previous_ = mkl_set_num_threads_local(requested);
+      mkl_active_ = true;
+#endif
+    }
   }
 
-  ~sby_omp_thread_guard(){
+  ~sby_thread_guard(){
+#if defined(SBYADANEAR_ONEAPI_MKL)
+    if(mkl_active_){
+      mkl_set_num_threads_local(mkl_previous_);
+    }
+#endif
 #ifdef _OPENMP
-    if(active_){
+    if(openmp_active_){
       omp_set_num_threads(previous_);
     }
 #endif
   }
 
-  sby_omp_thread_guard(const sby_omp_thread_guard&) = delete;
-  sby_omp_thread_guard& operator=(const sby_omp_thread_guard&) = delete;
+  sby_thread_guard(const sby_thread_guard&) = delete;
+  sby_thread_guard& operator=(const sby_thread_guard&) = delete;
 
 private:
 #ifdef _OPENMP
   int  previous_ = 1;
-  bool active_   = false;
+  bool openmp_active_ = false;
+#endif
+#if defined(SBYADANEAR_ONEAPI_MKL)
+  int  mkl_previous_ = 0;
+  bool mkl_active_ = false;
 #endif
 };
+
+// Diagnostico interno usado para verificar o limite efetivo dentro do escopo
+// do guard, sem deixar alteracoes permanentes no runtime.
+extern "C" SEXP sby_hpc_thread_probe_cpp(SEXP max_threads, SEXP abort_kernel){
+BEGIN_RCPP
+  const sby_thread_guard thread_guard(max_threads);
+  if(Rf_asLogical(abort_kernel) == TRUE) Rcpp::stop("kernel abortado para teste");
+  Rcpp::List out;
+#ifdef _OPENMP
+  out["openmp_max_threads"] = omp_get_max_threads();
+#else
+  out["openmp_max_threads"] = NA_INTEGER;
+#endif
+#if defined(SBYADANEAR_ONEAPI_MKL)
+  out["mkl_max_threads"] = mkl_get_max_threads();
+#else
+  out["mkl_max_threads"] = NA_INTEGER;
+#endif
+  return out;
+END_RCPP
+}
 
 // Interfaces dos kernels Fortran do motor HPC
 extern "C" {
@@ -953,6 +989,24 @@ static Rcpp::List sby_build_scaling_info(const sby_double_buffer& means,
 extern "C" SEXP sby_hpc_compile_report_cpp(){
 BEGIN_RCPP
   Rcpp::List out;
+#if defined(__linux__)
+  cpu_set_t affinity;
+  CPU_ZERO(&affinity);
+  if(sched_getaffinity(0, sizeof(affinity), &affinity) == 0){
+    Rcpp::IntegerVector allowed;
+    for(int cpu = 0; cpu < CPU_SETSIZE; ++cpu){
+      if(CPU_ISSET(cpu, &affinity)) allowed.push_back(cpu);
+    }
+    out["affinity_cpus"] = allowed;
+    out["affinity_cpu_count"] = allowed.size();
+  }else{
+    out["affinity_cpus"] = Rcpp::IntegerVector::create(NA_INTEGER);
+    out["affinity_cpu_count"] = NA_INTEGER;
+  }
+#else
+  out["affinity_cpus"] = Rcpp::IntegerVector::create(NA_INTEGER);
+  out["affinity_cpu_count"] = NA_INTEGER;
+#endif
   // Derivado das macros que o compilador realmente define, e nao de um -D fixo
   // no Makevars: antes o relatorio anunciava suporte Cascade Lake mesmo quando
   // nenhuma flag de arquitetura chegava ao compilador.
@@ -964,8 +1018,10 @@ BEGIN_RCPP
 #endif
 #if defined(SBYADANEAR_ONEAPI_MKL)
   out["mkl_linked"] = true;
+  out["mkl_max_threads"] = mkl_get_max_threads();
 #else
   out["mkl_linked"] = false;
+  out["mkl_max_threads"] = NA_INTEGER;
 #endif
 #if defined(__AVX512F__)
   out["avx512f"] = true;
@@ -1031,7 +1087,7 @@ BEGIN_RCPP
   // Em um ponto de entrada .Call() puro isso nao acontece sozinho, e sem o
   // escopo abaixo a saida deixava de ser reprodutivel por sby_seed.
   Rcpp::RNGScope rng_scope;
-  const sby_omp_thread_guard thread_guard(max_threads);
+  const sby_thread_guard thread_guard(max_threads);
 
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow(), p = x.ncol();
@@ -1106,7 +1162,7 @@ extern "C" SEXP sby_adasyn_hpc_cpp(
     SEXP target_levels){
 BEGIN_RCPP
   Rcpp::RNGScope rng_scope;
-  const sby_omp_thread_guard thread_guard(max_threads);
+  const sby_thread_guard thread_guard(max_threads);
 
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow(), p = x.ncol();
@@ -1160,7 +1216,7 @@ extern "C" SEXP sby_nearmiss_hpc_cpp(
     SEXP max_threads, SEXP column_names,
     SEXP target_levels){
 BEGIN_RCPP
-  const sby_omp_thread_guard thread_guard(max_threads);
+  const sby_thread_guard thread_guard(max_threads);
 
   Rcpp::NumericMatrix x(x_matrix);
   int n = x.nrow(), p = x.ncol();

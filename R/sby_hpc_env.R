@@ -61,7 +61,50 @@ sby_hpc_cgroup_cpu_quota <- function(){
   NA_integer_
 }
 
+# CPUs que o escalonador permite ao processo corrente. O diagnostico nativo e
+# preferido porque consulta sched_getaffinity(2); /proc e o fallback para uma
+# instalacao na qual o motor nativo ainda nao esteja carregado.
+sby_hpc_affinity <- function(){
+  sby_native <- tryCatch(
+    sby_call_native("sby_hpc_compile_report_cpp"),
+    error = function(sby_error) NULL
+  )
+  if(is.list(sby_native) && length(sby_native$affinity_cpus) &&
+     !anyNA(sby_native$affinity_cpus)){
+    return(as.integer(sby_native$affinity_cpus))
+  }
+
+  if(.Platform$OS.type == "unix" && file.exists("/proc/self/status")){
+    sby_status <- tryCatch(readLines("/proc/self/status", warn = FALSE),
+                           error = function(sby_error) character())
+    sby_line <- grep("^Cpus_allowed_list:", sby_status, value = TRUE)
+    if(length(sby_line) == 1L){
+      sby_ranges <- strsplit(sub("^[^:]+:[[:space:]]*", "", sby_line), ",",
+                             fixed = FALSE)[[1L]]
+      sby_cpus <- unlist(lapply(sby_ranges, function(sby_range){
+        sby_ends <- suppressWarnings(as.integer(strsplit(sby_range, "-", fixed = TRUE)[[1L]]))
+        if(length(sby_ends) == 1L && !is.na(sby_ends)) return(sby_ends)
+        if(length(sby_ends) == 2L && !anyNA(sby_ends)) return(seq.int(sby_ends[1L], sby_ends[2L]))
+        integer()
+      }), use.names = FALSE)
+      if(length(sby_cpus)) return(as.integer(sby_cpus))
+    }
+  }
+  integer()
+}
+
 # Resolve o numero de threads efetivo para o motor HPC
+sby_hpc_effective_thread_limit <- function(sby_requested, sby_physical,
+                                           sby_quota = NA_integer_,
+                                           sby_affinity_count = NA_integer_){
+  sby_limits <- c(sby_physical, sby_quota, sby_affinity_count)
+  if(sby_requested > 0L) sby_limits <- c(sby_requested, sby_limits)
+  sby_limits <- suppressWarnings(as.integer(sby_limits))
+  sby_limits <- sby_limits[!is.na(sby_limits) & sby_limits >= 1L]
+  if(!length(sby_limits)) return(1L)
+  as.integer(min(sby_limits))
+}
+
 sby_hpc_resolve_threads <- function(sby_config_max_threads = -1L){
   sby_config_max_threads <- suppressWarnings(as.integer(sby_config_max_threads))
   if(length(sby_config_max_threads) != 1L || is.na(sby_config_max_threads)){
@@ -76,15 +119,18 @@ sby_hpc_resolve_threads <- function(sby_config_max_threads = -1L){
     sby_detected <- 1L
   }
 
+  sby_affinity_count <- length(sby_hpc_affinity())
+  if(sby_affinity_count < 1L) sby_affinity_count <- NA_integer_
   sby_quota <- sby_hpc_cgroup_cpu_quota()
-  if(!is.na(sby_quota) && sby_quota >= 1L){
-    sby_detected <- min(sby_detected, sby_quota)
-  }
-
-  if(sby_config_max_threads > 0L){
-    return(min(sby_config_max_threads, sby_detected))
-  }
-  return(sby_detected)
+  sby_effective <- sby_hpc_effective_thread_limit(
+    sby_requested = sby_config_max_threads,
+    sby_physical = sby_detected,
+    sby_quota = sby_quota,
+    sby_affinity_count = sby_affinity_count
+  )
+  sby_adanear_state$sby_hpc_last_requested_threads <- sby_config_max_threads
+  sby_adanear_state$sby_hpc_last_effective_threads <- sby_effective
+  sby_effective
 }
 
 # Captura o estado anterior das variaveis controladas usando unset = NA

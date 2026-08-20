@@ -11,7 +11,8 @@
 #' @details
 #' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
 #' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
-#' motor nativo salva e restaura `omp_get_max_threads()` em torno do kernel.
+#' motor nativo salva e restaura os limites OpenMP e, quando ligada, oneMKL em
+#' torno do kernel.
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
@@ -21,11 +22,12 @@
 #' @param sby_nearmiss_k Numero inteiro positivo de vizinhos do
 #'   NearMiss-1. Padrao: `7`.
 #'
-#' @param sby_nearmiss_ratio Razao positiva de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_nearmiss_ratio)`, limitado a maioria disponivel.
-#'   Padrao: `0.5`.
+#' @param sby_nearmiss_ratio Razao nao negativa de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_nearmiss_ratio)`, limitado a maioria disponivel. Zero desativa o undersampling.
+#'   Padrao: `1`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
-#'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
+#'   detecta os nucleos fisicos disponíveis. O limite vale para OpenMP e para a
+#'   oneMKL da chamada corrente, quando ligada. Padrao: `-1`.
 #'
 #' @param sby_seed Semente inteira para reproducibilidade. Padrao:
 #'   `sample.int(10L^5L, 1L)`.

@@ -13,7 +13,8 @@
 #' @details
 #' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
 #' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
-#' motor nativo salva e restaura `omp_get_max_threads()` em torno do kernel.
+#' motor nativo salva e restaura os limites OpenMP e, quando ligada, oneMKL em
+#' torno do kernel, sem alterar variaveis de ambiente.
 #'
 #' Regras formais das razoes de reamostragem:
 #'
@@ -89,7 +90,8 @@
 #'   NearMiss-1. Padrao: `7`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
-#'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
+#'   detecta os nucleos fisicos disponíveis. O limite vale para os loops OpenMP
+#'   e para todas as chamadas oneMKL da chamada corrente, quando ligada. Padrao: `-1`.
 #'
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios
 #'   do ADASYN. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.

@@ -15,7 +15,8 @@
 #' @details
 #' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
 #' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
-#' motor nativo salva e restaura `omp_get_max_threads()` em torno do kernel.
+#' motor nativo salva e restaura os limites OpenMP e, quando ligada, oneMKL em
+#' torno do kernel.
 #'
 #' @param .data Data frame ou tibble com a coluna de desfecho e preditores
 #'   numericos referenciados em `formula`.
@@ -27,11 +28,12 @@
 #'
 #' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da
 #'   classe rara. `0.4`, por exemplo, adiciona 40% de registros sintéticos e
-#'   preserva 100% dos raros originais; nunca reduz a classe rara. Deve ser
-#'   estritamente positivo. Padrão: `0.2`.
+#'   preserva 100% dos raros originais; nunca reduz a classe rara. Zero desativa
+#'   a geração sintética e devolve os dados sem balanceamento. Padrão: `0.2`.
 #'
 #' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
-#'   detecta os nucleos fisicos disponíveis. Padrao: `-1`.
+#'   detecta os nucleos fisicos disponíveis. O limite vale para OpenMP e para a
+#'   oneMKL da chamada corrente, quando ligada. Padrao: `-1`.
 #'
 #' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios.
 #'   A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.

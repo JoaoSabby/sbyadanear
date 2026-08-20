@@ -27,11 +27,11 @@ sby_step_adanear_hpc(recipe, ..., role = NA, trained = FALSE, columns = NULL,
 \item{role}{Papel armazenado na etapa.}
 \item{trained}{Indicador interno de treinamento da etapa.}
 \item{columns}{Coluna de desfecho resolvida durante \code{prep()}.}
-\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. O cálculo sempre soma \code{1} ao valor informado: \code{n_rara_final = floor(n_rara_original * (1 + sby_adasyn_ratio))}. Portanto, \code{0.4} usa o multiplicador final \code{1.4}, nunca \code{0.4}, e preserva todos os raros originais.}
+\item{sby_adasyn_ratio}{Acréscimo relativo sobre a quantidade original da classe rara. A quantidade sintética é \code{floor(n_rara_original * sby_adasyn_ratio)}; zero desativa a geração.}
 \item{sby_nearmiss_ratio}{Razao de retencao NearMiss-1.}
 \item{sby_adasyn_k}{Numero inteiro positivo de vizinhos para ADASYN.}
 \item{sby_nearmiss_k}{Numero inteiro positivo de vizinhos para NearMiss-1.}
-\item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. \code{-1} detecta os nucleos fisicos disponiveis.}
+\item{sby_config_max_threads}{Numero inteiro de threads do motor HPC. \code{-1} detecta os nucleos fisicos disponiveis. O limite vale para OpenMP e para a oneMKL da chamada corrente, quando ligada.}
 \item{sby_seed}{Semente inteira.}
 \item{sby_audit}{Indicador logico que retorna uma lista com \code{sby_balanced_data} quando \code{TRUE}.}
 \item{sby_restore_types}{Mantido para compatibilidade com metadados da etapa.}
