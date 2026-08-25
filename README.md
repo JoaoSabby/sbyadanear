@@ -505,9 +505,10 @@ OpenMP e, quando ligada, a configuracao local da oneMKL. A politica de afinidade
 e de memoria fica sob controle do usuario; o pacote apenas consulta a mascara
 efetiva para evitar criar mais threads do que CPUs permitidas.
 
-Em maquinas de dois sockets (por exemplo, dois Intel Cascade Lake), o custo
-dominante do kNN exato e o trafego de memoria entre nos NUMA. Fixe as threads e
-distribua as paginas antes de iniciar o R:
+Em maquinas de dois sockets (por exemplo, dois Intel Cascade Lake), SGEMM,
+sincronizacao OpenMP e trafego entre nos NUMA podem dominar o kNN exato. A
+participacao de cada componente deve ser medida no servidor alvo. Fixe as
+threads e distribua as paginas antes de iniciar o R:
 
 ```sh
 export OMP_PROC_BIND=close

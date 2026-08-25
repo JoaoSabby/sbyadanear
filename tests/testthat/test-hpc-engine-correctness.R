@@ -169,3 +169,32 @@ test_that("razoes que nao rendem uma linha inteira nao inventam registros", {
     regexp = "reteve zero linhas"
   )
 })
+
+test_that("SGEMM blocado preserva empates e resultados entre threads", {
+  skip_if_not(sby_adanear_hpc_available())
+
+  # Symmetric coordinates create exact distance ties. Stable output across
+  # thread counts verifies that reference order, float narrowing, and tie
+  # handling do not depend on OpenMP scheduling.
+  dat <- data.frame(
+    x1 = c(-1, 1, 0, 0, -2, 2, 0, 0, -3, 3, 0, 0),
+    x2 = c(0, 0, -1, 1, 0, 0, -2, 2, 0, 0, -3, 3),
+    y = factor(c(rep("min", 4), rep("maj", 8)), levels = c("min", "maj"))
+  )
+
+  run <- function(threads) {
+    sby_adanear_hpc(
+      dat, y ~ ., sby_adasyn_k = 3, sby_nearmiss_k = 3,
+      sby_adasyn_ratio = 0.5, sby_nearmiss_ratio = 1,
+      sby_config_max_threads = threads, sby_seed = 918L
+    )
+  }
+
+  one <- run(1L)
+  two <- run(2L)
+  repeated <- run(1L)
+  expect_identical(two, one)
+  expect_identical(repeated, one)
+  expect_identical(names(one), names(dat))
+  expect_identical(levels(one$y), levels(dat$y))
+})

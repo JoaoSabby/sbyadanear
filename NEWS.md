@@ -2,6 +2,12 @@
 
 ## Correcoes do motor HPC
 
+* Distancias SGEMM: o kernel de producao agora executa apenas `-2 A B^T` com
+  leading dimensions reais. Blocos contiguos usam views, normas em double sao
+  calculadas uma vez, o buffer de distancia e reutilizado e sua correcao
+  float32 ocorre durante o top-k. Isso remove copias, alocacoes e regioes
+  OpenMP repetidas ao redor de cada SGEMM, sem alterar a API publica.
+
 * Compilacao: `src/Makevars` e `src/Makevars.win` passam a propagar
   `$(SHLIB_OPENMP_CXXFLAGS)` e `$(SHLIB_OPENMP_FCFLAGS)`/`$(SHLIB_OPENMP_FFLAGS)`
   para C++, Fortran e link. Sem isso, todo `#pragma omp` e todo `!$omp` eram

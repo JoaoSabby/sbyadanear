@@ -178,17 +178,6 @@ static void sby_resize_first_touch_pages(Buffer& buffer, size_t n){
   }
 }
 
-template <typename T>
-static void sby_parallel_copy(const T* src, T* dst, size_t n){
-#ifdef _OPENMP
-#pragma omp simd
-#endif
-  for(size_t i = 0; i < n; ++i){
-    dst[i] = src[i];
-  }
-}
-
-
 // -------------------------------------------------------------------
 // Blocagem das chamadas sgemm.
 //
@@ -213,7 +202,7 @@ static sby_gemm_tiling sby_resolve_gemm_tiling(int n_query, int n_ref, int p){
   const size_t dim_ref   = (size_t) std::max(1, n_ref);
   const size_t width     = (size_t) std::max(1, p);
 
-  // A copia dos blocos limita cada dimensao isoladamente.
+  // The operand-view budget preserves sufficiently wide SGEMM tiles.
   size_t ref_block = copy_budget_elems / width;
   if(ref_block < tile_floor) ref_block = tile_floor;
   if(ref_block > dim_ref)    ref_block = dim_ref;
@@ -239,23 +228,6 @@ static sby_gemm_tiling sby_resolve_gemm_tiling(int n_query, int n_ref, int p){
   out.query_block = (int) std::max<size_t>(1, std::min(query_block, dim_query));
   out.ref_block   = (int) std::max<size_t>(1, std::min(ref_block, dim_ref));
   return out;
-}
-
-// Copia um bloco contiguo de linhas de uma matriz column major. O laco de copia
-// e o proprio first touch das paginas, portanto nao ha pre-zeragem: todos os
-// n_block * p elementos sao escritos aqui.
-static void sby_copy_column_block(const sby_float_buffer& source, int n_source,
-                                  int p, int row_start, int n_block,
-                                  sby_float_buffer& block){
-  block.resize((size_t) n_block * (size_t) p);
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for(int j = 0; j < p; ++j){
-    const float* src = source.data() + (size_t) j * (size_t) n_source + (size_t) row_start;
-    float* dst = block.data() + (size_t) j * (size_t) n_block;
-    sby_parallel_copy(src, dst, (size_t) n_block);
-  }
 }
 
 // Copia linhas arbitrarias (gather) de uma matriz column major para um bloco
@@ -371,9 +343,10 @@ extern "C" {
   void sby_revert_zscore_fma_f(const float *x, int n, int p,
                                const double *means, const double *sds,
                                double *x_out, int *status);
-  void sby_pairwise_sqdist_sgemm_f(const float *a, int n_a,
-                                   const float *b, int n_b, int p,
-                                   float *d_out, int *status);
+  void sby_sgemm_neg2_f(const float *a, int lda,
+                         const float *b, int ldb,
+                         float *c, int ldc,
+                         int m, int n, int k, int *status);
   void sby_adasyn_interp_uniform_f(const float *minority, int n_min, int p,
                                    const int *base_idx, const int *nbr_idx,
                                    const float *lambda, int n_syn,
@@ -460,6 +433,29 @@ static void sby_destandarize_synthetic(
   }
 }
 
+// Computes squared row norms in double precision with one matrix-wide OpenMP
+// region. The input is column-major with ld as its physical row stride. Norms
+// are never recomputed for individual SGEMM tiles, which removes two teams per
+// tile and preserves the precision used by the former Fortran implementation.
+static void sby_row_sqnorms(const float* x, int rows, int columns, int ld,
+                            sby_double_buffer& norms){
+  norms.resize((size_t) rows);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for(int i = 0; i < rows; ++i){
+    double acc = 0.0;
+#ifdef _OPENMP
+#pragma omp simd reduction(+:acc)
+#endif
+    for(int j = 0; j < columns; ++j){
+      const double value = (double) x[(size_t) j * (size_t) ld + (size_t) i];
+      acc += value * value;
+    }
+    norms[i] = acc;
+  }
+}
+
 // -------------------------------------------------------------------
 // sby_knn_topk_against_reference
 //
@@ -502,20 +498,20 @@ static void sby_knn_topk_against_reference(
   const sby_gemm_tiling tiling = sby_resolve_gemm_tiling(n_query, n_ref, p);
   const double infinity = std::numeric_limits<double>::infinity();
 
-  sby_float_buffer query_block;
-  sby_float_buffer reference_block;
   sby_float_buffer dist_block;
+  sby_double_buffer query_norm;
+  sby_double_buffer reference_norm;
   sby_double_buffer top_dist;
   sby_double_buffer worst_val;
   std::vector<int> top_index;
   std::vector<int> worst_pos;
   int status = 0;
   int incomplete = 0;
+  sby_row_sqnorms(query.data(), n_query, p, n_query, query_norm);
+  sby_row_sqnorms(reference.data(), n_ref, p, n_ref, reference_norm);
 
   for(int q_start = 0; q_start < n_query; q_start += tiling.query_block){
     const int n_q = std::min(tiling.query_block, n_query - q_start);
-    sby_copy_column_block(query, n_query, p, q_start, n_q, query_block);
-
     sby_resize_first_touch(top_dist, (size_t) n_q * (size_t) keep_k, infinity);
     top_index.assign((size_t) n_q * (size_t) keep_k, -1);
     worst_pos.assign(n_q, 0);
@@ -523,13 +519,13 @@ static void sby_knn_topk_against_reference(
 
     for(int ref_start = 0; ref_start < n_ref; ref_start += tiling.ref_block){
       const int n_r = std::min(tiling.ref_block, n_ref - ref_start);
-      sby_copy_column_block(reference, n_ref, p, ref_start, n_r, reference_block);
-      // dist_block sai como (n_r x n_q): coluna i guarda as distancias da
-      // consulta i para todas as referencias do bloco, em posicoes contiguas.
-      sby_resize_first_touch_pages(dist_block, (size_t) n_r * (size_t) n_q);
-      sby_pairwise_sqdist_sgemm_f(reference_block.data(), n_r,
-                                  query_block.data(), n_q, p,
-                                  dist_block.data(), &status);
+      // Row intervals are column-major views. The offset selects the first row
+      // while lda/ldb retain the physical row stride of the complete matrices.
+      // C is owned by this query cycle and reused at capacity across ref tiles.
+      dist_block.resize((size_t) tiling.ref_block * (size_t) n_q);
+      sby_sgemm_neg2_f(reference.data() + ref_start, n_ref,
+                       query.data() + q_start, n_query,
+                       dist_block.data(), n_r, n_r, n_q, p, &status);
       if(status != 0){
         Rcpp::stop("Falha no calculo blocado de distancias por sgemm (status=%d)", status);
       }
@@ -545,7 +541,12 @@ static void sby_knn_topk_against_reference(
         int    local_worst_pos = worst_pos[i];
         double local_worst_val = worst_val[i];
         for(int b = 0; b < n_r; ++b){
-          const double candidate = (double) col[b];
+          double corrected = (double) col[b] + reference_norm[ref_start + b] +
+                             query_norm[q_start + i];
+          if(corrected < 0.0) corrected = 0.0;
+          // The former kernel stored the corrected value in float before C++
+          // compared it. This explicit narrowing preserves near-tie ordering.
+          const double candidate = (double) (float) corrected;
           if(candidate >= local_worst_val) continue;
           row_dist[local_worst_pos] = candidate;
           row_idx[local_worst_pos]  = ref_start + b;
@@ -833,14 +834,22 @@ static std::vector<int> sby_run_nearmiss_stage(
   // blocadas pelo mesmo orcamento, com piso de tile.
   const sby_gemm_tiling tiling = sby_resolve_gemm_tiling(n_maj, n_min, p);
   sby_float_buffer majority_block;
-  sby_float_buffer minority_block;
   sby_float_buffer dist_block;
+  sby_double_buffer original_norm;
+  sby_double_buffer minority_norm;
+  sby_row_sqnorms(x_scaled_orig.data(), n, p, n, original_norm);
+  sby_row_sqnorms(minority.data(), n_min, p, n_min, minority_norm);
   int status = 0;
 
   for(int maj_start = 0; maj_start < n_maj; maj_start += tiling.query_block){
     int n_maj_block = std::min(tiling.query_block, n_maj - maj_start);
     sby_gather_row_block(x_scaled_orig, n, p, majority_index.data() + maj_start,
                          n_maj_block, majority_block);
+
+    sby_double_buffer majority_norm((size_t) n_maj_block);
+    for(int m = 0; m < n_maj_block; ++m){
+      majority_norm[m] = original_norm[majority_index[maj_start + m]];
+    }
 
     sby_double_buffer score_acc;
     sby_resize_first_touch(score_acc, (size_t) n_maj_block, 0.0);
@@ -858,15 +867,15 @@ static std::vector<int> sby_run_nearmiss_stage(
 
     for(int min_start = 0; min_start < n_min; min_start += tiling.ref_block){
       int n_block = std::min(tiling.ref_block, n_min - min_start);
-      sby_copy_column_block(minority, n_min, p, min_start, n_block, minority_block);
-      // Orientacao (minoria x maioria): para uma linha majoritaria fixa, as
-      // distancias contra o bloco minoritario ficam contiguas. A orientacao
-      // anterior fazia o laco interno saltar n_maj_block floats por leitura,
-      // desperdicando toda a linha de cache carregada.
-      sby_resize_first_touch_pages(dist_block, (size_t) n_block * (size_t) n_maj_block);
-      sby_pairwise_sqdist_sgemm_f(minority_block.data(), n_block,
-                                  majority_block.data(), n_maj_block, p,
-                                  dist_block.data(), &status);
+      // Minority intervals are direct views with lda=n_min. The noncontiguous
+      // majority rows were gathered once for this query block and are reused
+      // for every minority tile. SGEMM overwrites C, so no repeated first touch
+      // or clearing is required after the buffer reaches its maximum capacity.
+      dist_block.resize((size_t) tiling.ref_block * (size_t) n_maj_block);
+      sby_sgemm_neg2_f(minority.data() + min_start, n_min,
+                       majority_block.data(), n_maj_block,
+                       dist_block.data(), n_block,
+                       n_block, n_maj_block, p, &status);
       if(status != 0){
         Rcpp::stop("Falha no calculo blocado de distancias NearMiss por sgemm (status=%d)", status);
       }
@@ -882,7 +891,10 @@ static std::vector<int> sby_run_nearmiss_stage(
 #pragma omp simd reduction(+:acc)
 #endif
           for(int c = 0; c < n_block; ++c){
-            acc += (double) col[c];
+            double corrected = (double) col[c] + minority_norm[min_start + c] +
+                               majority_norm[m];
+            if(corrected < 0.0) corrected = 0.0;
+            acc += (double) (float) corrected;
           }
           score_acc[m] += acc;
         }
@@ -896,7 +908,10 @@ static std::vector<int> sby_run_nearmiss_stage(
           int local_worst_pos = worst_pos[m];
           double local_worst_val = worst_val[m];
           for(int c = 0; c < n_block; ++c){
-            const double candidate = (double) col[c];
+            double corrected = (double) col[c] + minority_norm[min_start + c] +
+                               majority_norm[m];
+            if(corrected < 0.0) corrected = 0.0;
+            const double candidate = (double) (float) corrected;
             if(candidate >= local_worst_val) continue;
             row_topk[local_worst_pos] = candidate;
 
