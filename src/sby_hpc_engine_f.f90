@@ -29,7 +29,7 @@ module sby_hpc_engine_mod
   public :: sby_zscore_population_vsl_f
   public :: sby_apply_zscore_simd_f
   public :: sby_revert_zscore_fma_f
-  public :: sby_pairwise_sqdist_sgemm_f
+  public :: sby_sgemm_neg2_f
   public :: sby_adasyn_interp_uniform_f
 
   interface
@@ -46,25 +46,6 @@ module sby_hpc_engine_mod
   end interface
 
 contains
-
-  ! -------------------------------------------------------------------
-  ! sby_next_mkl_ld_f32
-  ! Ajusta leading dimension single precision para multiplos de 64 bytes
-  ! (16 floats) e evita conflitos de cache em potencias de 2.
-  ! -------------------------------------------------------------------
-  integer(c_int) function sby_next_mkl_ld_f32(n) result(ld)
-    integer(c_int), intent(in) :: n
-    integer(c_int) :: rounded
-    integer(kind=8) :: bytes
-
-    rounded = max(1_c_int, ((n + 15_c_int) / 16_c_int) * 16_c_int)
-    bytes = int(rounded, kind=8) * 4_8
-    if (bytes >= 4096_8 .and. iand(bytes, bytes - 1_8) == 0_8) then
-      rounded = rounded + 16_c_int
-    end if
-    ld = rounded
-  end function sby_next_mkl_ld_f32
-
 
   ! -------------------------------------------------------------------
   ! sby_zscore_population_vsl_f
@@ -205,158 +186,30 @@ contains
   end subroutine sby_revert_zscore_fma_f
 
   ! -------------------------------------------------------------------
-  ! sby_pairwise_sqdist_sgemm_f
-  ! Matriz de distancias ao quadrado por expansao euclidiana algebrica:
-  !   D^2 = ||A||^2 + ||B||^2 - 2 A B^T
-  ! A matriz central A B^T e entregue ao cblas_sgemm com layout column major.
-  !   a tem dimensao (n_a x p) e b tem dimensao (n_b x p)
-  !   d_out tem dimensao (n_a x n_b) com d_out(i, j) = ||a_i - b_j||^2
+  ! sby_sgemm_neg2_f
+  ! Computes only C = -2 * A * transpose(B) through the standard Fortran BLAS
+  ! interface. Matrices use column-major storage. lda and ldb are the physical
+  ! row strides of the source matrices, while ldc is the physical row stride
+  ! of C. A row interval can therefore be passed as an offset pointer without
+  ! copying its columns. No allocation, norm calculation, OpenMP region, or
+  ! thread setting is performed here. SGEMM is entered from serial C++ code so
+  ! the selected BLAS owns its worker team and avoids nested fork/join traffic.
   ! -------------------------------------------------------------------
-  subroutine sby_pairwise_sqdist_sgemm_f(a, n_a, b, n_b, p, d_out, status) &
-      bind(c, name="sby_pairwise_sqdist_sgemm_f")
-    integer(c_int), intent(in), value :: n_a
-    integer(c_int), intent(in), value :: n_b
-    integer(c_int), intent(in), value :: p
-    real(c_float), intent(in), target :: a(n_a, p)
-    real(c_float), intent(in), target :: b(n_b, p)
-    real(c_float), intent(out) :: d_out(n_a, n_b)
+  subroutine sby_sgemm_neg2_f(a, lda, b, ldb, c, ldc, m, n, k, status) &
+      bind(c, name="sby_sgemm_neg2_f")
+    integer(c_int), intent(in), value :: lda, ldb, ldc, m, n, k
+    real(c_float), intent(in) :: a(lda, *), b(ldb, *)
+    real(c_float), intent(out) :: c(ldc, *)
     integer(c_int), intent(out) :: status
 
-    integer :: i, j, k
-    integer(c_int) :: lda_opt, ldb_opt, ldc_opt, c_lda
-    logical :: pad_a, pad_b, pad_c
-    real(c_double), allocatable :: norm_a(:), norm_b(:)
-    real(c_float), allocatable, target :: a_work(:, :), b_work(:, :), c_work(:, :)
-    real(c_float), pointer :: a_gemm(:, :), b_gemm(:, :)
-    real(c_double) :: acc, val
-
     status = 0
-    if (n_a < 1 .or. n_b < 1 .or. p < 1) then
+    if (m < 1 .or. n < 1 .or. k < 1 .or. lda < m .or. ldb < n .or. ldc < m) then
       status = -1
       return
     end if
-
-    lda_opt = sby_next_mkl_ld_f32(n_a)
-    ldb_opt = sby_next_mkl_ld_f32(n_b)
-    ldc_opt = sby_next_mkl_ld_f32(n_a)
-    pad_a = lda_opt /= n_a
-    pad_b = ldb_opt /= n_b
-    ! Evita duplicar matrizes de distancia gigantes: o padding de C e aplicado
-    ! quando o overhead maximo fica limitado; A/B continuam alinhados sempre.
-    pad_c = (ldc_opt /= n_a) .and. (int(n_a, kind=8) * int(n_b, kind=8) <= 500000000_8)
-
-    allocate(norm_a(n_a), norm_b(n_b))
-    if (pad_a) allocate(a_work(lda_opt, p))
-    if (pad_b) allocate(b_work(ldb_opt, p))
-    if (pad_c) allocate(c_work(ldc_opt, n_b))
-
-    if (pad_a) then
-      a_work = 0.0
-      !$omp parallel do default(none) shared(a, a_work, n_a, p) private(i, j) schedule(static)
-      do j = 1, p
-        !$omp simd
-        do i = 1, n_a
-          a_work(i, j) = a(i, j)
-        end do
-      end do
-      !$omp end parallel do
-    end if
-
-    if (pad_b) then
-      b_work = 0.0
-      !$omp parallel do default(none) shared(b, b_work, n_b, p) private(i, j) schedule(static)
-      do j = 1, p
-        !$omp simd
-        do i = 1, n_b
-          b_work(i, j) = b(i, j)
-        end do
-      end do
-      !$omp end parallel do
-    end if
-
-    if (pad_a) then
-      a_gemm => a_work
-    else
-      a_gemm => a
-    end if
-    if (pad_b) then
-      b_gemm => b_work
-    else
-      b_gemm => b
-    end if
-
-    ! Normas ao quadrado por linha de cada bloco. A acumulacao e feita em
-    ! precisao dupla: em float32 o cancelamento da identidade euclidiana
-    ! ||a||^2 + ||b||^2 - 2 a.b produzia distancias negativas que o clamp em
-    ! zero mascarava, invertendo a ordem dos vizinhos mais proximos.
-    !$omp parallel do default(none) shared(a, norm_a, n_a, p) private(i, k, acc) schedule(static)
-    do i = 1, n_a
-      acc = 0.0d0
-      !$omp simd reduction(+:acc)
-      do k = 1, p
-        acc = acc + dble(a(i, k)) * dble(a(i, k))
-      end do
-      norm_a(i) = acc
-    end do
-    !$omp end parallel do
-
-    !$omp parallel do default(none) shared(b, norm_b, n_b, p) private(j, k, acc) schedule(static)
-    do j = 1, n_b
-      acc = 0.0d0
-      !$omp simd reduction(+:acc)
-      do k = 1, p
-        acc = acc + dble(b(j, k)) * dble(b(j, k))
-      end do
-      norm_b(j) = acc
-    end do
-    !$omp end parallel do
-
-    ! Produto central A B^T via sgemm. As entradas usam leading dimensions
-    ! alinhadas a 64 bytes quando necessario; a saida tambem usa ldc acolchoado
-    ! para problemas que nao duplicam uma matriz de distancia gigante.
-    if (pad_c) then
-      call sgemm('N', 'T', n_a, n_b, p, -2.0, a_gemm, lda_opt, &
-                 b_gemm, ldb_opt, 0.0, c_work, ldc_opt)
-    else
-      c_lda = n_a
-      call sgemm('N', 'T', n_a, n_b, p, -2.0, a_gemm, lda_opt, &
-                 b_gemm, ldb_opt, 0.0, d_out, c_lda)
-    end if
-
-    ! Soma das normas para completar a identidade euclidiana. A soma ocorre em
-    ! precisao dupla e o clamp final so remove o residuo de arredondamento
-    ! restante, nao a perda de digitos significativos da acumulacao.
-    if (pad_c) then
-      !$omp parallel do default(none) shared(d_out, c_work, norm_a, norm_b, n_a, n_b) &
-      !$omp& private(i, j, val) schedule(static)
-      do j = 1, n_b
-        !$omp simd private(val)
-        do i = 1, n_a
-          val = dble(c_work(i, j)) + norm_a(i) + norm_b(j)
-          if (val < 0.0d0) val = 0.0d0
-          d_out(i, j) = real(val, c_float)
-        end do
-      end do
-      !$omp end parallel do
-    else
-      !$omp parallel do default(none) shared(d_out, norm_a, norm_b, n_a, n_b) &
-      !$omp& private(i, j, val) schedule(static)
-      do j = 1, n_b
-        !$omp simd private(val)
-        do i = 1, n_a
-          val = dble(d_out(i, j)) + norm_a(i) + norm_b(j)
-          if (val < 0.0d0) val = 0.0d0
-          d_out(i, j) = real(val, c_float)
-        end do
-      end do
-      !$omp end parallel do
-    end if
-
-    if (pad_c) deallocate(c_work)
-    if (pad_b) deallocate(b_work)
-    if (pad_a) deallocate(a_work)
-    deallocate(norm_a, norm_b)
-  end subroutine sby_pairwise_sqdist_sgemm_f
+    call sgemm('N', 'T', m, n, k, -2.0_c_float, a, lda, &
+               b, ldb, 0.0_c_float, c, ldc)
+  end subroutine sby_sgemm_neg2_f
 
   ! -------------------------------------------------------------------
   ! sby_adasyn_interp_uniform_f
