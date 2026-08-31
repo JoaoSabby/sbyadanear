@@ -27,7 +27,7 @@ sby_adanear_matrix(sby_x_matrix, sby_y_vector, sby_adasyn_ratio = 0.2,
 }
 \description{Aplica sobreamostragem ADASYN e depois subamostragem NearMiss-1 reutilizando a mesma escala; razões iguais a zero pulam a etapa correspondente no fluxo híbrido.}
 \details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. Os papéis originais de minoria e maioria são preservados entre etapas. Auditoria padrão não guarda objetos intermediários pesados; \code{full} preserva artefatos completos.}
-\value{Lista com matriz, alvo, razões, distribuições e diagnósticos; opcionalmente escala, índices e intermediários.}
+\value{Lista com matriz, alvo, razões, distribuições e diagnósticos; opcionalmente escala, índices e intermediários. O objeto possui o atributo \code{sby}, uma lista cujo elemento \code{synthetic_rows} contém as posições inteiras das linhas sintéticas no retorno, ou \code{0L} quando nenhuma foi adicionada.}
 \examples{
 x <- matrix(rnorm(60), ncol = 2); storage.mode(x) <- "double"
 y <- factor(c(rep("minor", 8), rep("major", 22)))

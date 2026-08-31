@@ -1,5 +1,7 @@
 # sbyadanear 0.4.0 (em desenvolvimento)
 
+* Os retornos das funções que executam ADASYN agora incluem o atributo `sby`, com `synthetic_rows` indicando as posições das linhas sintéticas ou `0L` quando nenhuma linha foi adicionada.
+
 ## Correcoes do motor HPC
 
 * Distancias SGEMM: o kernel de producao agora executa apenas `-2 A B^T` com

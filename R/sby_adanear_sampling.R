@@ -232,7 +232,7 @@
 #' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
 #' 824-836.
 #'
-#' @return Tibble balanceado quando `sby_audit = FALSE`; lista com resultados de sobreamostragem, subamostragem, dados finais e diagnósticos quando `sby_audit = TRUE`.
+#' @return Tibble balanceado quando `sby_audit = FALSE`; lista com resultados de sobreamostragem, subamostragem, dados finais e diagnósticos quando `sby_audit = TRUE`. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
 #'
 #' @export
 sby_adanear <- function(
@@ -323,8 +323,9 @@ sby_adanear <- function(
   )
   sby_balanced_data <- sby_build_balanced_tibble(sby_final_predictors, sby_matrix_result$sby_y_vector)
 
+  sby_synthetic_rows <- attr(sby_matrix_result, "sby")$synthetic_rows
   if(isTRUE(sby_audit)){
-    return(list(
+    sby_result <- list(
       sby_oversampling_result = sby_matrix_result$sby_oversampling_result,
       sby_undersampling_result = sby_matrix_result$sby_undersampling_result,
       sby_balanced_data = sby_balanced_data,
@@ -332,9 +333,10 @@ sby_adanear <- function(
       sby_scaling_info = sby_matrix_result$sby_scaling_info,
       sby_diagnostics = sby_matrix_result$sby_diagnostics,
       sby_balanced_scaled = sby_matrix_result$sby_balanced_scaled
-    ))
+    )
+    return(sby_set_synthetic_rows(sby_result, sby_synthetic_rows))
   }
-  return(sby_balanced_data)
+  return(sby_set_synthetic_rows(sby_balanced_data, sby_synthetic_rows))
 }
 ####
 ## Fim

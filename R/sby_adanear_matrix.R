@@ -30,7 +30,7 @@
 #' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
 #' 824-836.
 #'
-#' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos.
+#' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
 #'
 #' @export
 sby_adanear_matrix <- function(
@@ -135,7 +135,7 @@ sby_adanear_matrix <- function(
     if(isTRUE(sby_return_scaled)){
       sby_result$sby_balanced_scaled <- list(x = sby_x_matrix, y = sby_y_out)
     }
-    return(sby_result)
+    return(sby_set_synthetic_rows(sby_result))
   }
 
   if(isTRUE(sby_run_adasyn)){
@@ -301,5 +301,8 @@ sby_adanear_matrix <- function(
     sby_result$sby_balanced_scaled <- sby_final_scaled
   }
 
-  return(sby_result)
+  sby_synthetic_rows <- which(
+    sby_retained_index > collapse::fnrow(sby_x_matrix)
+  )
+  return(sby_set_synthetic_rows(sby_result, sby_synthetic_rows))
 }

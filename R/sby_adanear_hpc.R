@@ -134,7 +134,7 @@
 #' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
 #' 824-836.
 #'
-#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
+#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
 #'
 #' @export
 sby_adanear_hpc <- function(
@@ -175,17 +175,18 @@ sby_adanear_hpc <- function(
   }
 
   if(identical(as.numeric(sby_adasyn_ratio), 0) && identical(as.numeric(sby_nearmiss_ratio), 0)){
-    return(tibble::as_tibble(.data))
+    return(sby_set_synthetic_rows(tibble::as_tibble(.data)))
   }
   if(identical(as.numeric(sby_adasyn_ratio), 0) && isTRUE(sby_nearmiss_ratio > 0)){
-    return(sby_nearmiss_hpc(
+    sby_result <- sby_nearmiss_hpc(
       .data = .data,
       formula = formula,
       sby_nearmiss_k = sby_nearmiss_k,
       sby_nearmiss_ratio = sby_nearmiss_ratio,
       sby_config_max_threads = sby_config_max_threads,
       sby_seed = sby_seed
-    ))
+    )
+    return(sby_set_synthetic_rows(sby_result))
   }
   if(isTRUE(sby_adasyn_ratio > 0) && identical(as.numeric(sby_nearmiss_ratio), 0)){
     return(sby_adasyn_hpc(
@@ -337,7 +338,11 @@ sby_adanear_hpc <- function(
     sby_input_count = sby_class_counts$sby_minority_count
   )
 
-  return(sby_balanced_data)
+  sby_synthetic_rows <- seq.int(
+    from = nrow(sby_maj_rows) + nrow(sby_min_rows) + 1L,
+    length.out = nrow(sby_syn_df)
+  )
+  return(sby_set_synthetic_rows(sby_balanced_data, sby_synthetic_rows))
 }
 ####
 ## Fim

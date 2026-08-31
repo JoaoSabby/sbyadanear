@@ -63,5 +63,5 @@ A logica do pipeline hibrido e:
   \item \eqn{r_o > 0 \land r_u > 0}: ADASYN executa seguido de NearMiss-1.
 }
 }
-\value{Tibble balanceado com classe \code{c("tbl_df", "tbl", "data.frame")}.}
+\value{Tibble balanceado com classe \code{c("tbl_df", "tbl", "data.frame") O objeto possui o atributo \code{sby}, uma lista cujo elemento \code{synthetic_rows} contém as posições inteiras das linhas sintéticas no retorno, ou \code{0L} quando nenhuma foi adicionada.}.}
 \seealso{\code{\link{sby_adanear}}, \code{\link{sby_adasyn_hpc}}, \code{\link{sby_nearmiss_hpc}}}

@@ -228,7 +228,7 @@
 #' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
 #' 824-836.
 #'
-#' @return Tibble balanceado quando `sby_audit = FALSE`; lista de auditoria com dados balanceados, diagnósticos e artefatos intermediários quando `sby_audit = TRUE`.
+#' @return Tibble balanceado quando `sby_audit = FALSE`; lista de auditoria com dados balanceados, diagnósticos e artefatos intermediários quando `sby_audit = TRUE`. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
 #'
 #' @export
 sby_adasyn <- function(
@@ -260,7 +260,7 @@ sby_adasyn <- function(
 
   # Preserva integralmente o data frame quando a etapa esta desativada
   if(sby_adasyn_ratio == 0){
-    return(sby_data)
+    return(sby_set_synthetic_rows(sby_data))
   }
 
   sby_formula_data <- sby_extract_formula_data(sby_formula = sby_formula, sby_data = sby_data)
@@ -337,9 +337,9 @@ sby_adasyn <- function(
     if(isTRUE(sby_return_scaled)){
       sby_result$sby_balanced_scaled <- sby_matrix_result$sby_balanced_scaled
     }
-    return(sby_result)
+    return(sby_set_synthetic_rows(sby_result, attr(sby_matrix_result, "sby")$synthetic_rows))
   }
-  return(sby_balanced_data)
+  return(sby_set_synthetic_rows(sby_balanced_data, attr(sby_matrix_result, "sby")$synthetic_rows))
 }
 ####
 ## Fim

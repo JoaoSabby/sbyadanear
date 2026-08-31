@@ -30,7 +30,7 @@
 #' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
 #' 824-836.
 #'
-#' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos.
+#' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
 #'
 #' @export
 sby_adasyn_matrix <- function(
@@ -81,7 +81,7 @@ sby_adasyn_matrix <- function(
 
   # Retorna a matriz intacta sem escala, KNN ou geracao quando a taxa e zero
   if(sby_synthetic_count == 0L){
-    return(list(
+    return(sby_set_synthetic_rows(list(
       sby_x_matrix = sby_x_matrix,
       sby_y_vector = sby_y_vector,
       sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
@@ -95,7 +95,7 @@ sby_adasyn_matrix <- function(
         sby_generated_rows = 0L,
         sby_skipped = TRUE
       )
-    ))
+    )))
   }
   # ADASYN exige ao menos duas observacoes na classe minoritaria para que
   # exista uma vizinhanca minoritaria valida na interpolacao sintetica.
@@ -226,5 +226,9 @@ sby_adasyn_matrix <- function(
     sby_result$sby_balanced_scaled <- list(x = sby_adasyn_result$x, y = sby_y_out)
   }
 
-  return(sby_result)
+  sby_synthetic_rows <- seq.int(
+    from = collapse::fnrow(sby_x_matrix) + 1L,
+    length.out = sby_synthetic_count
+  )
+  return(sby_set_synthetic_rows(sby_result, sby_synthetic_rows))
 }

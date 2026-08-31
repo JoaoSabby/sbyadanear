@@ -66,7 +66,7 @@
 #' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
 #' 824-836.
 #'
-#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
+#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
 #'
 #' @export
 sby_adasyn_hpc <- function(
@@ -96,7 +96,7 @@ sby_adasyn_hpc <- function(
 
   # Retorna os dados intactos quando a geracao sintetica esta desativada
   if(sby_adasyn_ratio == 0){
-    return(tibble::as_tibble(.data))
+    return(sby_set_synthetic_rows(tibble::as_tibble(.data)))
   }
 
   sby_formula_data            <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
@@ -216,7 +216,11 @@ sby_adasyn_hpc <- function(
     sby_input_count = sby_class_counts$sby_minority_count
   )
 
-  return(sby_balanced_data)
+  sby_synthetic_rows <- seq.int(
+    from = nrow(sby_original_predictor_data) + 1L,
+    length.out = nrow(sby_syn_df)
+  )
+  return(sby_set_synthetic_rows(sby_balanced_data, sby_synthetic_rows))
 }
 ####
 ## Fim
