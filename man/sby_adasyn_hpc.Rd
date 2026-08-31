@@ -20,5 +20,5 @@ Atalho de alto desempenho do oversampling ADASYN. Gera as linhas sinteticas no e
 \details{
 A funcao substitui internamente a rota denominada "native" como caminho rapido do ADASYN. O estado de RNG do chamador e preservado. O limite solicitado vale para OpenMP e para a configuracao local da oneMKL durante a chamada; ambos sao restaurados ao final e variaveis de ambiente nao sao alteradas.
 }
-\value{Tibble balanceado com classe \code{c("tbl_df", "tbl", "data.frame")}.}
+\value{Tibble balanceado com classe \code{c("tbl_df", "tbl", "data.frame") O objeto possui o atributo \code{sby}, uma lista cujo elemento \code{synthetic_rows} contém as posições inteiras das linhas sintéticas no retorno, ou \code{0L} quando nenhuma foi adicionada.}.}
 \seealso{\code{\link{sby_adasyn}}, \code{\link{sby_adanear_hpc}}, \code{\link{sby_nearmiss_hpc}}}

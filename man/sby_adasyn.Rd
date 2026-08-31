@@ -53,7 +53,7 @@ sby_adasyn(
 \item{sby_knn_hnsw_ef}{Número inteiro positivo usado apenas quando o engine efetivo é \code{"RcppHNSW"}. Controla a largura da lista dinâmica de candidatos (\code{ef}) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão \code{200L} prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.}
 \item{sby_knn_query_chunk_size}{Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é \code{1000L}. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.}
 }
-\value{Tibble balanceado quando \code{sby_audit = FALSE}; lista de auditoria com dados balanceados, diagnósticos e artefatos intermediários quando \code{sby_audit = TRUE}.}
+\value{Tibble balanceado quando \code{sby_audit = FALSE O objeto possui o atributo \code{sby}, uma lista cujo elemento \code{synthetic_rows} contém as posições inteiras das linhas sintéticas no retorno, ou \code{0L} quando nenhuma foi adicionada.}; lista de auditoria com dados balanceados, diagnósticos e artefatos intermediários quando \code{sby_audit = TRUE}.}
 \details{
 A função utiliza uma arquitetura KNN configurável sobre preditores numéricos padronizados por Z-score. Três escolhas trabalham em conjunto: \code{sby_knn_algorithm} define a estrutura/estratégia de busca, \code{sby_knn_engine} define a implementação computacional e \code{sby_knn_distance_metric} define a noção de proximidade.
 

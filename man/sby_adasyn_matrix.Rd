@@ -30,7 +30,7 @@ sby_adasyn_matrix(sby_x_matrix, sby_y_vector, sby_adasyn_ratio = 0.2,
 }
 \description{Gera observações sintéticas da classe minoritária por ADASYN usando matriz double densa e busca KNN configurável.}
 \details{Quando \code{sby_knn_parallel_backend = "RcppParallel"}, o runtime concreto pode ser TBB/oneTBB ou TinyThread conforme a instalação de \pkg{RcppParallel}; os diagnósticos auditáveis incluem \code{sby_knn_parallel_runtime}. A função padroniza os preditores por z-score antes do KNN, gera sintéticos no espaço padronizado e opcionalmente reverte para escala original. Use \code{sby_return_scaled = TRUE} para encadear com outras rotinas matriciais sem auditoria completa.}
-\value{Lista com \code{sby_x_matrix}, \code{sby_y_vector}, razões e distribuições de classe e \code{sby_diagnostics}; pode incluir \code{sby_scaling_info} e \code{sby_balanced_scaled}.}
+\value{Lista com \code{sby_x_matrix O objeto possui o atributo \code{sby}, uma lista cujo elemento \code{synthetic_rows} contém as posições inteiras das linhas sintéticas no retorno, ou \code{0L} quando nenhuma foi adicionada.}, \code{sby_y_vector}, razões e distribuições de classe e \code{sby_diagnostics}; pode incluir \code{sby_scaling_info} e \code{sby_balanced_scaled}.}
 \examples{
 x <- matrix(rnorm(40), ncol = 2); storage.mode(x) <- "double"
 y <- factor(c(rep("minor", 5), rep("major", 15)))
