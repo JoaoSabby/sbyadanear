@@ -1,51 +1,26 @@
 Package: sbyadanear
 Type: Package
-Title: Balanceamento Binario com ADASYN e NearMiss-1
-Version: 0.3.0
-Authors@R: 
+Title: Binary Resampling with ADASYN and NearMiss
+Version: 0.4.0
+Authors@R:
     person(given = "João Batista", family = "Gonçalves de Brito", role = c("aut", "cre"), comment = "https://orcid.org/0000-0002-4645-5217", email = "joao@sabby.com.br")
-Description: Implementa rotinas de balanceamento para classificacao binaria
-    desbalanceada com ADASYN, NearMiss-1 e fluxo combinado ADASYN +
-    NearMiss-1. As funcoes operam sobre preditores numericos, usam busca
-    KNN configuravel e podem utilizar kernels nativos em C++, C e Fortran.
+Description: Binary resampling with ADASYN and NearMiss 1, 2 and 3,
+    exact neighbors and preservation of original records. Uses Intel oneAPI
+    OpenMP and oneMKL on Linux, with scale, synthetic-lineage and thread audits.
 License: MIT + file LICENSE
 URL: https://github.com/JoaoSabby/sbyadanear
 BugReports: https://github.com/JoaoSabby/sbyadanear/issues
 Encoding: UTF-8
-Language: pt-BR
+Language: en-US
 NeedsCompilation: yes
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 ByteCompile: true
-Depends:
-    R (>= 4.0.0)
-Imports:
-    Rcpp,
-    RcppHNSW,
-    RcppParallel,
-    FNN,
-    parallel,
-    tools,
-    cli,
-    generics,
-    recipes,
-    rlang,
-    tibble,
-    collapse,
-    data.table,
-    kit,
-    Rfast,
-    coop
-LinkingTo:
-    Rcpp,
-    RcppParallel
-Suggests:
-    modeldata,
-    Matrix,
-    KernelKnn,
-    bigKNN,
-    bigmemory,
-    withr,
-    testthat (>= 3.0.0)
+Depends: R (>= 4.3.0)
+Imports: Rcpp, parallel, tibble, recipes, rlang, generics, stats, utils
+LinkingTo: Rcpp
+Suggests: testthat (>= 3.0.0), roxygen2
 Config/testthat/edition: 3
-SystemRequirements: Optional Intel oneAPI MKL (BLAS backend), OpenMP (optional), GNU make
+SystemRequirements: Linux x86_64, Intel oneAPI DPC++/C++ compiler (icpx),
+    Intel oneMKL LP64 (multithread), Intel OpenMP (libiomp5), GNU make,
+    a compiler supporting the ISO C++ 2020 standard
+Config/roxygen2/version: 8.0.0

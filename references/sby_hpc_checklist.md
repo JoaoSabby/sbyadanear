@@ -1,66 +1,12 @@
-# Check-list de implementacao das funcoes HPC (sby_adanear_hpc, sby_nearmiss_hpc, sby_adasyn_hpc)
+# Scientific and target-runtime checks
 
-Documento de planejamento e rastreio. Marcar [X] cada item concluido.
+README and generated roxygen/Rd define the current 0.4.0 contract. Original
+PDFs are retained here. Largest-remainder quotas, uniform fallback and domain
+restoration are explicit engineering policies; NearMiss-3 includes the
+second-stage ranking documented by imbalanced-learn.
 
-## Parte A - Analise do pacote (concluida antes da codificacao)
-
-- [X] Mapear fluxo da API publica: sby_adanear -> sby_adanear_matrix -> sby_adasyn_matrix + sby_nearmiss_matrix.
-- [X] Identificar a rota "native" (sby_knn_engine == "native") e seus kernels Fortran (compute/apply/revert zscore, rbind).
-- [X] Confirmar que ADASYN no fluxo adanear opera no espaco padronizado (sby_return_original_scale = FALSE).
-- [X] Confirmar contrato de sby_get_knnx, sby_generate_adasyn_samples, sby_nearmiss_index.
-- [X] Confirmar convencoes: snake_case, ausencia de travessao, documentacao roxygen pt-BR.
-
-## Parte B - Implementacao R (atalho HPC)
-
-- [X] Criar R/sby_adanear_hpc.R com assinatura exata, sem sobrescrever variaveis de ambiente do runtime.
-- [X] Criar R/sby_adasyn_hpc.R (atalho ADASYN puro no espaco padronizado).
-- [X] Criar R/sby_nearmiss_hpc.R (atalho NearMiss-1 puro).
-- [X] Helper R/sby_hpc_env.R: captura e restaura somente MKL_NUM_THREADS e OMP_NUM_THREADS, e resolve o numero de threads respeitando cotas de cgroup.
-- [X] Helper R/sby_hpc_native_available.R: verifica simbolos HPC carregados, com fallback transparente para a rota classica.
-- [X] Roteamento: a rota "native" passa a delegar para o atalho HPC quando os simbolos existem; funcoes originais continuam acessiveis.
-
-## Parte C - Camada C++ (Rcpp zero-copy)
-
-- [X] sby_adanear_hpc_cpp: orquestra zscore populacional (VSL), aplicacao, KNN via sgemm, ADASYN e NearMiss no espaco padronizado.
-- [X] Montagem Zero-Copy: Rcpp::List com 200 NumericVector pre-alocados ao numero exato de linhas finais.
-- [X] Reversao do z-score por FMA durante a copia para os vetores da List final (chama kernel Fortran).
-- [X] Atributos: class c("tbl_df","tbl","data.frame"), names (colunas + alvo) e row.names.
-- [X] Registro do novo simbolo no R_CallMethodDef e R_init_sbyadanear.
-
-## Parte D - Camada Fortran (FMA AVX-512, VSL, sgemm)
-
-- [X] sby_zscore_population_vsl_f: estatisticas via VSL (vslsscompute - media e variancia).
-- [X] sby_apply_zscore_simd_f: padronizacao no espaco z (laco SIMD).
-- [X] sby_revert_zscore_fma_f: reversao via laco aninhado !DIR$ SIMD / !$OMP SIMD forcando vfmadd213ps.
-- [X] sby_pairwise_sqdist_sgemm_f: D^2 = ||A||^2 + ||B||^2 - 2 A B^T via cblas_sgemm.
-- [X] KNN/Nearest-neighbor streaming: blocagem de SGEMM com top-k incremental sem materializar a matriz de distancia completa.
-- [X] sby_adasyn_interp_uniform_f: interpolacao lambda com vdrnguniform no espaco padronizado.
-- [X] Declaracoes de interface VSL/RNG/BLAS com bind(C).
-
-## Parte E - Lista de Controlo Obrigatoria (do prompt)
-
-- [X] Funcao R com assinatura exata e ambiente isolado com restauro (on.exit).
-- [X] Nomenclatura 100% snake_case verificada em todo o codigo e variaveis.
-- [X] Logica livre da dupla normalizacao: ADASYN atua diretamente na matriz padronizada.
-- [X] FMA (Fused Multiply-Add) garantido via diretivas SIMD no Fortran para a reversao do z-score.
-- [X] Montagem Zero-Copy do Tibble/data.frame efetuada diretamente no C++ (Rcpp::List).
-- [X] Contagem de threads do kernel limitada a chamada corrente por guarda RAII que salva e restaura omp_get_max_threads().
-- [X] Substituicao do calculo de distancias pela rotina sgemm bloqueada.
-- [X] Retornos e documentacao completamente livres do caractere travessao.
-
-## Parte F - Conferencia final
-
-- [X] Simulacao linha a linha do fluxo R -> C++ -> Fortran -> R.
-- [X] Verificacao de consistencia de assinaturas entre camadas.
-- [X] Verificacao de NAMESPACE, RcppExports.R e registro de simbolos.
-
-## Parte G - Parecer Intel oneMKL e ajustes de desempenho adicionais
-
-- [X] Conferido o guia Intel de uso do oneMKL com extensoes R: manter linkagem oneMKL opcional em `src/Makevars` e nao sobrescrever variaveis de ambiente globais ja carregadas pelo servidor do cliente.
-- [X] Conferido o guia Intel de threading: o pacote nao altera variaveis de ambiente do runtime na rota HPC; o teto de threads vale so para a chamada corrente e `omp_get_max_threads()` e restaurado ao final.
-- [X] Conferidas as recomendacoes Intel de leading dimensions: o kernel `sby_pairwise_sqdist_sgemm_f` agora calcula leading dimensions single precision alinhadas a 64 bytes, evita multiplos exatos de grandes potencias de 2 e usa buffers acolchoados para A/B; C tambem e acolchoada quando a duplicacao da matriz de distancia fica limitada.
-- [X] Conferido o contrato `sgemm`: os valores `lda`, `ldb` e `ldc` continuam respeitando os minimos exigidos por `m`, `n` e `k`, com padding apenas acima desses minimos.
-- [X] Registro historico: a primeira implementacao usava `sby_pairwise_sqdist_sgemm_f` e criava padding de A/B/C dentro de cada tile, conforme o item anterior.
-- [X] Implementacao sucessora: `sby_sgemm_neg2_f` executa somente `C = -2 A B^T`, aceita `lda`, `ldb` e `ldc` reais e nao aloca, copia, calcula normas nem abre regiao OpenMP. Blocos contiguos sao views; normas em double sao precomputadas, o buffer C e reutilizado e a correcao float32 e fundida ao top-k.
-- [X] Conferida a recomendacao de problemas pequenos: `MKL_DIRECT_CALL` foi avaliado, mas nao aplicado porque o kernel critico chama `cblas_sgemm` via interface Fortran direta e o gargalo informado e de processamento massivo, nao de micro-GEMMs repetidos.
-- [X] Conferida a recomendacao de offload: nao aplicada porque o hardware alvo informado e CPU Intel Xeon Platinum 8260 sem GPU/accelerator oneAPI dedicado.
+Target CI checks installation/linkage to Intel, absence of libgomp from the
+package dependencies, observed OpenMP teams and MKL_VERBOSE DGEMM NThr,
+NearMiss oracles, ADASYN lineage, original copies, synthetic domains, RNG,
+thread ceilings/state restoration, validation errors and synchronized help.
+Local diagnostic scientific tests do not verify the Intel production stack.

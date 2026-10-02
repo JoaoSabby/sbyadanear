@@ -1,119 +1,32 @@
-name: Oracle Linux 9.7 R 4.5.3 validation
-
+name: Oracle Linux Intel oneAPI
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - "docker/oraclelinux97-r453/Dockerfile"
-      - "docker/oraclelinux97-r453/r-config/**"
-      - ".github/workflows/main.yml"
-      - "R/**"
-      - "src/**"
-      - "DESCRIPTION"
-      - "NAMESPACE"
-      - "tools/docker/**"
-
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  docker-tests:
+  scientific-and-parallel:
     runs-on: ubuntu-latest
-
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
+    timeout-minutes: 90
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Show commit and configuration files
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build Oracle Linux with Intel compiler and oneMKL
         run: |
-          echo "Commit:"
-          git rev-parse HEAD
-
-          echo "Dockerfile:"
-          sed -n '1,240p' docker/oraclelinux97-r453/Dockerfile
-
-          echo "R configuration files:"
-          for config_file in \
-            docker/oraclelinux97-r453/r-config/.Renviron \
-            docker/oraclelinux97-r453/r-config/.Rprofile \
-            docker/oraclelinux97-r453/r-config/Makevars; do
-            echo "${config_file}:"
-            if [ -f "${config_file}" ]; then
-              sed -n '1,240p' "${config_file}"
-            else
-              echo "not present"
-            fi
-          done
-
-          echo "Searching unsupported packages:"
-          find docker/oraclelinux97-r453 -type f -print0 | xargs -0 -r grep -n "qpdf" || true
-
-          echo "Searching sensitive terms:"
-          search_paths=(.github/workflows/main.yml)
-          if [ -d docker/oraclelinux97-r453/r-config ]; then
-            search_paths+=(docker/oraclelinux97-r453/r-config)
-          fi
-          grep -R -n -i -E 'password|secret|credential|user|host|database|dbname' "${search_paths[@]}" || true
-
-      - name: Build Oracle Linux image
+          mkdir -p ci-results
+          docker build -f docker/oraclelinux97-r453/Dockerfile -t sbyadanear-oneapi . 2>&1 | tee ci-results/docker-build.log
+      - name: Check documentation, package, science and threads
         run: |
-          docker build \
-            --no-cache \
-            -f docker/oraclelinux97-r453/Dockerfile \
-            --build-arg SBY_USE_ONEAPI_MKL=1 \
-            -t sbyadanear:oraclelinux97-r453 \
-            .
-
-      - name: Create output directory
-        run: |
-          mkdir -p test-results
-
-      - name: Run first container
-        run: |
-          docker run --rm \
-            -e INSTANCE_ID=gha_1 \
-            -e TEST_REPETITIONS=2 \
-            -e TEST_KNN_WORKERS=2 \
-            -e TEST_OUTPUT_DIR=/workspace/r-package-validation/results \
-            -e OMP_NUM_THREADS=2 \
-            -e MKL_NUM_THREADS=2 \
-            -e OPENBLAS_NUM_THREADS=1 \
-            -e BLIS_NUM_THREADS=1 \
-            -v "$PWD/test-results:/workspace/r-package-validation/results" \
-            sbyadanear:oraclelinux97-r453 \
-            Rscript tools/docker/run_many_tests.R
-
-      - name: Run second container
-        run: |
-          docker run --rm \
-            -e INSTANCE_ID=gha_2 \
-            -e TEST_REPETITIONS=2 \
-            -e TEST_KNN_WORKERS=2 \
-            -e TEST_OUTPUT_DIR=/workspace/r-package-validation/results \
-            -e OMP_NUM_THREADS=2 \
-            -e MKL_NUM_THREADS=2 \
-            -e OPENBLAS_NUM_THREADS=1 \
-            -e BLIS_NUM_THREADS=1 \
-            -v "$PWD/test-results:/workspace/r-package-validation/results" \
-            sbyadanear:oraclelinux97-r453 \
-            Rscript tools/docker/run_many_tests.R
-
-      - name: Show generated files
-        if: always()
-        run: |
-          echo "Files in test-results:"
-          ls -lah test-results || true
-
-          echo "CSV preview:"
-          for file in test-results/*.csv; do
-            echo "$file"
-            head -n 20 "$file" || true
-          done
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
+          mkdir -p ci-results
+          docker run --rm --cpus=2 \
+            -e SBY_REQUIRE_INTEL=true -e MKL_VERBOSE=1 -e MKL_DYNAMIC=FALSE \
+            -v "$PWD:/workspace/sbyadanear" sbyadanear-oneapi \
+            bash tools/ci-check.sh
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: oraclelinux97-r453-test-results
-          path: test-results/
-          if-no-files-found: warn
+          name: oracle-linux-oneapi-evidence
+          path: ci-results/

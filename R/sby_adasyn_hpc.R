@@ -1,227 +1,44 @@
-#' Atalho HPC do oversampling ADASYN
+#' ADASYN resampling
 #'
 #' @description
-#' `sby_adasyn_hpc()` e o atalho de alto desempenho do oversampling ADASYN.
-#' Executa todo o processamento no espaco padronizado: estatisticas populacionais
-#' por laco SIMD paralelo, distancias exatas por `sgemm` (oneMKL quando ligado,
-#' BLAS do R caso contrario) e pesos de interpolacao gerados por `Rcpp::runif()`
-#' sob controle da semente local.
-#' A alocacao das sinteticas segue o ADASYN classico, ponderada pela densidade
-#' majoritaria local de cada ponto raro.
-#' A despadronizacao das sinteticas ocorre inteiramente no C++ com FMA vetorizado.
-#' A reconstrucao final do tibble acontece na camada R, preservando os tipos
-#' originais das colunas.
+#' Apply ADASYN through the common exact Intel oneAPI engine.
 #'
-#' @details
-#' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
-#' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
-#' motor nativo salva e restaura os limites OpenMP e, quando ligada, oneMKL em
-#' torno do kernel.
+#' @param .data Data frame or tibble containing the outcome and plain numeric predictors.
 #'
-#' @param .data Data frame ou tibble com a coluna de desfecho e preditores
-#'   numericos referenciados em `formula`.
+#' @param formula Formula outcome ~ predictors. Select existing columns only; transformations and interactions are rejected.
 #'
-#' @param formula Formula no formato `alvo ~ preditores`.
+#' @param sby_adasyn_k Positive integer number of ADASYN neighbors. Difficulty uses min(k, n - 1); interpolation uses min(k, n_min - 1). These searches run only when G > 0.
 #'
-#' @param sby_adasyn_k Numero inteiro positivo de vizinhos do ADASYN.
-#'   Padrao: `3`.
+#' @param sby_adasyn_ratio Nonnegative expansion relative to the original minority: G = floor(n_min * ratio). Zero disables generation. This is a reparameterization, not the beta used in the original paper. Inactive when d_th prevents ADASYN or beta is supplied instead.
 #'
-#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da
-#'   classe rara. `0.4`, por exemplo, adiciona 40% de registros sintéticos e
-#'   preserva 100% dos raros originais; nunca reduz a classe rara. Zero desativa
-#'   a geração sintética e devolve os dados sem balanceamento. Padrão: `0.2`.
+#' @param sby_config_max_threads Positive integer per-call thread ceiling, or -1L for detection. Capped by physical cores, CPU affinity, container quota and the hard OpenMP thread limit. Both Intel OpenMP and oneMKL receive this resolved ceiling. Local controls are restored on success or error. BLAS runs outside OpenMP regions; small BLAS calls may use fewer threads. HPC interfaces use this parameter directly. No AVX-512 requirement.
 #'
-#' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
-#'   detecta os nucleos fisicos disponíveis. O limite vale para OpenMP e para a
-#'   oneMKL da chamada corrente, quando ligada. Padrao: `-1`.
+#' @param sby_seed Integer seed from 0 to .Machine$integer.max; default sample.int(10e7, 1). ADASYN uses a scoped Mersenne-Twister/Inversion/Rejection RNG and restores RNGkind and .Random.seed, including after errors. Identical input, seed, parameters and numerical environment reproduce the result. Evaluating the default sample.int consumes the caller RNG; supply a seed explicitly to avoid this. NearMiss itself is deterministic and does not draw random numbers.
 #'
-#' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios.
-#'   A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
+#' @param sby_audit FALSE retains the always-present sbyaudit and sby attributes. TRUE also attaches the detailed audit. HPC interfaces always return a tibble; classic tabular interfaces return a list with sby_balanced_data when audited; matrix interfaces return lists. For recipes, the step bake method returns data with attributes; final recipes::bake(recipe) may drop them. The last audit remains in `prepared_recipe$steps[[i]]$audit_log$last`.
 #'
-#' @concept balanceamento de classes
-#' @concept ADASYN
-#' @concept NearMiss
+#' @param sby_adasyn_beta Optional number from 0 to 1: G = floor((n_maj - n_min) * beta), using the original paper parameterization. Cannot be supplied together with an explicitly supplied sby_adasyn_ratio. NULL uses ratio.
 #'
-#' @details
-#' Esta interface executa a mesma família de modelos geométricos descrita nas
-#' funções tabulares, usando matrizes numéricas densas e fatores binários para
-#' reduzir cópias e facilitar integração com pipelines de alto desempenho.
+#' @param sby_adasyn_d_th Threshold from 0 to 1. ADASYN executes only when n_min / n_maj < d_th. Default 1; zero disables generation. Class roles are determined on the original data and remain fixed.
 #'
-#' @references
-#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
-#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#' @param sby_adasyn_zero_difficulty Policy when all difficulty values are zero: "error" (default) stops because the paper normalization is undefined; "uniform" explicitly requests the documented uniform-quota extension. Consult the audit for the resolved policy and whether fallback was used.
 #'
-#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
-#' a case study involving information extraction. In *Proceedings of the ICML
-#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#' @inherit sby_adanear_hpc details references
 #'
-#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
-#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
-#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
-#' doi:10.1186/s40854-023-00558-3.
-#'
-#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
-#' nearest neighbor search using Hierarchical Navigable Small World graphs.
-#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
-#' 824-836.
-#'
-#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
-#'
+#' @return A balanced tibble with sbyaudit and sby attributes; sby_audit = TRUE additionally attaches audit. See Details for indices and telemetry.
 #' @export
 sby_adasyn_hpc <- function(
   .data,
   formula,
   sby_adasyn_k = 3,
-  sby_adasyn_ratio         = 0.2,
+  sby_adasyn_ratio = 0.2,
   sby_config_max_threads = -1,
-  sby_seed               = sample.int(10L^5L, 1L)
-){
-  sby_adanear_check_user_interrupt()
-
-  sby_original_column_order <- colnames(.data)
-
-  # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
-  # respeita a configuracao externa do runtime HPC.
-  sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
-
-  # --- Validacoes antes de qualquer operacao matricial ---
-  if (!is.numeric(sby_adasyn_ratio) || length(sby_adasyn_ratio) != 1L ||
-      is.na(sby_adasyn_ratio) || !is.finite(sby_adasyn_ratio) || sby_adasyn_ratio < 0) {
-    sby_adanear_abort(
-      "sby_adasyn_ratio deve ser um numero nao negativo.",
-      call = sys.call()
-    )
-  }
-
-  # Retorna os dados intactos quando a geracao sintetica esta desativada
-  if(sby_adasyn_ratio == 0){
-    return(sby_set_synthetic_rows(tibble::as_tibble(.data)))
-  }
-
-  sby_formula_data            <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
-  sby_original_predictor_data <- sby_formula_data$sby_predictor_data
-  sby_target_vector           <- sby_formula_data$sby_target_vector
-  sby_target_name             <- sby_formula_data$sby_target_name
-
-  # Captura os levels originais ANTES de qualquer as.factor() para preservar
-  # a classe, a ordem e os labels exatos do factor de entrada.
-  # c(factor, character) destruiria o factor retornando codigos numericos.
-  sby_original_levels <- if (is.factor(sby_target_vector)) {
-    levels(sby_target_vector)
-  } else {
-    unique(as.character(sby_target_vector))
-  }
-
-  sby_seed <- sby_validate_seed(sby_seed = sby_seed)
-  sby_validate_sampling_inputs(sby_original_predictor_data, sby_target_vector, sby_seed = sby_seed)
-
-  sby_x_matrix     <- sby_adanear_as_numeric_matrix(sby_original_predictor_data)
-  sby_column_names <- sby_adanear_get_column_names(sby_original_predictor_data)
-
-  # Usa os levels originais para nao reordenar alfabeticamente
-  sby_target_factor <- factor(sby_target_vector, levels = sby_original_levels)
-  sby_class_counts  <- sby_binary_class_counts_fast(sby_target_factor)
-
-  # O runtime MKL/OpenMP deve ser configurado externamente pelo usuario HPC.
-
-  sby_type_info <- sby_infer_numeric_column_types(sby_original_predictor_data)
-
-  sby_adasyn_k <- sby_validate_positive_integer_scalar(
-    sby_adasyn_k, "sby_adasyn_k"
-  )
-
-  if (!sby_adanear_hpc_available()) {
-    sby_adanear_abort(
-      "Motor HPC nao disponivel. Compile o pacote com suporte a MKL/AVX-512.",
-      call = sys.call()
-    )
-  }
-
-  sby_hpc_result <- sby_with_seed(sby_seed, {
-    sby_call_native(
-      "sby_adasyn_hpc_cpp",
-      sby_x_matrix,
-      sby_target_factor,
-      as.integer(sby_adasyn_k),
-      as.numeric(sby_adasyn_ratio),
-      as.integer(sby_total_threads),
-      sby_column_names,
-      levels(sby_target_factor)
-    )
-  })
-  # Retorno esperado de sby_adasyn_hpc_cpp:
-  #   $sby_synthetic_rows   — NumericMatrix (double, despadronizado no C++)
-  #   $sby_target_synthetic — IntegerVector (codigos de nivel das sinteticas)
-  #   $sby_scaling_info     — List(centers, scales)
-
-  # --- Reconstrucao na camada R ---
-
-  # Todos os originais preservados sem transformacao
-  sby_all_original_rows   <- sby_original_predictor_data
-  sby_all_original_target <- sby_target_vector
-
-  # Sinteticas: restauro de tipos apos chegada como double
-  if (nrow(sby_hpc_result$sby_synthetic_rows) > 0L) {
-    sby_syn_df <- sby_restore_numeric_column_types(
-      as.data.frame(sby_hpc_result$sby_synthetic_rows, stringsAsFactors = FALSE),
-      sby_type_info,
-      TRUE
-    )
-  } else {
-    sby_syn_df <- sby_original_predictor_data[0L, , drop = FALSE]
-  }
-
-  # Labels das sinteticas via levels originais (nao via levels do factor interno)
-  sby_syn_target_labels <- sby_original_levels[
-    sby_hpc_result$sby_target_synthetic
-  ]
-
-  sby_final_predictors <- rbind(sby_all_original_rows, sby_syn_df)
-  rownames(sby_final_predictors) <- NULL
-
-  # Reconstroi vetor alvo como factor com os levels originais para preservar
-  # a classe, a ordem e os labels exatos — evitando que c(factor, character)
-  # retorne codigos numericos como character.
-  sby_final_target <- factor(
-    c(
-      as.character(sby_all_original_target),
-      sby_syn_target_labels
-    ),
-    levels = sby_original_levels
-  )
-
-  sby_balanced_data <- sby_build_balanced_tibble(
-    sby_predictor_data = sby_final_predictors,
-    sby_target_vector  = sby_final_target
-  )
-
-  if (!identical(sby_target_name, "TARGET")) {
-    names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
-  }
-
-  # Reordena apenas as colunas que o balanceamento de fato devolveu. Formulas
-  # que selecionam um subconjunto de preditores produzem menos colunas do que
-  # `.data` tinha, e pedir a `fselect()` uma coluna ausente aborta a chamada.
-  sby_balanced_data <- collapse::fselect(
-    .x = sby_balanced_data,
-    intersect(sby_original_column_order, names(sby_balanced_data))
-  )
-
-  sby_assert_minority_not_reduced(
-    sby_input_target = sby_target_vector,
-    sby_output_target = sby_balanced_data[[sby_target_name]],
-    sby_context = "sby_adasyn_hpc()",
-    sby_minority_label = sby_class_counts$sby_minority_label,
-    sby_input_count = sby_class_counts$sby_minority_count
-  )
-
-  sby_synthetic_rows <- seq.int(
-    from = nrow(sby_original_predictor_data) + 1L,
-    length.out = nrow(sby_syn_df)
-  )
-  return(sby_set_synthetic_rows(sby_balanced_data, sby_synthetic_rows))
+  sby_seed = sample.int(10e7, 1),
+  sby_audit = FALSE,
+  sby_adasyn_beta = NULL,
+  sby_adasyn_d_th = 1,
+  sby_adasyn_zero_difficulty = c("error", "uniform")
+) {
+  parameters <- mget(names(formals(sys.function())), envir=environment())
+  sby_dispatch("adasyn", parameters, "sby_adasyn_hpc", !missing(sby_adasyn_ratio))
 }
-####
-## Fim
-#

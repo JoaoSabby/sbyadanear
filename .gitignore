@@ -53,3 +53,11 @@ rsconnect/
 
 # translation temp files
 .prompts/
+
+.validation/
+*.Rcheck/
+*.tar.gz
+ci-results/
+
+# Private local review artifacts
+/audit/

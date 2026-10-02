@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  echo "sbyadanear requires Linux x86_64." >&2
+  exit 1
+fi
+command -v icpx >/dev/null 2>&1 || { echo "Load Intel oneAPI setvars.sh: icpx is required." >&2; exit 1; }
+test -n "${MKLROOT:-}" && test -f "$MKLROOT/include/mkl.h" || {
+  echo "Load Intel oneAPI setvars.sh: MKLROOT/include/mkl.h is required." >&2; exit 1;
+}
