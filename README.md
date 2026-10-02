@@ -1,558 +1,202 @@
-# sbyadanear — balanceamento binário ADASYN + NearMiss-1
+# sbyadanear
 
-`sbyadanear` é um pacote R para **engenharia de instâncias em problemas de
-classificação binária desbalanceados**. O pacote oferece rotinas de
-sobreamostragem **ADASYN**, subamostragem **NearMiss-1** e um pipeline híbrido
-**ADASYN + NearMiss-1** chamado `sby_adanear()`.
+ADASYN and NearMiss-1, NearMiss-2 and NearMiss-3 for binary outcomes with
+numeric predictors. Version 0.4.0 supports Linux x86_64 with Intel oneAPI:
+one exact double-precision engine, Intel OpenMP and threaded oneMKL BLAS.
+Installation fails without that toolchain. AVX-512 is not required.
 
-Internamente, as rotinas trabalham com matrizes numéricas, padronização Z-score,
-consultas KNN configuráveis e kernels nativos em C++, C e Fortran para partes
-críticas quando disponíveis. O motor HPC consolidado usa `sgemm` da BLAS do R
-ou da oneMKL opcional.
+## Installation
 
-## Estado da API
-
-A versão atual do pacote é **0.3.0**. O pacote está em desenvolvimento e a API
-pública foi organizada para usar:
-
-- Funções e parâmetros com prefixo `sby_` e padrão `snake_case`.
-- Interface principal por **fórmula + dados**: `sby_formula` e `sby_data`.
-- Preditores numéricos e alvo binário com exatamente duas classes.
-- Retorno padrão como `tibble` balanceado.
-- Coluna de desfecho padronizada como `TARGET` no objeto retornado.
-- `sby_audit = FALSE` para retornar apenas os dados balanceados.
-- `sby_audit = TRUE` para retornar lista com dados balanceados, diagnósticos,
-  informações de escala e metadados de tipos.
-
-> **Importante:** em chamadas como `sby_adanear(sby_y ~ ., sby_data)`, o lado
-> esquerdo da fórmula identifica o desfecho e o lado direito identifica os
-> preditores. Use `~ .` para usar todas as demais colunas como preditores.
-
-### Contrato de fórmulas e dados
-
-As funções públicas aceitam fórmulas para **selecionar colunas já existentes** em
-`sby_data`. Transformações, interações e offsets da sintaxe de fórmulas do R
-(por exemplo, `log(x)`, `x1:x2` ou `offset(z)`) devem ser calculados antes da
-chamada e armazenados como colunas explícitas. Essa restrição evita divergências
-entre a seleção por fórmula, a restauração de tipos e o pipeline matricial usado
-pelas rotinas KNN e nativas.
-
-Preditores devem ser numéricos, finitos e densos. Matrizes esparsas do pacote
-`Matrix` são rejeitadas com erro explícito para evitar densificação acidental de
-bases grandes. Colunas constantes também são rejeitadas porque a padronização
-Z-score exige desvio padrão positivo.
-
-O número de linhas sintéticas é `floor(n_minoria * sby_over_ratio)`. Portanto,
-em bases pequenas uma razão positiva pode gerar zero linhas. Use uma razão
-adequada ao tamanho da minoria e uma `sby_seed` inteira para reprodutibilidade.
-
-## KNN, métricas e engines
-
-As rotinas usam KNN para estimar vizinhanças locais. Os principais controles são:
-
-- `sby_knn_engine`: engine de busca (`"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"`, `"bigKNN"`).
-- `sby_knn_algorithm`: algoritmo exato do FNN (`"auto"`, `"kd_tree"`,
-  `"cover_tree"`, `"brute"`); a engine `native` aceita `"auto"` ou `"brute"` e resolve internamente a rota exata.
-- `sby_knn_distance_metric`: métrica (`"euclidean"`, `"cosine"`, `"ip"`).
-- `sby_knn_workers`: número de workers. Em `native`, os workers podem acionar o kernel RcppParallel exato; em `FNN`, consultas exatas são
-  paralelizadas por blocos; em `RcppHNSW`, os workers são repassados aos
-  threads nativos do índice aproximado.
-- `sby_knn_parallel_backend`: backend do paralelismo exato. Use `"parallel"`
-  para manter o particionamento por blocos do R ou `"RcppParallel"` para
-  acionar threads nativos no kernel exato bruto (`native` ou compatibilidade `FNN` + `brute`).
-- `sby_knn_hnsw_m` e `sby_knn_hnsw_ef`: parâmetros do HNSW quando
-  `sby_knn_engine = "RcppHNSW"`.
-- `sby_knn_query_chunk_size`: quantidade de linhas de consulta processadas por
-  bloco nas rotas KNN. O padrão `1000L` equilibra overhead de chamadas e pico
-  de memória; valores maiores podem favorecer BLAS/MKL em matrizes densas,
-  enquanto valores menores reduzem pressão de memória.
-
-Resumo de compatibilidade:
-
-| Engine | Tipo de busca | Métricas suportadas | Algoritmos aceitos no pacote |
-|---|---|---|---|
-| `native` | Exata densa via kernel C/C++ interno | `euclidean` | `auto`, `brute` |
-| `FNN` | Exata via `FNN::get.knnx()` | `euclidean` | `auto`, `kd_tree`, `cover_tree`, `brute` |
-| `RcppHNSW` | Aproximada por HNSW | `euclidean`, `cosine`, `ip` | `auto` |
-| `KernelKnn` | Exata via `KernelKnn::knn.index.dist()` | `euclidean` | `auto`, `brute` |
-| `bigKNN` | Exata via `bigKNN::knn_bigmatrix()` | `euclidean` | `auto`, `brute` |
-
-A seleção automática evita busca aproximada por padrão. Com
-`sby_knn_engine = "auto"` e `sby_knn_distance_metric = "euclidean"`, o pacote
-prefere `native` quando as rotinas nativas estão carregadas; se elas não estiverem
-disponíveis, usa `FNN` como fallback exato. Para permitir que `auto` escolha
-`RcppHNSW` em métricas não euclidianas quando a aproximação é aceitável, use
-`options(sbyadanear.sby_knn_allow_approx = TRUE)`. Essa configuração é uma opção
-global, não um argumento público das funções.
-
-O contrato interno comum de KNN é uma lista com `nn.index` e/ou `nn.dist`:
-`nn.index` usa índices 1-based compatíveis com R, e `nn.dist` representa a
-distância retornada pela engine efetiva. Nas rotas exatas euclidianas nativas, as
-distâncias são a raiz quadrada da soma de quadrados, não a distância quadrática.
-Para `cosine` e `ip`, o pacote normaliza as linhas por norma L2 antes da busca e
-usa a escala de distância retornada por `RcppHNSW`.
-
-
-Consultas KNN longas são executadas em blocos para permitir interrupção por
-`Ctrl + C` entre blocos e para controlar o pico de memória. Ajuste esse
-comportamento diretamente na chamada:
-
-```r
-sby_adanear(
-  sby_formula = alvo ~ .,
-  sby_data = dados,
-  sby_knn_query_chunk_size = 2000L
-)
+```sh
+source /opt/intel/oneapi/setvars.sh
+Rscript -e 'install.packages(c("Rcpp", "tibble", "recipes", "rlang", "generics", "testthat", "roxygen2"))'
+R CMD INSTALL .
 ```
 
-Para cálculo exato em matrizes densas de alta dimensionalidade, prefira a engine
-`native` explícita. A rota de compatibilidade `FNN` com `sby_knn_algorithm =
-"brute"` usa a mesma implementação nativa quando os kernels estão disponíveis e a
-opção `sbyadanear.sby_use_native_brute` permanece ativa:
+`MKLROOT` must identify the oneMKL installation and `icpx` must be on PATH.
+Source setvars.sh before each R session unless Intel library paths are
+registered with the system dynamic loader. Linkage uses LP64, `mkl_intel_thread`, `mkl_core` and `libiomp5`. The runtime
+diagnostic checks the OpenMP library actually resolved. The canonical
+Dockerfile in `docker/oraclelinux97-r453/` builds Oracle Linux 9 with R and
+oneAPI. Its name is retained for existing paths; the image tracks Oracle
+Linux 9, and R_VERSION controls the R source release (default 4.5.3).
 
-```r
-sby_adanear(
-  sby_formula = alvo ~ .,
-  sby_data = dados,
-  sby_knn_engine = "native",
-  sby_knn_algorithm = "brute",
-  sby_knn_distance_metric = "euclidean",
-  sby_knn_workers = 1L,
-  sby_knn_parallel_backend = "parallel"
-)
+```sh
+docker build -f docker/oraclelinux97-r453/Dockerfile -t sbyadanear-oneapi .
+docker run --rm --cpus=2 -e MKL_VERBOSE=1 -e MKL_DYNAMIC=FALSE \
+  -e SBY_REQUIRE_INTEL=true -v "$PWD:/workspace/sbyadanear" \
+  sbyadanear-oneapi bash tools/ci-check.sh
 ```
 
-Quando o R estiver ligado ao Intel oneAPI/MKL, `sby_knn_workers = 1L` permite que
-o BLAS use seus próprios threads. Quando `sby_knn_workers > 1L`, o pacote reduz
-threads BLAS por processo para evitar competição excessiva de CPU. Para trocar o
-paralelismo por blocos do R por threads nativos no caminho exato bruto, combine
-`sby_knn_engine = "native"`, `sby_knn_algorithm = "brute"` e
-`sby_knn_parallel_backend = "RcppParallel"`.
+The workflow checks installation, linkage, scientific tests, synchronized
+help, observed OpenMP teams and DGEMM `NThr` from MKL_VERBOSE. Passing local
+algorithm checks does not establish successful Linux/Intel compilation or
+observed oneMKL parallelism: these require the target workflow/container.
 
-`RcppParallel` decide o runtime concreto: em plataformas suportadas ele usa TBB
-/ oneTBB e, nas demais, cai para TinyThread. Por isso o pacote não expõe um
-parâmetro separado `oneTBB`; quando `sby_audit = TRUE`, os diagnósticos incluem
-`sby_knn_parallel_runtime` para indicar se a execução efetiva foi
-`"parallel"`, `"RcppParallel::TBB"` ou `"RcppParallel::TinyThread"`.
-
-O kernel `RcppParallel` do `sbyadanear` não contém regiões OpenMP internas. Ainda
-assim, duplo paralelismo pode ocorrer se o usuário envolver a chamada em outro
-backend paralelo ou se uma biblioteca numérica externa abrir threads ao mesmo
-tempo. Em servidores com Intel oneAPI/MKL, o pacote mitiga esse cenário
-reduzindo temporariamente `OMP_NUM_THREADS` e `MKL_NUM_THREADS` para `1` quando
-`sby_knn_workers > 1L`; em pipelines já paralelos, prefira
-`sby_knn_workers = 1L` por tarefa externa.
-
-Para HNSW com maior proximidade em relação ao resultado exato, aumente `M` e
-`ef`. A configuração abaixo prioriza fidelidade sobre velocidade e memória:
-
-```r
-sby_adanear(
-  sby_formula = alvo ~ .,
-  sby_data = dados,
-  sby_knn_engine = "RcppHNSW",
-  sby_knn_algorithm = "auto",
-  sby_knn_distance_metric = "euclidean",
-  sby_knn_hnsw_m = 32L,
-  sby_knn_hnsw_ef = 1000L,
-  sby_knn_workers = parallel::detectCores(logical = FALSE)
-)
-```
-
-Em bases muito sensíveis à vizinhança local, valores como `sby_knn_hnsw_m = 48L`
-e `sby_knn_hnsw_ef = 2000L` podem aproximar mais a seleção do resultado exato,
-com maior consumo de memória e tempo de construção do índice.
-
-## Funções principais
-
-```r
-# Pipeline híbrido: primeiro gera amostras sintéticas com ADASYN e depois
-# reduz a classe majoritária com NearMiss-1
-sby_adanear(
-  sby_formula,
-  sby_data,
-  sby_over_ratio = 0.2,
-  sby_under_ratio = 1,
-  sby_knn_over_k = 5L,
-  sby_knn_under_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
-  sby_audit = FALSE
-)
-
-# Somente sobreamostragem ADASYN da classe minoritária
-sby_adasyn(
-  sby_formula,
-  sby_data,
-  sby_over_ratio = 0.2,
-  sby_knn_over_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
-  sby_audit = FALSE
-)
-
-# Somente subamostragem NearMiss-1 da classe majoritária
-sby_nearmiss(
-  sby_formula,
-  sby_data,
-  sby_under_ratio = 1,
-  sby_knn_under_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
-  sby_audit = FALSE
-)
-```
-
-## Etapas para `recipes`
-
-O pacote também oferece etapas supervisionadas para pipelines `recipes`:
-
-```r
-# Etapa ADASYN para recipes.
-sby_step_adasyn(
-  recipe,
-  ...,
-  sby_over_ratio = 0.2,
-  sby_knn_over_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
-  sby_audit = FALSE
-)
-
-# Etapa NearMiss-1 para recipes.
-sby_step_nearmiss(
-  recipe,
-  ...,
-  sby_under_ratio = 1,
-  sby_knn_under_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
-  sby_audit = FALSE
-)
-
-# Etapa combinada ADASYN + NearMiss-1 para recipes.
-sby_step_adanear(
-  recipe,
-  ...,
-  sby_over_ratio = 0.2,
-  sby_under_ratio = 1,
-  sby_knn_over_k = 5L,
-  sby_knn_under_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
-  sby_audit = FALSE
-)
-```
-
-Por padrão, as etapas usam `skip = TRUE`, pois alteram o número de linhas do
-conjunto processado e normalmente devem ser aplicadas apenas no treinamento.
-
-## Atalhos do motor HPC
-
-Para matrizes densas em servidores com OpenMP e, opcionalmente, oneMKL, o pacote
-oferece `sby_adasyn_hpc()`, `sby_nearmiss_hpc()` e `sby_adanear_hpc()`. Essas
-interfaces preservam nomes e tipos de colunas e o estado de RNG do chamador. O
-argumento `sby_config_max_threads` limita os loops OpenMP e todas as chamadas
-oneMKL feitas durante a chamada corrente:
-
-```r
-sby_hpc_result <- sby_adanear_hpc(
-  .data = sby_data,
-  formula = sby_y ~ .,
-  sby_adasyn_ratio = 0.5,
-  sby_nearmiss_ratio = 1,
-  sby_config_max_threads = 8L,
-  sby_seed = 123L
-)
-```
-
-O limite efetivo é o mínimo entre o valor solicitado, núcleos físicos, cota de
-cgroup e CPUs permitidas pela afinidade. Os atalhos não modificam
-`MKL_NUM_THREADS`, `MKL_DOMAIN_NUM_THREADS` ou `OMP_NUM_THREADS`.
-
-## Exemplo rápido com `sby_adanear()`
+## Usage
 
 ```r
 library(sbyadanear)
-
-# A semente aqui controla apenas a criação do exemplo reproduzível
-set.seed(42)
-
-# Cria dois preditores numéricos. As rotinas de sampling esperam preditores
-# numéricos; variáveis categóricas devem ser tratadas antes do balanceamento
-sby_x <- tibble::tibble(
-  sby_a = rnorm(40),
-  sby_b = rnorm(40)
+result <- sby_adanear_hpc(
+  .data = data, formula = outcome ~ .,
+  sby_adasyn_ratio = 0.5, sby_nearmiss_ratio = 1,
+  sby_adasyn_k = 5L, sby_nearmiss_k = 3L,
+  nearmiss_model = 3L, sby_nearmiss_m = 3L,
+  sby_config_max_threads = 4L,
+  sby_seed = 123L, sby_audit = TRUE
 )
-
-# Cria um alvo binário desbalanceado: 10 observações minoritárias e 30
-# majoritárias. A coluna do alvo pode ter qualquer nome na entrada
-sby_y <- factor(c(rep("minority", 10), rep("majority", 30)))
-
-# Junta preditores e alvo em um único data frame, pois a API pública usa fórmula + dados
-sby_data <- tibble::add_column(sby_x, sby_y = sby_y)
-
-# Aplica o pipeline híbrido:
-# - sby_formula = sby_y ~ . informa que sby_y é o alvo e as demais colunas são
-#   preditores;
-# - sby_over_ratio controla a geração sintética ADASYN;
-# - sby_under_ratio controla a maioria retida como múltiplo do tamanho final da classe rara no NearMiss-1;
-#   use 1 para reduzir a majoritária até igualar a minoritária disponível;
-# - sby_seed fixo torna a geração e desempates reproduzíveis.
-sby_balanced <- sby_adanear(
-  sby_formula = sby_y ~ .,
-  sby_data = sby_data,
-  sby_over_ratio = 0.5,
-  sby_under_ratio = 0.8,
-  sby_seed = 123
-)
-
-# O retorno padrão é um tibble. A coluna alvo é padronizada como TARGET.
-sby_balanced
+attr(result, "sbyaudit")
+attr(result, "audit")$telemetry
+attr(result, "audit")$synthetics
+sby_hpc_cpu_report()
 ```
 
-## Auditoria
+Use an explicit seed for repeatability. The default `sample.int(10e7, 1)`
+consumes one caller RNG draw when evaluated. The sampling call fixes a
+scoped RNG and restores the previous state even after errors. Repeatability
+requires identical input, seed, parameters and numerical environment;
+cross-platform or library-version floating-point identity is not promised.
+NearMiss itself makes no random draws.
 
-```r
-# Com sby_audit = TRUE, a função retorna uma lista com dados finais,
-# resultados intermediários e diagnósticos de contagem/configuração
-sby_audit <- sby_adanear(
-  sby_formula = sby_y ~ .,
-  sby_data = sby_data,
-  sby_over_ratio = 0.5,
-  sby_under_ratio = 0.8,
-  sby_seed = 123,
-  sby_audit = TRUE
-)
+## Scientific contract and pipeline
 
-# Diagnósticos incluem contagens de linhas, distribuição de classes e
-# parâmetros KNN resolvidos
-sby_audit$sby_diagnostics
+1. Determine class roles from the originals. On equal counts, preserve the
+   first factor level or first observed non-factor label. Numeric labels
+   are matched numerically, without lossy conversion to text.
+2. Keep originals and compute one population z-scale over all original
+   rows: mean and standard deviation with denominator n. Constant columns
+   use scale 1.
+3. ADASYN estimates difficulty from mixed original neighbors, excluding
+   only the exact self index. It normalizes the majority-neighbor fractions,
+   chooses another ORIGINAL rare neighbor, and draws one lambda in [0,1)
+   shared by every predictor. Synthetics are never reused as parents.
+4. NearMiss selects original majority rows using original rare rows plus
+   continuous synthetic rare rows in the SAME initial z-space. Scores
+   average Euclidean **d**, not squared distance.
+5. Evaluate the affine inverse stably from the original parents, avoiding
+   cancellation. Restore only synthetic domains: observed binary 0/1
+   columns use threshold `>= 0.5`; integer-valued columns, including doubles,
+   use `round()` with ties to even. Clamp EVERY synthetic predictor to its
+   original minimum and maximum. Arbitrary categorical codes and decimal
+   grids are not inferred.
+6. Return retained originals in input order, followed by restored
+   synthetics. Original rare and retained majority rows are copied without
+   inverse scaling or rounding. Formula-selected predictors and the outcome
+   retain their input-column order; factor levels/ordering are preserved.
 
-# Dados balanceados finais.
-sby_audit$sby_balanced_data
-```
+ADASYN uses `G = floor(n_min * sby_adasyn_ratio)`. Alternatively,
+`sby_adasyn_beta` uses `G = floor((n_maj - n_min) * beta)`, the paper's
+parameterization. Do not explicitly supply both. Ratios beyond balance imply beta > 1 and
+extend the paper parameter range; the beta parameter itself remains [0,1].
+ADASYN runs only if
+`n_min / n_maj < sby_adasyn_d_th` (default 1); zero disables it. Neighbor
+counts are capped at available rows. G = 0 skips difficulty calculations,
+recorded as NA with `audit$adasyn$executed = FALSE`.
 
-## Exemplos individuais
+Largest-remainder integer quotas sum to exactly G, with original-index
+breaks for ties. This resolves a choice not fully specified by the paper.
+Zero difficulty stops by default because normalization is undefined;
+`sby_adasyn_zero_difficulty = "uniform"` explicitly requests uniform quotas.
+Domain restoration is also additional postprocessing of continuous ADASYN.
+Different quotas, scales, ties or fallback policies can change results
+relative to other implementations.
 
-```r
-# Apenas ADASYN: aumenta adaptativamente a classe minoritária e mantém todos os
-# exemplos originais
-sby_only_over <- sby_adasyn(
-  sby_formula = sby_y ~ .,
-  sby_data = sby_data,
-  sby_over_ratio = 0.5,
-  sby_seed = 123
-)
+NearMiss retention is `min(n_maj, floor((n_min + G) * ratio))`. Zero disables
+it. The cap precedes integer conversion to prevent overflow. A positive
+ratio rounding to zero produces an informative error. A target covering the
+entire majority skips scoring, recorded as NA with `executed = FALSE`.
 
-# Apenas NearMiss-1: reduz a classe majoritária priorizando exemplos próximos à
-# classe minoritária
-sby_only_under <- sby_nearmiss(
-  sby_formula = sby_y ~ .,
-  sby_data = sby_data,
-  sby_under_ratio = 0.8,
-  sby_seed = 123
-)
-```
+## NearMiss variants
 
-## Exemplo com `recipes`
+| Model | Score neighbors | Retention |
+|---|---|---|
+| 1L | K nearest rare rows | Smallest mean distance |
+| 2L | K farthest rare rows | Smallest mean distance |
+| 3L (default) | K nearest rare rows after preselection | Largest candidate mean distance |
 
-```r
-library(recipes)
+NearMiss-3 preselects the union of the M nearest majority rows of EACH rare
+row. `sby_nearmiss_m` defines M independently of K, and only affects model 3.
+If there are too few candidates, retain all candidates, warn and record
+shortage; never fill from non-candidates. All ties use increasing original
+row index. Models outside 1, 2 and 3 produce an informative error. The
+two-stage variant follows the imbalanced-learn operational definition:
+the Mani/Zhang prefilter and subsequent candidate ranking are distinguished.
 
-# Define uma recipe simples. O desfecho é sby_y e os preditores são sby_a/sby_b.
-sby_rec <- recipe(sby_y ~ ., data = sby_data)
+## Audit
 
-# Seleciona explicitamente o desfecho para a etapa supervisionada
-sby_rec <- sby_step_adanear(
-  recipe = sby_rec,
-  all_outcomes(),
-  sby_over_ratio = 0.5,
-  sby_under_ratio = 0.8,
-  sby_seed = 123
-)
+`sbyaudit` is always present. `adasyn` and `nearmiss` are 1-based OUTPUT row
+positions of synthetics and retained majority rows. The original indices
+refer to INPUT rows. Package, function and evaluated/effective parameters
+are recorded; the full input dataset is not duplicated in this attribute.
+`sby$synthetic_rows` remains available (0L without synthetics).
 
-# prep() treina a etapa e resolve a coluna de desfecho selecionada.
-sby_rec_prepped <- prep(sby_rec, training = sby_data)
+With `sby_audit = TRUE`, `audit` also provides the initial scale, domains,
+indices, counts, NearMiss candidates/scores, ADASYN difficulty/quotas,
+parents/neighbors/lambda, continuous and standardized synthetic matrices,
+thread diagnostics and per-stage `telemetry` as a tibble. Apply documented
+domain restoration to the parents' interpolation to reconstruct final
+synthetics. Complete audit requires additional memory.
 
-# bake() aplica a etapa ao conjunto informado. Como a etapa altera linhas, use
-# com cuidado fora do treinamento.
-sby_rec_balanced <- bake(sby_rec_prepped, new_data = sby_data)
-```
+Telemetry distinguishes elapsed time, current RSS, cumulative PROCESS peak
+RSS, buffer estimates and output-object size. Peak RSS is not an exclusive
+stage peak. It includes cores, quota/affinity, resolved ceilings and observed
+OpenMP team sizes. Configured MKL threads do not prove actual DGEMM teams:
+`mkl_observed_threads` is NA; use `MKL_VERBOSE=1` to observe `NThr`.
+Unavailable metrics are NA. Detailed RSS telemetry is skipped when audit is
+disabled; sampling values are unchanged.
 
-## Instalação local
+## Parallelism and bounded memory
 
-```sh
-R CMD INSTALL .
-```
+The HPC ceiling comes from **sby_config_max_threads**, capped by physical
+cores, CPU affinity, container quota and the hard OpenMP limit. Scaling,
+exact-neighbor searches, interpolation and score averaging use Intel
+OpenMP. DGEMM uses threaded oneMKL outside those teams, preventing nested
+teams. RNG and R assembly remain serial. The call restores local MKL and
+OpenMP controls on success or error without changing environment variables.
+Small BLAS calls may use fewer threads than configured.
 
-## Dependências
+Per-call row norms are cached; query distance tiles are reused. Each worker
+keeps only K neighbors in an exact heap, reducing neighbor scratch from
+O(threads * reference_rows) to O(threads * K). Tie ordering and distances are
+preserved. NearMiss sorts only the retained prefix. Cancellation checks
+remain; extended-precision square roots prevent loss of finite distances
+when their squared values overflow or underflow double storage. No full
+all-pairs distance matrix is constructed, although exact search still has
+quadratic time complexity in the compared row counts.
 
-Dependências importadas pelo pacote:
+## Compatibility in 0.4.0
 
-```r
-install.packages(c(
-  "Rcpp", "RcppHNSW", "RcppParallel", "FNN", "cli", "generics",
-  "recipes", "rlang", "tibble", "collapse", "data.table", "kit",
-  "Rfast", "coop"
-))
-```
+All tabular, matrix, index-selector and recipes interfaces delegate to the
+same engine. HPC always returns a tibble; audited classic tabular calls or
+calls requesting additional z output return a list with sby_balanced_data.
+Matrix/index interfaces return lists. Legacy engine/algorithm selectors
+accept auto/native and auto/brute; other engines and non-Euclidean metrics
+are rejected. Legacy parallel/RcppParallel selectors map to Intel OpenMP,
+without fork/TBB. HNSW is inactive and accepts only its defaults.
+`sby_restore_types` must be TRUE; external sby_type_info is rejected.
 
-Dependências opcionais usadas em testes, benchmarks ou engines opcionais:
+Classic sby_knn_workers is used when sby_config_max_threads = -1L; an
+explicit ceiling takes precedence. Deprecated selectors are validated
+compatibility controls, not independent computation backends. The default
+NearMiss is now 3L; request 1L to keep the former variant. Uniform ADASYN
+fallback now requires explicit selection.
 
-```r
-install.packages(c("modeldata", "Matrix", "KernelKnn", "bigKNN", "bigmemory", "testthat"))
-```
+Classic interfaces accept external scaling and already-standardized input.
+Reconstructed originals cannot be guaranteed bit-identical to originals not
+provided. Standardized matrix output is a presentation option applied AFTER
+domain restoration. HPC always computes its scale from original input.
 
+Recipes step bake returns data with audit attributes. Final
+recipes::bake(recipe) may drop them; consult
+`prepared_recipe$steps[[i]]$audit_log$last` (sbyaudit and audit). Each call
+replaces this entry; it is not a full history. Default skip = TRUE prevents
+resampling new data while prep still resamples training data.
 
-## Ambiente de desenvolvimento
+## References
 
-O repositório inclui um `Dockerfile` com R, toolchain de compilação e as
-dependências de sistema necessárias para desenvolvimento e validação do pacote
-
-```sh
-docker build -t sbyadanear-r .
-docker run --rm -it -v "$PWD":/workspace/sbyadanear sbyadanear-r
-```
-
-Dentro do container, valide o pacote com:
-
-```sh
-R CMD build .
-R CMD check sbyadanear_0.3.0.tar.gz
-```
-
-## Arquivos principais
-
-- `DESCRIPTION`: metadados, versão e dependências do pacote R.
-- `NAMESPACE`: funções exportadas, métodos S3 e carregamento da biblioteca
-  nativa.
-- `R/`: funções R, helpers internos e métodos S3 das etapas `recipes`.
-- `src/`: kernels nativos em C++, C e Fortran compilados na instalação do pacote.
-- `man/`: documentação gerada a partir dos blocos roxygen2.
-
-## Validação recomendada
-
-```sh
-R CMD build .
-R CMD check sbyadanear_0.3.0.tar.gz
-R CMD INSTALL .
-```
-
-Quando o binário do R não estiver disponível no ambiente, valide ao menos a
-estrutura textual com `git diff --check` e buscas com `rg`.
-
-
-## Ambiente R para validacao operacional completa
-
-Para executar validacao completa localmente e no GitHub, o pacote requer um
-ambiente com R, toolchain de compilacao C e dependencias opcionais para testes
-especificos. O caminho recomendado e usar o Docker do proprio repositorio.
-
-### Opcao 1: validacao local com Docker
-
-```bash
-docker build -f docker/oraclelinux97-r453/Dockerfile -t sbyadanear:oraclelinux97-r453 .
-docker run --rm -it sbyadanear:oraclelinux97-r453 R --version
-docker run --rm -it -v "$PWD":/workspace/r-package-validation sbyadanear:oraclelinux97-r453 Rscript tools/docker/run_many_tests.R
-```
-
-### Opcao 2: validacao automatizada no GitHub Actions
-
-O workflow `.github/workflows/main.yml` ja executa:
-
-- build da imagem Oracle Linux com R 4.5.3
-- execucao repetida de `tools/docker/run_many_tests.R`
-- upload dos artefatos CSV em `test-results`
-
-### Sobre MKL no Docker
-
-Sim, o Docker pode executar testes com MKL quando a imagem estiver configurada
-com oneAPI/MKL e variaveis de ambiente adequadas. No pacote `sbyadanear`, MKL
-nao e dependencia obrigatoria do pacote em si. O beneficio vem do ambiente R e
-do backend BLAS/LAPACK configurado na imagem.
-
-Para diagnostico dentro do container:
-
-```r
-Sys.getenv("OMP_NUM_THREADS")
-Sys.getenv("MKL_NUM_THREADS")
-Sys.getenv("MKL_DOMAIN_NUM_THREADS")
-```
-
-Se `RhpcBLASctl` estiver instalado no ambiente:
-
-```r
-RhpcBLASctl::blas_get_num_procs()
-RhpcBLASctl::omp_get_num_procs()
-```
-
-### Recomendacao de threads
-
-Quando houver paralelismo externo no pipeline, limitar threads de BLAS/OpenMP
-normalmente reduz oversubscription:
-
-```r
-Sys.setenv(
-  OMP_NUM_THREADS = "1",
-  MKL_NUM_THREADS = "1"
-)
-```
-
-Quando o processo for unico e computacionalmente intenso, aumentar threads pode
-ser util, dependendo do hardware e do backend numerico.
-
-### Rota HPC em servidores NUMA de dois sockets
-
-As funcoes `sby_adasyn_hpc()`, `sby_nearmiss_hpc()` e `sby_adanear_hpc()` nao
-alteram variaveis de ambiente do runtime: o argumento `sby_config_max_threads`
-vale apenas para a chamada corrente. O guard nativo salva e restaura o limite
-OpenMP e, quando ligada, a configuracao local da oneMKL. A politica de afinidade
-e de memoria fica sob controle do usuario; o pacote apenas consulta a mascara
-efetiva para evitar criar mais threads do que CPUs permitidas.
-
-Em maquinas de dois sockets (por exemplo, dois Intel Cascade Lake), SGEMM,
-sincronizacao OpenMP e trafego entre nos NUMA podem dominar o kNN exato. A
-participacao de cada componente deve ser medida no servidor alvo. Fixe as
-threads e distribua as paginas antes de iniciar o R:
-
-```sh
-export OMP_PROC_BIND=close
-export OMP_PLACES=cores
-numactl --interleave=all Rscript minha_analise.R
-```
-
-`OMP_PROC_BIND=close` com `OMP_PLACES=cores` mantem as threads de um mesmo time
-no socket onde os dados foram tocados pela primeira vez; `numactl
---interleave=all` espalha as matrizes grandes pelos dois nos, evitando saturar o
-controlador de memoria de um unico socket. Os buffers internos do motor sao
-inicializados por *first touch* paginado e paralelo, de modo a respeitar essa
-politica em vez de concentrar todas as paginas na thread mestre.
-
-Deixe `sby_config_max_threads = -1` para que o pacote detecte os nucleos
-disponiveis. A deteccao respeita cotas de cgroup (v1 e v2), portanto o valor
-correto tambem e usado dentro de containers e de slices do systemd. Em Linux,
-a deteccao tambem respeita `sched_getaffinity()`: um processo fixado em uma CPU
-usa uma thread efetiva mesmo quando `sby_config_max_threads = 8L`.
-
-Use `sby_hpc_cpu_report()` para auditar CPUs permitidas, quantidade permitida,
-limites OpenMP/oneMKL, variaveis de ambiente, capacidades de compilacao e um
-aviso quando o limite atual exceder a afinidade:
-
-```r
-report <- sby_hpc_cpu_report()
-report[c("affinity_cpus", "affinity_cpu_count", "openmp_max_threads",
-         "mkl_max_threads", "hpc_environment", "affinity_warning")]
-```
-
-### Compilacao com oneMKL e AVX-512
-
-O `src/Makevars` consome OpenMP pelas macros `SHLIB_OPENMP_*` do R (C++ e
-Fortran) e detecta as flags de arquitetura sondando o compilador: usa
-`-march=cascadelake -mtune=cascadelake` no GCC/Clang e `-xCORE-AVX512
--qopt-zmm-usage=high` no toolchain Intel. Sobrescreva com
-`SBYADANEAR_ARCH_FLAGS="..."` ou desligue com `SBYADANEAR_NO_ARCH_FLAGS=1`.
-
-O oneMKL e ligado automaticamente quando `MKLROOT` (ou `ONEAPI_ROOT`) aponta
-para uma instalacao com `libmkl_rt`; caso contrario o pacote cai na BLAS do R.
-O kernel Fortran usa a interface Fortran padrao do BLAS (`sgemm`), e nao CBLAS,
-justamente para que esse fallback continue valido. Confirme o que foi de fato
-ligado com:
-
-```r
-sby_hpc_cpu_report()$compile_report$mkl_linked
-```
+- He et al. (2008), [ADASYN DOI](https://doi.org/10.1109/IJCNN.2008.4633969).
+- Mani and Zhang (2003), *kNN approach to unbalanced data distributions*,
+  ICML Workshop. Original PDFs are retained in references/.
+- [NearMiss operational definitions](https://imbalanced-learn.org/stable/under_sampling.html#near-miss).
+- [Intel OpenMP libraries](https://www.intel.com/content/www/us/en/docs/dpcpp-cpp-compiler/developer-guide-reference/2025-2/use-the-openmp-libraries.html).
+- [Intel oneMKL linkage](https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-0/selecting-libraries-to-link-with.html).

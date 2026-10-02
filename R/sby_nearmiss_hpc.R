@@ -1,207 +1,41 @@
-#' Atalho HPC do undersampling NearMiss-1
+#' NearMiss resampling
 #'
 #' @description
-#' `sby_nearmiss_hpc()` e o atalho de alto desempenho do undersampling NearMiss-1.
-#' Ranqueia e retem as linhas majoritarias estritamente no espaco padronizado,
-#' com distancias exatas por `sgemm` (oneMKL quando ligado, BLAS do R caso
-#' contrario). O C++ retorna apenas os indices das linhas retidas; a reconstrucao
-#' do tibble ocorre na camada R diretamente a partir dos dados originais, sem
-#' aritmética alguma. Somente linhas da classe majoritaria sao descartadas.
+#' Apply NearMiss through the common exact Intel oneAPI engine.
 #'
-#' @details
-#' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
-#' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
-#' motor nativo salva e restaura os limites OpenMP e, quando ligada, oneMKL em
-#' torno do kernel.
+#' @param .data Data frame or tibble containing the outcome and plain numeric predictors.
 #'
-#' @param .data Data frame ou tibble com a coluna de desfecho e preditores
-#'   numericos referenciados em `formula`.
+#' @param formula Formula outcome ~ predictors. Select existing columns only; transformations and interactions are rejected.
 #'
-#' @param formula Formula no formato `alvo ~ preditores`.
+#' @param sby_nearmiss_k Positive integer number K of Euclidean distances d averaged for NearMiss, capped at the expanded rare-class size. Used only when majority retention actually reduces the data.
 #'
-#' @param sby_nearmiss_k Numero inteiro positivo de vizinhos do
-#'   NearMiss-1. Padrao: `7`.
+#' @param sby_nearmiss_ratio Nonnegative majority retention relative to the expanded minority: min(n_maj, floor((n_min + G) * ratio)). Zero disables NearMiss. A positive ratio rounding to zero produces an informative error. If the target retains the entire majority, neighbor scoring is skipped.
 #'
-#' @param sby_nearmiss_ratio Razao nao negativa de retencao da classe majoritaria em relacao ao tamanho da classe rara. O alvo e `floor(n_minoria * sby_nearmiss_ratio)`, limitado a maioria disponivel. Zero desativa o undersampling.
-#'   Padrao: `1`.
+#' @param sby_config_max_threads Positive integer per-call thread ceiling, or -1L for detection. Capped by physical cores, CPU affinity, container quota and the hard OpenMP thread limit. Both Intel OpenMP and oneMKL receive this resolved ceiling. Local controls are restored on success or error. BLAS runs outside OpenMP regions; small BLAS calls may use fewer threads. HPC interfaces use this parameter directly. No AVX-512 requirement.
 #'
-#' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
-#'   detecta os nucleos fisicos disponíveis. O limite vale para OpenMP e para a
-#'   oneMKL da chamada corrente, quando ligada. Padrao: `-1`.
+#' @param sby_seed Integer seed from 0 to .Machine$integer.max; default sample.int(10e7, 1). ADASYN uses a scoped Mersenne-Twister/Inversion/Rejection RNG and restores RNGkind and .Random.seed, including after errors. Identical input, seed, parameters and numerical environment reproduce the result. Evaluating the default sample.int consumes the caller RNG; supply a seed explicitly to avoid this. NearMiss itself is deterministic and does not draw random numbers.
 #'
-#' @param sby_seed Semente inteira para reproducibilidade. Padrao:
-#'   `sample.int(10L^5L, 1L)`.
+#' @param sby_audit FALSE retains the always-present sbyaudit and sby attributes. TRUE also attaches the detailed audit. HPC interfaces always return a tibble; classic tabular interfaces return a list with sby_balanced_data when audited; matrix interfaces return lists. For recipes, the step bake method returns data with attributes; final recipes::bake(recipe) may drop them. The last audit remains in `prepared_recipe$steps[[i]]$audit_log$last`.
 #'
-#' @concept balanceamento de classes
-#' @concept ADASYN
-#' @concept NearMiss
+#' @param nearmiss_model Integer 1L, 2L or 3L; default 3L. NearMiss-1 retains majority rows with the SMALLEST mean distance to their K NEAREST rare rows. NearMiss-2 retains rows with the SMALLEST mean distance to their K FARTHEST rare rows. NearMiss-3 first takes the union of the M nearest majority rows of EACH rare row, then retains candidates with the LARGEST mean distance to their K nearest rare rows. M = sby_nearmiss_m and K = sby_nearmiss_k (or sby_knn_under_k) are independent. Continuous synthetic rare rows participate in the combined pipeline before domain restoration. Candidate shortage retains all candidates and warns; it does not fill from non-candidates. Ties use increasing original row index. Other values produce an informative error. The model is validated even when NearMiss is inactive.
 #'
-#' @details
-#' Esta interface executa a mesma família de modelos geométricos descrita nas
-#' funções tabulares, usando matrizes numéricas densas e fatores binários para
-#' reduzir cópias e facilitar integração com pipelines de alto desempenho.
+#' @param sby_nearmiss_m Positive integer preselection count M for NearMiss-3; default 3L, capped at majority size. Does not alter K. Validated for every model, but used in neighbor selection only for model 3 when NearMiss executes.
 #'
-#' @references
-#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
-#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#' @inherit sby_adanear_hpc details references
 #'
-#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
-#' a case study involving information extraction. In *Proceedings of the ICML
-#' 2003 Workshop on Learning from Imbalanced Data Sets*.
-#'
-#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
-#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
-#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
-#' doi:10.1186/s40854-023-00558-3.
-#'
-#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
-#' nearest neighbor search using Hierarchical Navigable Small World graphs.
-#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
-#' 824-836.
-#'
-#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`.
-#'
+#' @return A balanced tibble with sbyaudit and sby attributes; sby_audit = TRUE additionally attaches audit. See Details for indices and telemetry.
 #' @export
 sby_nearmiss_hpc <- function(
   .data,
   formula,
   sby_nearmiss_k = 7,
-  sby_nearmiss_ratio         = 1,
-  sby_config_max_threads  = -1,
-  sby_seed                = sample.int(10L^5L, 1L)
-){
-  sby_adanear_check_user_interrupt()
-
-  sby_original_column_order <- colnames(.data)
-
-  # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
-  # respeita a configuracao externa do runtime HPC.
-  sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
-
-  if (!is.numeric(sby_nearmiss_ratio) || length(sby_nearmiss_ratio) != 1L ||
-      is.na(sby_nearmiss_ratio) || !is.finite(sby_nearmiss_ratio) ||
-      sby_nearmiss_ratio < 0) {
-    sby_adanear_abort(
-      "sby_nearmiss_ratio deve ser um numero nao negativo.",
-      call = sys.call()
-    )
-  }
-
-  # Retorna os dados intactos quando a reducao majoritaria esta desativada
-  if(sby_nearmiss_ratio == 0){
-    return(tibble::as_tibble(.data))
-  }
-
-  sby_formula_data            <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
-  sby_original_predictor_data <- sby_formula_data$sby_predictor_data
-  sby_target_vector           <- sby_formula_data$sby_target_vector
-  sby_target_name             <- sby_formula_data$sby_target_name
-
-  # Captura os levels originais ANTES de qualquer as.factor() para preservar
-  # a classe, a ordem e os labels exatos do factor de entrada.
-  # c(factor, character) destruiria o factor retornando codigos numericos.
-  sby_original_levels <- if (is.factor(sby_target_vector)) {
-    levels(sby_target_vector)
-  } else {
-    unique(as.character(sby_target_vector))
-  }
-
-  sby_seed <- sby_validate_seed(sby_seed = sby_seed)
-  sby_validate_sampling_inputs(sby_original_predictor_data, sby_target_vector, sby_seed = sby_seed)
-
-  sby_x_matrix     <- sby_adanear_as_numeric_matrix(sby_original_predictor_data)
-  sby_column_names <- sby_adanear_get_column_names(sby_original_predictor_data)
-
-  # Usa os levels originais para nao reordenar alfabeticamente
-  sby_target_factor <- factor(sby_target_vector, levels = sby_original_levels)
-  sby_class_counts  <- sby_binary_class_counts_fast(sby_target_factor)
-
-  # O runtime MKL/OpenMP deve ser configurado externamente pelo usuario HPC.
-
-  # Indices 1-based das linhas da minoria no conjunto original
-  sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
-  sby_minority_idx       <- which(as.integer(sby_target_factor) == sby_minority_level_int)
-
-  sby_nearmiss_k <- sby_validate_positive_integer_scalar(
-    sby_nearmiss_k, "sby_nearmiss_k"
-  )
-
-  if (!sby_adanear_hpc_available()) {
-    sby_adanear_abort(
-      "Motor HPC nao disponivel. Compile o pacote com suporte a MKL/AVX-512.",
-      call = sys.call()
-    )
-  }
-
-  sby_hpc_result <- sby_call_native(
-    "sby_nearmiss_hpc_cpp",
-    sby_x_matrix,
-    sby_target_factor,
-    as.integer(sby_nearmiss_k),
-    as.numeric(sby_nearmiss_ratio),
-    as.integer(sby_total_threads),
-    sby_column_names,
-    levels(sby_target_factor)
-  )
-  # Retorno esperado de sby_nearmiss_hpc_cpp:
-  #   $sby_retained_majority_idx — IntegerVector (indices 1-based no original)
-  #   $sby_scaling_info          — List(centers, scales)
-
-  # --- Reconstrucao das 2 partes na camada R (zero aritmetica) ---
-
-  # Parte 1: maioria remanescente — indice direto no original
-  sby_maj_rows   <- sby_original_predictor_data[
-    sby_hpc_result$sby_retained_majority_idx, , drop = FALSE
-  ]
-  sby_maj_target <- sby_target_vector[sby_hpc_result$sby_retained_majority_idx]
-
-  # Parte 2: minoria original — integra
-  sby_min_rows   <- sby_original_predictor_data[sby_minority_idx, , drop = FALSE]
-  sby_min_target <- sby_target_vector[sby_minority_idx]
-
-  sby_final_predictors <- rbind(sby_maj_rows, sby_min_rows)
-  rownames(sby_final_predictors) <- NULL
-
-  # Reconstroi vetor alvo como factor com os levels originais para preservar
-  # a classe, a ordem e os labels exatos — evitando que c(factor, character)
-  # retorne codigos numericos como character.
-  # NearMiss nao gera sinteticas: apenas concatena os vetores originais.
-  sby_final_target <- factor(
-    c(
-      as.character(sby_maj_target),
-      as.character(sby_min_target)
-    ),
-    levels = sby_original_levels
-  )
-
-  sby_balanced_data <- sby_build_balanced_tibble(
-    sby_predictor_data = sby_final_predictors,
-    sby_target_vector  = sby_final_target
-  )
-
-  if (!identical(sby_target_name, "TARGET")) {
-    names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
-  }
-
-  # Reordena apenas as colunas que o balanceamento de fato devolveu. Formulas
-  # que selecionam um subconjunto de preditores produzem menos colunas do que
-  # `.data` tinha, e pedir a `fselect()` uma coluna ausente aborta a chamada.
-  sby_balanced_data <- collapse::fselect(
-    .x = sby_balanced_data,
-    intersect(sby_original_column_order, names(sby_balanced_data))
-  )
-
-  sby_assert_minority_not_reduced(
-    sby_input_target = sby_target_vector,
-    sby_output_target = sby_balanced_data[[sby_target_name]],
-    sby_context = "sby_nearmiss_hpc()",
-    sby_minority_label = sby_class_counts$sby_minority_label,
-    sby_input_count = sby_class_counts$sby_minority_count
-  )
-
-  return(sby_balanced_data)
+  sby_nearmiss_ratio = 1,
+  sby_config_max_threads = -1,
+  sby_seed = sample.int(10e7, 1),
+  sby_audit = FALSE,
+  nearmiss_model = 3L,
+  sby_nearmiss_m = 3L
+) {
+  parameters <- mget(names(formals(sys.function())), envir=environment())
+  sby_dispatch("nearmiss", parameters, "sby_nearmiss_hpc", FALSE)
 }
-####
-## Fim
-#

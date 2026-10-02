@@ -1,349 +1,140 @@
-#' Atalho HPC do pipeline combinado ADASYN e NearMiss-1
+#' ADASYN and NearMiss resampling
 #'
 #' @description
-#' `sby_adanear_hpc()` e o atalho de alto desempenho do pipeline combinado de
-#' balanceamento binario. Consolida ADASYN e NearMiss-1 em uma unica passada no
-#' espaco padronizado, com estatisticas populacionais por laco SIMD paralelo,
-#' distancias exatas por `sgemm` (oneMKL quando ligado, BLAS do R caso contrario)
-#' e pesos de interpolacao gerados por `Rcpp::runif()` sob controle da semente
-#' local. A despadronizacao das sinteticas ocorre inteiramente no C++ com FMA
-#' vetorizado. A reconstrucao final do tibble acontece na camada R, preservando
-#' os tipos originais das colunas.
+#' Apply ADASYN and NearMiss through the common exact Intel oneAPI engine.
+#'
+#' @param .data Data frame or tibble containing the outcome and plain numeric predictors.
+#'
+#' @param formula Formula outcome ~ predictors. Select existing columns only; transformations and interactions are rejected.
+#'
+#' @param sby_adasyn_k Positive integer number of ADASYN neighbors. Difficulty uses min(k, n - 1); interpolation uses min(k, n_min - 1). These searches run only when G > 0.
+#'
+#' @param sby_nearmiss_k Positive integer number K of Euclidean distances d averaged for NearMiss, capped at the expanded rare-class size. Used only when majority retention actually reduces the data.
+#'
+#' @param sby_config_max_threads Positive integer per-call thread ceiling, or -1L for detection. Capped by physical cores, CPU affinity, container quota and the hard OpenMP thread limit. Both Intel OpenMP and oneMKL receive this resolved ceiling. Local controls are restored on success or error. BLAS runs outside OpenMP regions; small BLAS calls may use fewer threads. HPC interfaces use this parameter directly. No AVX-512 requirement.
+#'
+#' @param sby_seed Integer seed from 0 to .Machine$integer.max; default sample.int(10e7, 1). ADASYN uses a scoped Mersenne-Twister/Inversion/Rejection RNG and restores RNGkind and .Random.seed, including after errors. Identical input, seed, parameters and numerical environment reproduce the result. Evaluating the default sample.int consumes the caller RNG; supply a seed explicitly to avoid this. NearMiss itself is deterministic and does not draw random numbers.
+#'
+#' @param sby_adasyn_ratio Nonnegative expansion relative to the original minority: G = floor(n_min * ratio). Zero disables generation. This is a reparameterization, not the beta used in the original paper. Inactive when d_th prevents ADASYN or beta is supplied instead.
+#'
+#' @param sby_nearmiss_ratio Nonnegative majority retention relative to the expanded minority: min(n_maj, floor((n_min + G) * ratio)). Zero disables NearMiss. A positive ratio rounding to zero produces an informative error. If the target retains the entire majority, neighbor scoring is skipped.
+#'
+#' @param sby_audit FALSE retains the always-present sbyaudit and sby attributes. TRUE also attaches the detailed audit. HPC interfaces always return a tibble; classic tabular interfaces return a list with sby_balanced_data when audited; matrix interfaces return lists. For recipes, the step bake method returns data with attributes; final recipes::bake(recipe) may drop them. The last audit remains in `prepared_recipe$steps[[i]]$audit_log$last`.
+#'
+#' @param nearmiss_model Integer 1L, 2L or 3L; default 3L. NearMiss-1 retains majority rows with the SMALLEST mean distance to their K NEAREST rare rows. NearMiss-2 retains rows with the SMALLEST mean distance to their K FARTHEST rare rows. NearMiss-3 first takes the union of the M nearest majority rows of EACH rare row, then retains candidates with the LARGEST mean distance to their K nearest rare rows. M = sby_nearmiss_m and K = sby_nearmiss_k (or sby_knn_under_k) are independent. Continuous synthetic rare rows participate in the combined pipeline before domain restoration. Candidate shortage retains all candidates and warns; it does not fill from non-candidates. Ties use increasing original row index. Other values produce an informative error. The model is validated even when NearMiss is inactive.
+#'
+#' @param sby_nearmiss_m Positive integer preselection count M for NearMiss-3; default 3L, capped at majority size. Does not alter K. Validated for every model, but used in neighbor selection only for model 3 when NearMiss executes.
+#'
+#' @param sby_adasyn_beta Optional number from 0 to 1: G = floor((n_maj - n_min) * beta), using the original paper parameterization. Cannot be supplied together with an explicitly supplied sby_adasyn_ratio. NULL uses ratio.
+#'
+#' @param sby_adasyn_d_th Threshold from 0 to 1. ADASYN executes only when n_min / n_maj < d_th. Default 1; zero disables generation. Class roles are determined on the original data and remain fixed.
+#'
+#' @param sby_adasyn_zero_difficulty Policy when all difficulty values are zero: "error" (default) stops because the paper normalization is undefined; "uniform" explicitly requests the documented uniform-quota extension. Consult the audit for the resolved policy and whether fallback was used.
 #'
 #' @details
-#' Nao altera variaveis de ambiente do runtime MKL/OpenMP. O numero de threads
-#' informado em `sby_config_max_threads` vale apenas para a chamada corrente: o
-#' motor nativo salva e restaura os limites OpenMP e, quando ligada, oneMKL em
-#' torno do kernel, sem alterar variaveis de ambiente.
+#' The combined pipeline computes one initial population z-scale on all
+#' original rows; constant columns have scale 1. ADASYN difficulty is the
+#' proportion of majority neighbors among the K mixed original neighbors,
+#' excluding only the exact self index. It normalizes these difficulties and
+#' allocates G synthetics using largest remainders: floor(G * w_i), then one
+#' unit per largest fractional remainder, breaking ties by original row index.
+#' This integer policy explicitly resolves a choice left open by the paper.
+#' The quotas sum to exactly G. Zero difficulty requires the explicit uniform
+#' extension or produces an error. Each synthetic chooses one ORIGINAL rare
+#' neighbor and one uniform lambda in [0,1), shared by all columns.
+#' Synthetic rows are never reused as parents.
 #'
-#' Regras formais das razoes de reamostragem:
+#' NearMiss averages Euclidean d, not squared d, in the same initial z-space.
+#' In the combined pipeline, it uses rare originals plus continuous synthetics
+#' BEFORE domain restoration. NearMiss-only routes do not execute ADASYN;
+#' ADASYN-only routes do not execute NearMiss. NearMiss-3 uses the two-stage
+#' operational definition documented by imbalanced-learn: the Mani and Zhang
+#' prefilter followed by ranking candidates by their largest mean nearest-rare
+#' distance. This latter selection must be distinguished from the prefilter.
 #'
-#' Sejam \eqn{r_o = sby\_over\_ratio}, \eqn{r_u = sby\_under\_ratio},
-#' \eqn{n_{min}^{(0)}} o numero original de registros da classe rara,
-#' \eqn{n_{maj}^{(0)}} o numero original de registros da classe majoritaria,
-#' \eqn{n_{syn}} o numero de registros sinteticos gerados pelo ADASYN,
-#' \eqn{n_{min}^{(1)}} o numero de registros da classe rara disponiveis para
-#' o NearMiss-1, \eqn{n_{maj}^{disp}} o numero de registros majoritarios
-#' disponiveis antes do NearMiss-1 e \eqn{n_{maj}^{ret}} o numero-alvo de
-#' registros majoritarios retidos. O dominio das razoes nesta rotina hibrida e
-#' \deqn{r_o, r_u \in [0, \infty).}
-#' Valores negativos sao invalidos.
+#' The affine inverse is evaluated stably using original parents (algebraically
+#' equivalent to z * sigma + mu), avoiding cancellation when the global center
+#' is large relative to rare values. Only synthetics undergo domain restoration:
+#' observed binary 0/1 columns use threshold >= 0.5; observed integer columns,
+#' including whole-valued doubles, use round() with ties to even; all columns
+#' are clamped to their original minima and maxima. Arbitrary categorical codes
+#' and decimal grids are not inferred. Domain restoration is an additional
+#' postprocessing policy, not the continuous ADASYN rule in the paper.
 #'
-#' A etapa ADASYN e executada se, e somente se,
-#' \deqn{r_o > 0.}
-#' Formalmente:
-#' \deqn{
-#' \operatorname{ADASYN}(r_o) =
-#' \begin{cases}
-#' \text{nao executado}, & \text{se } r_o = 0 \\
-#' \text{executado}, & \text{se } r_o > 0
-#' \end{cases}
-#' }
-#' Quando \eqn{r_o > 0}, o numero de registros sinteticos e aproximadamente
-#' \deqn{n_{syn} = \left\lfloor n_{min}^{(0)} r_o \right\rfloor}
-#' e a classe rara apos ADASYN tem aproximadamente
-#' \deqn{n_{min}^{(1)} = n_{min}^{(0)} + n_{syn}
-#' \approx n_{min}^{(0)}(1 + r_o).}
-#' Nao existe piso minimo: em bases pequenas, razoes positivas cujo produto
-#' \eqn{n_{min}^{(0)} r_o} fica abaixo de 1 geram zero linhas sinteticas, e a
-#' classe rara permanece intacta.
+#' Retained originals are copied in input order, followed by restored synthetics.
+#' Tabular routes return only formula-selected predictors and the outcome,
+#' in their input-column order. Factor levels and ordering are preserved.
+#' On equal class counts, the first factor level or first observed label is
+#' the preserved class. If G = 0, difficulty is not calculated (NA in audit).
+#' If retention includes the entire majority, scoring is skipped (NA).
+#' audit$adasyn$executed and audit$nearmiss$executed record these conditions.
 #'
-#' A etapa NearMiss-1 e executada se, e somente se,
-#' \deqn{r_u > 0.}
-#' Formalmente:
-#' \deqn{
-#' \operatorname{NearMiss}(r_u) =
-#' \begin{cases}
-#' \text{nao executado}, & \text{se } r_u = 0 \\
-#' \text{executado}, & \text{se } r_u > 0
-#' \end{cases}
-#' }
-#' Quando \eqn{r_u > 0}, a quantidade-alvo de registros majoritarios retidos e
-#' \deqn{
-#' n_{maj}^{ret} =
-#' \min\left(n_{maj}^{disp},
-#' \left\lfloor n_{min}^{(1)} r_u \right\rfloor\right).
-#' }
-#' Assim, `sby_nearmiss_ratio = 0.5` retem ate metade do tamanho final da classe
-#' rara, `sby_nearmiss_ratio = 1` retem ate a mesma quantidade da classe rara e
-#' `sby_nearmiss_ratio = 2` retem ate duas vezes o tamanho da classe rara,
-#' limitado a maioria disponivel.
+#' The sbyaudit attribute is always present. adasyn and nearmiss contain
+#' 1-based OUTPUT positions of synthetics and retained majority rows.
+#' original_minority_indices and original_majority_indices refer to INPUT rows.
+#' The element named after the public function contains evaluated parameters,
+#' input dimensions and effective controls. Input records are not copied into
+#' this attribute. sby$synthetic_rows is retained for compatibility (0L when
+#' there are no synthetics). With sby_audit = TRUE, audit includes initial_scale,
+#' domains, original_indices, parameters, counts, nearmiss, adasyn, synthetics
+#' (parent, neighbor, lambda), synthetic_continuous, synthetic_standardized,
+#' threads and a per-stage telemetry tibble.
 #'
-#' A logica do pipeline hibrido e:
-#' \itemize{
-#'   \item \eqn{r_o = 0 \land r_u = 0}: ADASYN e NearMiss-1 nao executam; os
-#'     dados originais sao retornados preservados.
-#'   \item \eqn{r_o > 0 \land r_u = 0}: apenas ADASYN executa.
-#'   \item \eqn{r_o = 0 \land r_u > 0}: apenas NearMiss-1 executa.
-#'   \item \eqn{r_o > 0 \land r_u > 0}: ADASYN executa seguido de NearMiss-1.
-#' }
+#' Telemetry records elapsed time, current RSS, cumulative PROCESS peak RSS,
+#' physical/logical cores, quota/affinity, configured ceilings and observed
+#' OpenMP team sizes. Unavailable metrics are NA. mkl_configured_threads is
+#' configuration, whereas mkl_observed_threads is NA: use MKL_VERBOSE=1 to
+#' observe DGEMM NThr. Buffer estimates and output-object sizes are not RSS.
+#' Detailed telemetry and extra lineage matrices are collected only when
+#' sby_audit = TRUE. Both audited and unaudited calls produce identical values.
 #'
-#' @param .data Data frame ou tibble com a coluna de desfecho e preditores
-#'   numericos referenciados em `formula`.
+#' Scaling, exact-neighbor searches, interpolation and NearMiss score averaging
+#' use Intel OpenMP. DGEMM uses threaded oneMKL outside OpenMP teams, avoiding
+#' nested teams. RNG and R assembly remain serial. Query tiles are bounded;
+#' row norms are cached per call, distance buffers reused and each worker
+#' retains only K neighbors in an exact heap. NearMiss sorts only the retained
+#' prefix. Double precision and cancellation checks are preserved; extreme
+#' squared distances are square-rooted in extended precision when required.
+#' Reproducibility requires the same numerical environment; cross-version or
+#' cross-platform floating-point identity is not promised.
 #'
-#' @param formula Formula no formato `alvo ~ preditores`.
-#'
-#' @param sby_adasyn_k Numero inteiro positivo de vizinhos da etapa
-#'   ADASYN. Padrao: `3`.
-#'
-#' @param sby_nearmiss_k Numero inteiro positivo de vizinhos da etapa
-#'   NearMiss-1. Padrao: `7`.
-#'
-#' @param sby_config_max_threads Numero inteiro de threads do motor HPC. `-1`
-#'   detecta os nucleos fisicos disponíveis. O limite vale para os loops OpenMP
-#'   e para todas as chamadas oneMKL da chamada corrente, quando ligada. Padrao: `-1`.
-#'
-#' @param sby_seed Semente inteira para o gerador de numeros pseudo-aleatorios
-#'   do ADASYN. A semente e aplicada em escopo local e o estado RNG global do chamador e restaurado ao final. Padrao: `sample.int(10L^5L, 1L)`.
-#'
-#' @param sby_adasyn_ratio Acréscimo relativo sobre a quantidade original da
-#'   classe rara. `0.4`, por exemplo, adiciona 40% de registros sintéticos e
-#'   preserva 100% dos raros originais; nunca reduz a classe rara. Valores
-#'   positivos executam ADASYN; zero desativa ADASYN nesta rotina híbrida.
-#'   Padrão: `0.2`.
-#'
-#' @param sby_nearmiss_ratio Razao nao negativa de retencao da classe majoritaria
-#'   em relacao ao tamanho final da classe rara. Valores positivos executam
-#'   NearMiss-1; zero desativa NearMiss-1 nesta rotina hibrida. Padrao: `1`.
-#'
-#' @concept balanceamento de classes
-#' @concept ADASYN
-#' @concept NearMiss
-#'
-#' @details
-#' Esta interface executa a mesma família de modelos geométricos descrita nas
-#' funções tabulares, usando matrizes numéricas densas e fatores binários para
-#' reduzir cópias e facilitar integração com pipelines de alto desempenho.
+#' The recipes step bake method returns data with these attributes, but the
+#' final column selection in recipes::bake(recipe) may drop them. Consult
+#' `prepared_recipe$steps[[i]]$audit_log$last` for the last sbyaudit and audit.
+#' Each call replaces this entry; it is not a complete execution history.
+#' Installation requires Linux x86_64, icpx, oneMKL LP64 and libiomp5. There is
+#' no alternative-BLAS or serial native backend, and no AVX-512 requirement.
 #'
 #' @references
-#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
-#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#' He, H., Bai, Y., Garcia, E. A., and Li, S. (2008). ADASYN: Adaptive
+#' synthetic sampling approach for imbalanced learning. IJCNN, 1322-1328.
+#' doi:10.1109/IJCNN.2008.4633969.
 #'
-#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
-#' a case study involving information extraction. In *Proceedings of the ICML
-#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#' Mani, I., and Zhang, I. (2003). kNN approach to unbalanced data distributions:
+#' a case study involving information extraction. ICML Workshop on Learning
+#' from Imbalanced Data Sets.
 #'
-#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
-#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
-#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
-#' doi:10.1186/s40854-023-00558-3.
+#' Two-stage NearMiss operational definition:
+#' https://imbalanced-learn.org/stable/under_sampling.html#near-miss
 #'
-#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
-#' nearest neighbor search using Hierarchical Navigable Small World graphs.
-#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
-#' 824-836.
-#'
-#' @return Tibble balanceado com classe `c("tbl_df", "tbl", "data.frame")`. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
-#'
+#' @return A balanced tibble with sbyaudit and sby attributes; sby_audit = TRUE additionally attaches audit. See Details for indices and telemetry.
 #' @export
 sby_adanear_hpc <- function(
   .data,
   formula,
-  sby_adasyn_k  = 3,
+  sby_adasyn_k = 3,
   sby_nearmiss_k = 7,
-  sby_config_max_threads  = -1,
-  sby_seed                = sample.int(10L^5L, 1L),
-  sby_adasyn_ratio          = 0.2,
-  sby_nearmiss_ratio         = 1
-){
-  sby_adanear_check_user_interrupt()
-
-  # Ordem das colunas do input para recompor o output na mesma sequencia
-  sby_original_column_order <- colnames(.data)
-
-  # Nao altera variaveis de ambiente MKL/OMP dentro da chamada;
-  # respeita a configuracao externa do runtime HPC.
-  sby_total_threads <- sby_hpc_resolve_threads(sby_config_max_threads)
-
-  if (!is.numeric(sby_nearmiss_ratio) || length(sby_nearmiss_ratio) != 1L ||
-      is.na(sby_nearmiss_ratio) || !is.finite(sby_nearmiss_ratio) ||
-      sby_nearmiss_ratio < 0) {
-    sby_adanear_abort(
-      "sby_nearmiss_ratio deve ser um numero nao negativo.",
-      call = sys.call()
-    )
-  }
-
-  # --- Validacoes antes de qualquer operacao matricial ---
-  if (!is.numeric(sby_adasyn_ratio) || length(sby_adasyn_ratio) != 1L ||
-      is.na(sby_adasyn_ratio) || !is.finite(sby_adasyn_ratio) || sby_adasyn_ratio < 0) {
-    sby_adanear_abort(
-      "sby_adasyn_ratio deve ser um numero nao negativo.",
-      call = sys.call()
-    )
-  }
-
-  if(identical(as.numeric(sby_adasyn_ratio), 0) && identical(as.numeric(sby_nearmiss_ratio), 0)){
-    return(sby_set_synthetic_rows(tibble::as_tibble(.data)))
-  }
-  if(identical(as.numeric(sby_adasyn_ratio), 0) && isTRUE(sby_nearmiss_ratio > 0)){
-    sby_result <- sby_nearmiss_hpc(
-      .data = .data,
-      formula = formula,
-      sby_nearmiss_k = sby_nearmiss_k,
-      sby_nearmiss_ratio = sby_nearmiss_ratio,
-      sby_config_max_threads = sby_config_max_threads,
-      sby_seed = sby_seed
-    )
-    return(sby_set_synthetic_rows(sby_result))
-  }
-  if(isTRUE(sby_adasyn_ratio > 0) && identical(as.numeric(sby_nearmiss_ratio), 0)){
-    return(sby_adasyn_hpc(
-      .data = .data,
-      formula = formula,
-      sby_adasyn_k = sby_adasyn_k,
-      sby_adasyn_ratio = sby_adasyn_ratio,
-      sby_config_max_threads = sby_config_max_threads,
-      sby_seed = sby_seed
-    ))
-  }
-
-  # Extrai preditores e alvo
-  sby_formula_data         <- sby_extract_formula_data(sby_formula = formula, sby_data = .data)
-  sby_original_predictor_data <- sby_formula_data$sby_predictor_data
-  sby_target_vector        <- sby_formula_data$sby_target_vector
-  sby_target_name          <- sby_formula_data$sby_target_name
-
-  # Captura os levels originais ANTES de qualquer as.factor() para preservar
-  # a classe, a ordem e os labels exatos do factor de entrada.
-  # c(factor, character) destruiria o factor retornando codigos numericos.
-  sby_original_levels <- if (is.factor(sby_target_vector)) {
-    levels(sby_target_vector)
-  } else {
-    unique(as.character(sby_target_vector))
-  }
-
-  sby_seed <- sby_validate_seed(sby_seed = sby_seed)
-  sby_validate_sampling_inputs(sby_original_predictor_data, sby_target_vector, sby_seed = sby_seed)
-
-  sby_x_matrix     <- sby_adanear_as_numeric_matrix(sby_original_predictor_data)
-  sby_column_names <- sby_adanear_get_column_names(sby_original_predictor_data)
-
-  # Usa os levels originais para nao reordenar alfabeticamente
-  sby_target_factor  <- factor(sby_target_vector, levels = sby_original_levels)
-  sby_class_counts   <- sby_binary_class_counts_fast(sby_target_factor)
-
-  # O runtime MKL/OpenMP deve ser configurado externamente pelo usuario HPC.
-
-  sby_type_info <- sby_infer_numeric_column_types(sby_original_predictor_data)
-
-  # Indices 1-based das linhas da minoria no conjunto original
-  sby_minority_level_int <- as.integer(sby_class_counts$sby_minority_level)
-  sby_minority_idx       <- which(as.integer(sby_target_factor) == sby_minority_level_int)
-
-  sby_adasyn_k  <- sby_validate_positive_integer_scalar(
-    sby_adasyn_k, "sby_adasyn_k"
-  )
-  sby_nearmiss_k <- sby_validate_positive_integer_scalar(
-    sby_nearmiss_k, "sby_nearmiss_k"
-  )
-
-  # Motor HPC obrigatorio: sem fallback de engine generico
-  if (!sby_adanear_hpc_available()) {
-    sby_adanear_abort(
-      "Motor HPC nao disponivel. Compile o pacote com suporte a MKL/AVX-512.",
-      call = sys.call()
-    )
-  }
-
-  sby_hpc_result <- sby_with_seed(sby_seed, {
-    sby_call_native(
-      "sby_adanear_hpc_result_cpp",
-      sby_x_matrix,
-      sby_target_factor,
-      as.integer(sby_adasyn_k),
-      as.integer(sby_nearmiss_k),
-      as.numeric(sby_adasyn_ratio),
-      as.numeric(sby_nearmiss_ratio),
-      as.integer(sby_total_threads),
-      sby_column_names,
-      levels(sby_target_factor)
-    )
-  })
-  # Retorno esperado de sby_adanear_hpc_result_cpp:
-  #   $sby_synthetic_rows        — NumericMatrix (double, despadronizado no C++)
-  #   $sby_retained_majority_idx — IntegerVector (indices 1-based no original)
-  #   $sby_target_synthetic      — IntegerVector (codigos de nivel das sinteticas)
-  #   $sby_scaling_info          — List(centers, scales)
-
-  # --- Reconstrucao das 3 partes na camada R ---
-
-  # Parte 1: maioria remanescente — indice direto no original, zero aritmetica
-  sby_maj_rows   <- sby_original_predictor_data[
-    sby_hpc_result$sby_retained_majority_idx, , drop = FALSE
-  ]
-  sby_maj_target <- sby_target_vector[sby_hpc_result$sby_retained_majority_idx]
-
-  # Parte 2: minoria original — integra, sem qualquer transformacao
-  sby_min_rows   <- sby_original_predictor_data[sby_minority_idx, , drop = FALSE]
-  sby_min_target <- sby_target_vector[sby_minority_idx]
-
-  # Parte 3: sinteticas — chegam como double apos despadronizacao no C++;
-  #           apenas restauro de tipos (integer -> integer, etc.)
-  if (nrow(sby_hpc_result$sby_synthetic_rows) > 0L) {
-    sby_syn_df <- sby_restore_numeric_column_types(
-      as.data.frame(sby_hpc_result$sby_synthetic_rows, stringsAsFactors = FALSE),
-      sby_type_info,
-      TRUE
-    )
-  } else {
-    sby_syn_df <- sby_original_predictor_data[0L, , drop = FALSE]
-  }
-
-  # Nao ha piso minimo de sinteticas: razoes pequenas demais para render uma
-  # linha inteira produzem zero sinteticas, como na rota classica em R. O rbind
-  # permanece valido com `sby_syn_df` vazio.
-  sby_final_predictors <- rbind(sby_maj_rows, sby_min_rows, sby_syn_df)
-  rownames(sby_final_predictors) <- NULL
-
-  # Reconstroi vetor alvo: labels das sinteticas via levels originais.
-  # O factor e reconstituido com os levels originais para preservar a classe,
-  # a ordem e os labels exatos — evitando que c(factor, character) retorne
-  # codigos numericos como character.
-  sby_syn_target_labels <- sby_original_levels[
-    sby_hpc_result$sby_target_synthetic
-  ]
-  sby_final_target <- factor(
-    c(
-      as.character(sby_maj_target),
-      as.character(sby_min_target),
-      sby_syn_target_labels
-    ),
-    levels = sby_original_levels
-  )
-
-  sby_balanced_data <- sby_build_balanced_tibble(
-    sby_predictor_data = sby_final_predictors,
-    sby_target_vector  = sby_final_target
-  )
-
-  if (!identical(sby_target_name, "TARGET")) {
-    names(sby_balanced_data)[names(sby_balanced_data) == "TARGET"] <- sby_target_name
-  }
-
-  # Reordena apenas as colunas que o balanceamento de fato devolveu. Formulas
-  # que selecionam um subconjunto de preditores produzem menos colunas do que
-  # `.data` tinha, e pedir a `fselect()` uma coluna ausente aborta a chamada.
-  sby_balanced_data <- collapse::fselect(
-    .x = sby_balanced_data,
-    intersect(sby_original_column_order, names(sby_balanced_data))
-  )
-
-  sby_assert_minority_not_reduced(
-    sby_input_target = sby_target_vector,
-    sby_output_target = sby_balanced_data[[sby_target_name]],
-    sby_context = "sby_adanear_hpc()",
-    sby_minority_label = sby_class_counts$sby_minority_label,
-    sby_input_count = sby_class_counts$sby_minority_count
-  )
-
-  sby_synthetic_rows <- seq.int(
-    from = nrow(sby_maj_rows) + nrow(sby_min_rows) + 1L,
-    length.out = nrow(sby_syn_df)
-  )
-  return(sby_set_synthetic_rows(sby_balanced_data, sby_synthetic_rows))
+  sby_config_max_threads = -1,
+  sby_seed = sample.int(10e7, 1),
+  sby_adasyn_ratio = 0.2,
+  sby_nearmiss_ratio = 1,
+  sby_audit = FALSE,
+  nearmiss_model = 3L,
+  sby_nearmiss_m = 3L,
+  sby_adasyn_beta = NULL,
+  sby_adasyn_d_th = 1,
+  sby_adasyn_zero_difficulty = c("error", "uniform")
+) {
+  parameters <- mget(names(formals(sys.function())), envir=environment())
+  sby_dispatch("adanear", parameters, "sby_adanear_hpc", !missing(sby_adasyn_ratio))
 }
-####
-## Fim
-#

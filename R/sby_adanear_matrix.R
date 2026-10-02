@@ -1,37 +1,67 @@
-#' Aplicar ADANEAR diretamente sobre matrix double e factor binario
+#' ADASYN and NearMiss resampling
 #'
-#' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`; ajuste para equilibrar overhead de chamadas e pico de memória.
+#' @description
+#' Apply ADASYN and NearMiss through the common exact Intel oneAPI engine.
 #'
-#' @concept balanceamento de classes
-#' @concept ADASYN
-#' @concept NearMiss
+#' @param sby_x_matrix Dense numeric matrix. Double columns containing only whole numbers are recognized as integer domains.
 #'
-#' @details
-#' Esta interface executa a mesma família de modelos geométricos descrita nas
-#' funções tabulares, usando matrizes numéricas densas e fatores binários para
-#' reduzir cópias e facilitar integração com pipelines de alto desempenho.
+#' @param sby_y_vector Outcome with exactly two observed classes and no missing values. Factor levels and ordering are preserved.
 #'
-#' @references
-#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
-#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#' @param sby_adasyn_ratio Nonnegative expansion relative to the original minority: G = floor(n_min * ratio). Zero disables generation. This is a reparameterization, not the beta used in the original paper. Inactive when d_th prevents ADASYN or beta is supplied instead.
 #'
-#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
-#' a case study involving information extraction. In *Proceedings of the ICML
-#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#' @param sby_nearmiss_ratio Nonnegative majority retention relative to the expanded minority: min(n_maj, floor((n_min + G) * ratio)). Zero disables NearMiss. A positive ratio rounding to zero produces an informative error. If the target retains the entire majority, neighbor scoring is skipped.
 #'
-#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
-#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
-#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
-#' doi:10.1186/s40854-023-00558-3.
+#' @param sby_knn_over_k Positive integer ADASYN neighbor count; equivalent to sby_adasyn_k in HPC interfaces.
 #'
-#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
-#' nearest neighbor search using Hierarchical Navigable Small World graphs.
-#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
-#' 824-836.
+#' @param sby_knn_under_k Positive integer NearMiss score neighbor count; equivalent to sby_nearmiss_k in HPC interfaces.
 #'
-#' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
+#' @param sby_seed Integer seed from 0 to .Machine$integer.max; default sample.int(10e7, 1). ADASYN uses a scoped Mersenne-Twister/Inversion/Rejection RNG and restores RNGkind and .Random.seed, including after errors. Identical input, seed, parameters and numerical environment reproduce the result. Evaluating the default sample.int consumes the caller RNG; supply a seed explicitly to avoid this. NearMiss itself is deterministic and does not draw random numbers.
 #'
+#' @param sby_audit FALSE retains the always-present sbyaudit and sby attributes. TRUE also attaches the detailed audit. HPC interfaces always return a tibble; classic tabular interfaces return a list with sby_balanced_data when audited; matrix interfaces return lists. For recipes, the step bake method returns data with attributes; final recipes::bake(recipe) may drop them. The last audit remains in `prepared_recipe$steps[[i]]$audit_log$last`.
+#'
+#' @param sby_audit_level Compatibility selector: none, light or full. light and full enable the same detailed audit in this version.
+#'
+#' @param sby_return_scaled Include an additional standardized matrix. Tabular primary output remains in the original scale; matrix results use sby_x_scaled.
+#'
+#' @param sby_return_original_scale TRUE returns sby_x_matrix in the original scale; FALSE returns it standardized. Integer-domain restrictions apply before this optional presentation transformation.
+#'
+#' @param sby_knn_algorithm Compatibility selector: only auto or brute. Every route uses the common exact neighbor engine; alternative trees are not implemented.
+#'
+#' @param sby_knn_engine Compatibility selector: only auto or native, both using Intel oneAPI. Approximate or external engines are rejected.
+#'
+#' @param sby_knn_distance_metric Only euclidean is supported by this scientific contract. Other metrics are rejected.
+#'
+#' @param sby_knn_workers Classic-interface thread ceiling when sby_config_max_threads = -1L; default 1L. Supply -1L or a positive integer. Validated even when an explicit sby_config_max_threads takes precedence. HPC uses its own sby_config_max_threads.
+#'
+#' @param sby_knn_parallel_backend Validated legacy selector: parallel or RcppParallel. Both map to Intel OpenMP/oneMKL, without fork or TBB.
+#'
+#' @param sby_knn_hnsw_m Legacy compatibility parameter. Only its default 16L is accepted; HNSW is not executed.
+#'
+#' @param sby_knn_hnsw_ef Legacy compatibility parameter. Only its default 200L is accepted; HNSW is not executed.
+#'
+#' @param sby_knn_query_chunk_size Positive integer requested query tile size, capped at 128 to bound the distance buffer. Does not change neighbor geometry.
+#'
+#' @param sby_memory_guard Whether to enforce the conservative dense-buffer estimate. This estimate is not an exact total-process memory ceiling.
+#'
+#' @param sby_max_output_rows Positive row limit or Inf for expanded input before majority retention. Checked before native allocations.
+#'
+#' @param sby_max_dense_gb Positive budget for estimated dense buffers, in GiB, or Inf.
+#'
+#' @param sby_config_max_threads Positive integer per-call thread ceiling, or -1L for detection. Capped by physical cores, CPU affinity, container quota and the hard OpenMP thread limit. Both Intel OpenMP and oneMKL receive this resolved ceiling. Local controls are restored on success or error. BLAS runs outside OpenMP regions; small BLAS calls may use fewer threads. HPC interfaces use this parameter directly. No AVX-512 requirement.
+#'
+#' @param nearmiss_model Integer 1L, 2L or 3L; default 3L. NearMiss-1 retains majority rows with the SMALLEST mean distance to their K NEAREST rare rows. NearMiss-2 retains rows with the SMALLEST mean distance to their K FARTHEST rare rows. NearMiss-3 first takes the union of the M nearest majority rows of EACH rare row, then retains candidates with the LARGEST mean distance to their K nearest rare rows. M = sby_nearmiss_m and K = sby_nearmiss_k (or sby_knn_under_k) are independent. Continuous synthetic rare rows participate in the combined pipeline before domain restoration. Candidate shortage retains all candidates and warns; it does not fill from non-candidates. Ties use increasing original row index. Other values produce an informative error. The model is validated even when NearMiss is inactive.
+#'
+#' @param sby_nearmiss_m Positive integer preselection count M for NearMiss-3; default 3L, capped at majority size. Does not alter K. Validated for every model, but used in neighbor selection only for model 3 when NearMiss executes.
+#'
+#' @param sby_adasyn_beta Optional number from 0 to 1: G = floor((n_maj - n_min) * beta), using the original paper parameterization. Cannot be supplied together with an explicitly supplied sby_adasyn_ratio. NULL uses ratio.
+#'
+#' @param sby_adasyn_d_th Threshold from 0 to 1. ADASYN executes only when n_min / n_maj < d_th. Default 1; zero disables generation. Class roles are determined on the original data and remain fixed.
+#'
+#' @param sby_adasyn_zero_difficulty Policy when all difficulty values are zero: "error" (default) stops because the paper normalization is undefined; "uniform" explicitly requests the documented uniform-quota extension. Consult the audit for the resolved policy and whether fallback was used.
+#'
+#' @inherit sby_adanear_hpc details references
+#'
+#' @return A list with sby_x_matrix, sby_y_vector, sby_scaling_info, class distributions/ratios and diagnostics. Additional indices/standardized output follows its flags. Attributes follow Details.
 #' @export
 sby_adanear_matrix <- function(
   sby_x_matrix,
@@ -40,269 +70,29 @@ sby_adanear_matrix <- function(
   sby_nearmiss_ratio = 1,
   sby_knn_over_k = 5L,
   sby_knn_under_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
+  sby_seed = sample.int(10e7, 1),
   sby_audit = FALSE,
   sby_audit_level = c("none", "light", "full"),
   sby_return_scaled = FALSE,
   sby_return_original_scale = TRUE,
-  sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
-  sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
+  sby_knn_algorithm = "auto",
+  sby_knn_engine = "auto",
+  sby_knn_distance_metric = "euclidean",
   sby_knn_workers = 1L,
-  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
+  sby_knn_parallel_backend = "parallel",
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L,
   sby_knn_query_chunk_size = 1000L,
   sby_memory_guard = TRUE,
   sby_max_output_rows = Inf,
-  sby_max_dense_gb = Inf
-){
-  sby_audit_level <- sby_resolve_audit_level(sby_audit, sby_audit_level)
-  sby_audit_full <- identical(sby_audit_level, "full")
-  sby_audit_light <- sby_audit_level %in% c("light", "full")
-  sby_return_scaled <- sby_validate_logical_scalar(sby_return_scaled, "sby_return_scaled")
-  sby_return_original_scale <- sby_validate_logical_scalar(sby_return_original_scale, "sby_return_original_scale")
-  sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
-  }
-  if(!(is.numeric(sby_adasyn_ratio) && length(sby_adasyn_ratio) == 1L && !is.na(sby_adasyn_ratio) && is.finite(sby_adasyn_ratio) && sby_adasyn_ratio >= 0)){
-    sby_adanear_abort("'sby_adasyn_ratio' deve ser escalar numerico nao negativo")
-  }
-  if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L && !is.na(sby_nearmiss_ratio) && sby_nearmiss_ratio >= 0)){
-    sby_adanear_abort("'sby_nearmiss_ratio' deve ser escalar numerico nao negativo")
-  }
-
-  sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
-  sby_original_roles <- sby_get_binary_class_roles(sby_target_factor = sby_y_vector)
-  sby_run_adasyn <- isTRUE(sby_adasyn_ratio > 0)
-  sby_run_nearmiss <- isTRUE(sby_nearmiss_ratio > 0)
-
-  if(!isTRUE(sby_run_adasyn) && !isTRUE(sby_run_nearmiss)){
-    sby_y_out <- as.factor(sby_y_vector)
-    sby_class_info_output <- sby_binary_class_counts_fast(sby_y_out)
-    sby_scaling_info <- list(
-      centers = rep(0, collapse::fncol(sby_x_matrix)),
-      scales = rep(1, collapse::fncol(sby_x_matrix))
-    )
-    sby_diagnostics <- list(
-      sby_method = "adanear",
-      sby_input_rows = collapse::fnrow(sby_x_matrix),
-      sby_after_oversampling_rows = collapse::fnrow(sby_x_matrix),
-      sby_output_rows = collapse::fnrow(sby_x_matrix),
-      sby_output_scale = "original",
-      sby_original_minority_label = sby_original_roles$sby_minority_label,
-      sby_original_majority_label = sby_original_roles$sby_majority_label,
-      sby_adasyn_executed = FALSE,
-      sby_nearmiss_executed = FALSE,
-      sby_oversampling_diagnostics = list(
-        sby_method = "adasyn_skipped",
-        sby_input_rows = collapse::fnrow(sby_x_matrix),
-        sby_output_rows = collapse::fnrow(sby_x_matrix),
-        sby_generated_rows = 0L,
-        sby_skipped = TRUE
-      ),
-      sby_undersampling_diagnostics = list(
-        sby_method = "nearmiss_skipped",
-        sby_input_rows = collapse::fnrow(sby_x_matrix),
-        sby_output_rows = collapse::fnrow(sby_x_matrix),
-        sby_removed_rows = 0L,
-        sby_skipped = TRUE
-      )
-    )
-    sby_result <- list(
-      sby_x_matrix = sby_x_matrix,
-      sby_y_vector = sby_y_out,
-      sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
-      sby_class_ratio_output = sby_class_info_output$sby_class_ratio,
-      sby_input_class_distribution = sby_class_info_input$sby_class_counts,
-      sby_output_class_distribution = sby_class_info_output$sby_class_counts,
-      sby_diagnostics = sby_diagnostics
-    )
-    if(isTRUE(sby_audit_light)){
-      sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
-      sby_result$sby_diagnostics$sby_generated_rows <- 0L
-      sby_result$sby_diagnostics$sby_removed_rows <- 0L
-    }
-    if(isTRUE(sby_audit_full)){
-      sby_result$sby_oversampling_result <- list(sby_diagnostics = sby_diagnostics$sby_oversampling_diagnostics)
-      sby_result$sby_undersampling_result <- list(sby_diagnostics = sby_diagnostics$sby_undersampling_diagnostics)
-    }
-    if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
-      sby_result$sby_scaling_info <- sby_scaling_info
-      sby_result$sby_retained_index <- seq_len(collapse::fnrow(sby_x_matrix))
-    }
-    if(isTRUE(sby_return_scaled)){
-      sby_result$sby_balanced_scaled <- list(x = sby_x_matrix, y = sby_y_out)
-    }
-    return(sby_set_synthetic_rows(sby_result))
-  }
-
-  if(isTRUE(sby_run_adasyn)){
-    sby_over_result <- sby_adasyn_matrix(
-      sby_x_matrix = sby_x_matrix,
-      sby_y_vector = sby_y_vector,
-      sby_adasyn_ratio = sby_adasyn_ratio,
-      sby_knn_over_k = sby_knn_over_k,
-      sby_seed = sby_seed,
-      sby_audit = sby_audit_full,
-      sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
-      sby_return_scaled = TRUE,
-      sby_return_original_scale = FALSE,
-      sby_knn_algorithm = sby_knn_algorithm,
-      sby_knn_engine = sby_knn_engine,
-      sby_knn_distance_metric = sby_knn_distance_metric,
-      sby_knn_workers = sby_knn_workers,
-      sby_knn_parallel_backend = sby_knn_parallel_backend,
-      sby_knn_hnsw_m = sby_knn_hnsw_m,
-      sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
-      sby_memory_guard = sby_memory_guard,
-      sby_max_output_rows = sby_max_output_rows,
-      sby_max_dense_gb = sby_max_dense_gb
-    )
-    sby_current_scaled_x <- sby_over_result$sby_balanced_scaled$x
-    sby_current_y <- sby_over_result$sby_balanced_scaled$y
-    sby_scaling_info <- sby_over_result$sby_scaling_info
-    sby_over_diagnostics <- sby_over_result$sby_diagnostics
-    sby_after_oversampling_rows <- collapse::fnrow(sby_current_scaled_x)
-  }else{
-    sby_knn_engine_for_scaling <- match.arg(sby_knn_engine)
-    sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix, sby_engine = sby_knn_engine_for_scaling)
-    sby_current_scaled_x <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine_for_scaling)
-    sby_current_y <- as.factor(sby_y_vector)
-    sby_after_oversampling_rows <- collapse::fnrow(sby_current_scaled_x)
-    sby_over_diagnostics <- list(
-      sby_method = "adasyn_skipped",
-      sby_input_rows = collapse::fnrow(sby_x_matrix),
-      sby_output_rows = collapse::fnrow(sby_x_matrix),
-      sby_generated_rows = 0L,
-      sby_output_scale = "z_score",
-      sby_skipped = TRUE
-    )
-    sby_over_result <- list(
-      sby_x_matrix = sby_current_scaled_x,
-      sby_y_vector = sby_current_y,
-      sby_scaling_info = sby_scaling_info,
-      sby_balanced_scaled = list(x = sby_current_scaled_x, y = sby_current_y),
-      sby_diagnostics = sby_over_diagnostics
-    )
-  }
-
-  if(isTRUE(sby_run_nearmiss)){
-    sby_under_result <- sby_nearmiss_matrix(
-      sby_x_matrix = sby_current_scaled_x,
-      sby_y_vector = sby_current_y,
-      sby_nearmiss_ratio = sby_nearmiss_ratio,
-      sby_knn_under_k = sby_knn_under_k,
-      sby_seed = sby_seed,
-      sby_audit = sby_audit_full,
-      sby_audit_level = if(isTRUE(sby_audit_full)) "full" else "none",
-      sby_return_index = TRUE,
-      sby_return_scaled = isTRUE(sby_return_scaled) || isTRUE(sby_audit_full),
-      sby_return_original_scale = sby_return_original_scale,
-      sby_scaling_info = sby_scaling_info,
-      sby_input_already_scaled = TRUE,
-      sby_fixed_minority_label = sby_original_roles$sby_minority_label,
-      sby_fixed_majority_label = sby_original_roles$sby_majority_label,
-      sby_knn_algorithm = sby_knn_algorithm,
-      sby_knn_engine = sby_knn_engine,
-      sby_knn_distance_metric = sby_knn_distance_metric,
-      sby_knn_workers = sby_knn_workers,
-      sby_knn_parallel_backend = sby_knn_parallel_backend,
-      sby_knn_hnsw_m = sby_knn_hnsw_m,
-      sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-      sby_knn_query_chunk_size = sby_knn_query_chunk_size,
-      sby_memory_guard = sby_memory_guard
-    )
-    sby_final_x <- sby_under_result$sby_x_matrix
-    sby_final_y <- sby_under_result$sby_y_vector
-    sby_final_scaled <- sby_under_result$sby_balanced_scaled
-    sby_retained_index <- sby_under_result$sby_retained_index
-    sby_under_diagnostics <- sby_under_result$sby_diagnostics
-    sby_output_scale <- sby_under_result$sby_diagnostics$sby_output_scale
-  }else{
-    if(isTRUE(sby_return_original_scale)){
-      sby_final_x <- sby_revert_z_score_scaling_matrix(sby_current_scaled_x, sby_scaling_info, sby_engine = match.arg(sby_knn_engine))
-      sby_output_scale <- "original"
-    }else{
-      sby_final_x <- sby_current_scaled_x
-      sby_output_scale <- "z_score"
-    }
-    sby_final_y <- sby_current_y
-    sby_final_scaled <- list(x = sby_current_scaled_x, y = sby_current_y)
-    sby_retained_index <- seq_len(collapse::fnrow(sby_current_scaled_x))
-    sby_under_diagnostics <- list(
-      sby_method = "nearmiss_skipped",
-      sby_input_rows = collapse::fnrow(sby_current_scaled_x),
-      sby_output_rows = collapse::fnrow(sby_current_scaled_x),
-      sby_removed_rows = 0L,
-      sby_output_scale = sby_output_scale,
-      sby_skipped = TRUE
-    )
-    sby_under_result <- list(
-      sby_x_matrix = sby_final_x,
-      sby_y_vector = sby_final_y,
-      sby_retained_index = sby_retained_index,
-      sby_balanced_scaled = sby_final_scaled,
-      sby_diagnostics = sby_under_diagnostics
-    )
-  }
-
-  sby_assert_minority_not_reduced(
-    sby_input_target = sby_y_vector,
-    sby_output_target = sby_final_y,
-    sby_context = "sby_adanear_matrix()",
-    sby_minority_label = sby_original_roles$sby_minority_label,
-    sby_input_count = as.integer(
-      sby_class_info_input$sby_class_counts[sby_original_roles$sby_minority_label]
-    )
-  )
-
-  sby_class_info_output <- sby_binary_class_counts_fast(sby_final_y)
-  sby_diagnostics <- list(
-    sby_method = "adanear",
-    sby_input_rows = collapse::fnrow(sby_x_matrix),
-    sby_after_oversampling_rows = sby_after_oversampling_rows,
-    sby_output_rows = collapse::fnrow(sby_final_x),
-    sby_output_scale = sby_output_scale,
-    sby_original_minority_label = sby_original_roles$sby_minority_label,
-    sby_original_majority_label = sby_original_roles$sby_majority_label,
-    sby_adasyn_executed = sby_run_adasyn,
-    sby_nearmiss_executed = sby_run_nearmiss,
-    sby_oversampling_diagnostics = sby_over_diagnostics,
-    sby_undersampling_diagnostics = sby_under_diagnostics
-  )
-
-  sby_result <- list(
-    sby_x_matrix = sby_final_x,
-    sby_y_vector = sby_final_y,
-    sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
-    sby_class_ratio_output = sby_class_info_output$sby_class_ratio,
-    sby_input_class_distribution = sby_class_info_input$sby_class_counts,
-    sby_output_class_distribution = sby_class_info_output$sby_class_counts,
-    sby_diagnostics = sby_diagnostics
-  )
-
-  if(isTRUE(sby_audit_light)){
-    sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
-    sby_result$sby_diagnostics$sby_generated_rows <- sby_over_diagnostics$sby_generated_rows
-    sby_result$sby_diagnostics$sby_removed_rows <- sby_after_oversampling_rows - collapse::fnrow(sby_final_x)
-  }
-  if(isTRUE(sby_audit_full)){
-    sby_result$sby_oversampling_result <- sby_over_result
-    sby_result$sby_undersampling_result <- sby_under_result
-  }
-  if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
-    sby_result$sby_scaling_info <- sby_scaling_info
-    sby_result$sby_retained_index <- sby_retained_index
-  }
-  if(isTRUE(sby_return_scaled)){
-    sby_result$sby_balanced_scaled <- sby_final_scaled
-  }
-
-  sby_synthetic_rows <- which(
-    sby_retained_index > collapse::fnrow(sby_x_matrix)
-  )
-  return(sby_set_synthetic_rows(sby_result, sby_synthetic_rows))
+  sby_max_dense_gb = Inf,
+  sby_config_max_threads = -1L,
+  nearmiss_model = 3L,
+  sby_nearmiss_m = 3L,
+  sby_adasyn_beta = NULL,
+  sby_adasyn_d_th = 1,
+  sby_adasyn_zero_difficulty = c("error", "uniform")
+) {
+  parameters <- mget(names(formals(sys.function())), envir=environment())
+  sby_dispatch("adanear", parameters, "sby_adanear_matrix", !missing(sby_adasyn_ratio))
 }

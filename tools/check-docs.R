@@ -1,0 +1,7 @@
+paths <- c("NAMESPACE",list.files("man",full.names=TRUE))
+before <- tools::md5sum(paths)
+roxygen2::roxygenize(".",load_code=roxygen2::load_source)
+after_paths <- c("NAMESPACE",list.files("man",full.names=TRUE))
+stopifnot(identical(paths,after_paths),identical(before,tools::md5sum(paths)))
+for(f in list.files("man",pattern="\\.Rd$",full.names=TRUE)) tools::parse_Rd(f)
+cat("Roxygen, namespace and Rd synchronized\n")

@@ -1,10 +1,10 @@
 {
   "name": "sbyadanear-r",
   "build": {
-    "dockerfile": "../Dockerfile",
+    "dockerfile": "../docker/oraclelinux97-r453/Dockerfile",
     "context": ".."
   },
-  "workspaceFolder": "/workspace/instance_engineering",
+  "workspaceFolder": "/workspace/sbyadanear",
   "customizations": {
     "vscode": {
       "extensions": [

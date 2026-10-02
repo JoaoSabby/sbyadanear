@@ -1,234 +1,92 @@
-#' Aplicar ADASYN diretamente sobre matrix double e factor binario
+#' ADASYN resampling
 #'
-#' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`; ajuste para equilibrar overhead de chamadas e pico de memória.
+#' @description
+#' Apply ADASYN through the common exact Intel oneAPI engine.
 #'
-#' @concept balanceamento de classes
-#' @concept ADASYN
-#' @concept NearMiss
+#' @param sby_x_matrix Dense numeric matrix. Double columns containing only whole numbers are recognized as integer domains.
 #'
-#' @details
-#' Esta interface executa a mesma família de modelos geométricos descrita nas
-#' funções tabulares, usando matrizes numéricas densas e fatores binários para
-#' reduzir cópias e facilitar integração com pipelines de alto desempenho.
+#' @param sby_y_vector Outcome with exactly two observed classes and no missing values. Factor levels and ordering are preserved.
 #'
-#' @references
-#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
-#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
+#' @param sby_adasyn_ratio Nonnegative expansion relative to the original minority: G = floor(n_min * ratio). Zero disables generation. This is a reparameterization, not the beta used in the original paper. Inactive when d_th prevents ADASYN or beta is supplied instead.
 #'
-#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
-#' a case study involving information extraction. In *Proceedings of the ICML
-#' 2003 Workshop on Learning from Imbalanced Data Sets*.
+#' @param sby_knn_over_k Positive integer ADASYN neighbor count; equivalent to sby_adasyn_k in HPC interfaces.
 #'
-#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
-#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
-#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
-#' doi:10.1186/s40854-023-00558-3.
+#' @param sby_seed Integer seed from 0 to .Machine$integer.max; default sample.int(10e7, 1). ADASYN uses a scoped Mersenne-Twister/Inversion/Rejection RNG and restores RNGkind and .Random.seed, including after errors. Identical input, seed, parameters and numerical environment reproduce the result. Evaluating the default sample.int consumes the caller RNG; supply a seed explicitly to avoid this. NearMiss itself is deterministic and does not draw random numbers.
 #'
-#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
-#' nearest neighbor search using Hierarchical Navigable Small World graphs.
-#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
-#' 824-836.
+#' @param sby_audit FALSE retains the always-present sbyaudit and sby attributes. TRUE also attaches the detailed audit. HPC interfaces always return a tibble; classic tabular interfaces return a list with sby_balanced_data when audited; matrix interfaces return lists. For recipes, the step bake method returns data with attributes; final recipes::bake(recipe) may drop them. The last audit remains in `prepared_recipe$steps[[i]]$audit_log$last`.
 #'
-#' @return Lista leve com `sby_x_matrix`, `sby_y_vector`, razoes, distribuicoes e diagnosticos. O objeto possui o atributo `sby`, uma lista cujo elemento `synthetic_rows` contém as posições inteiras das linhas sintéticas no retorno, ou `0L` quando nenhuma foi adicionada.
+#' @param sby_audit_level Compatibility selector: none, light or full. light and full enable the same detailed audit in this version.
 #'
+#' @param sby_return_scaled Include an additional standardized matrix. Tabular primary output remains in the original scale; matrix results use sby_x_scaled.
+#'
+#' @param sby_return_original_scale TRUE returns sby_x_matrix in the original scale; FALSE returns it standardized. Integer-domain restrictions apply before this optional presentation transformation.
+#'
+#' @param sby_scaling_info Optional list with finite numeric sby_center and positive sby_scale vectors, one value per predictor in input-column order. Aliases centers/scales and means/sds are accepted. Overrides automatic scaling.
+#'
+#' @param sby_input_already_scaled TRUE reconstructs original-scale values using supplied scaling information before processing. Such reconstructed originals cannot be guaranteed bit-identical to originals not supplied to the function.
+#'
+#' @param sby_knn_algorithm Compatibility selector: only auto or brute. Every route uses the common exact neighbor engine; alternative trees are not implemented.
+#'
+#' @param sby_knn_engine Compatibility selector: only auto or native, both using Intel oneAPI. Approximate or external engines are rejected.
+#'
+#' @param sby_knn_distance_metric Only euclidean is supported by this scientific contract. Other metrics are rejected.
+#'
+#' @param sby_knn_workers Classic-interface thread ceiling when sby_config_max_threads = -1L; default 1L. Supply -1L or a positive integer. Validated even when an explicit sby_config_max_threads takes precedence. HPC uses its own sby_config_max_threads.
+#'
+#' @param sby_knn_parallel_backend Validated legacy selector: parallel or RcppParallel. Both map to Intel OpenMP/oneMKL, without fork or TBB.
+#'
+#' @param sby_knn_hnsw_m Legacy compatibility parameter. Only its default 16L is accepted; HNSW is not executed.
+#'
+#' @param sby_knn_hnsw_ef Legacy compatibility parameter. Only its default 200L is accepted; HNSW is not executed.
+#'
+#' @param sby_knn_query_chunk_size Positive integer requested query tile size, capped at 128 to bound the distance buffer. Does not change neighbor geometry.
+#'
+#' @param sby_memory_guard Whether to enforce the conservative dense-buffer estimate. This estimate is not an exact total-process memory ceiling.
+#'
+#' @param sby_max_output_rows Positive row limit or Inf for expanded input before majority retention. Checked before native allocations.
+#'
+#' @param sby_max_dense_gb Positive budget for estimated dense buffers, in GiB, or Inf.
+#'
+#' @param sby_config_max_threads Positive integer per-call thread ceiling, or -1L for detection. Capped by physical cores, CPU affinity, container quota and the hard OpenMP thread limit. Both Intel OpenMP and oneMKL receive this resolved ceiling. Local controls are restored on success or error. BLAS runs outside OpenMP regions; small BLAS calls may use fewer threads. HPC interfaces use this parameter directly. No AVX-512 requirement.
+#'
+#' @param sby_adasyn_beta Optional number from 0 to 1: G = floor((n_maj - n_min) * beta), using the original paper parameterization. Cannot be supplied together with an explicitly supplied sby_adasyn_ratio. NULL uses ratio.
+#'
+#' @param sby_adasyn_d_th Threshold from 0 to 1. ADASYN executes only when n_min / n_maj < d_th. Default 1; zero disables generation. Class roles are determined on the original data and remain fixed.
+#'
+#' @param sby_adasyn_zero_difficulty Policy when all difficulty values are zero: "error" (default) stops because the paper normalization is undefined; "uniform" explicitly requests the documented uniform-quota extension. Consult the audit for the resolved policy and whether fallback was used.
+#'
+#' @inherit sby_adanear_hpc details references
+#'
+#' @return A list with sby_x_matrix, sby_y_vector, sby_scaling_info, class distributions/ratios and diagnostics. Additional indices/standardized output follows its flags. Attributes follow Details.
 #' @export
 sby_adasyn_matrix <- function(
   sby_x_matrix,
   sby_y_vector,
   sby_adasyn_ratio = 0.2,
   sby_knn_over_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
+  sby_seed = sample.int(10e7, 1),
   sby_audit = FALSE,
   sby_audit_level = c("none", "light", "full"),
   sby_return_scaled = FALSE,
   sby_return_original_scale = TRUE,
   sby_scaling_info = NULL,
   sby_input_already_scaled = FALSE,
-  sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
-  sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
+  sby_knn_algorithm = "auto",
+  sby_knn_engine = "auto",
+  sby_knn_distance_metric = "euclidean",
   sby_knn_workers = 1L,
-  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
+  sby_knn_parallel_backend = "parallel",
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L,
   sby_knn_query_chunk_size = 1000L,
   sby_memory_guard = TRUE,
   sby_max_output_rows = Inf,
-  sby_max_dense_gb = Inf
-){
-  sby_adanear_check_user_interrupt()
-
-  sby_audit_level <- sby_resolve_audit_level(sby_audit, sby_audit_level)
-  sby_audit_full <- identical(sby_audit_level, "full")
-  sby_audit_light <- sby_audit_level %in% c("light", "full")
-  sby_return_scaled <- sby_validate_logical_scalar(sby_return_scaled, "sby_return_scaled")
-  sby_return_original_scale <- sby_validate_logical_scalar(sby_return_original_scale, "sby_return_original_scale")
-  sby_input_already_scaled <- sby_validate_logical_scalar(sby_input_already_scaled, "sby_input_already_scaled")
-  sby_memory_guard <- sby_validate_logical_scalar(sby_memory_guard, "sby_memory_guard")
-
-  sby_x_matrix <- sby_validate_dense_double_matrix(sby_x_matrix = sby_x_matrix)
-  if(length(sby_y_vector) != collapse::fnrow(sby_x_matrix)){
-    sby_adanear_abort("'sby_y_vector' deve ter comprimento igual ao numero de linhas de 'sby_x_matrix'")
-  }
-  sby_class_info_input <- sby_binary_class_counts_fast(sby_y_vector)
-
-  # Valida a taxa e calcula a quantidade sintetica antes de preparar KNN
-  sby_synthetic_count <- sby_compute_minority_expansion_count(
-    sby_y_vector,
-    sby_adasyn_ratio
-  )
-
-  # Retorna a matriz intacta sem escala, KNN ou geracao quando a taxa e zero
-  if(sby_synthetic_count == 0L){
-    return(sby_set_synthetic_rows(list(
-      sby_x_matrix = sby_x_matrix,
-      sby_y_vector = sby_y_vector,
-      sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
-      sby_class_ratio_output = sby_class_info_input$sby_class_ratio,
-      sby_input_class_distribution = sby_class_info_input$sby_class_counts,
-      sby_output_class_distribution = sby_class_info_input$sby_class_counts,
-      sby_diagnostics = list(
-        sby_method = "adasyn_skipped",
-        sby_input_rows = collapse::fnrow(sby_x_matrix),
-        sby_output_rows = collapse::fnrow(sby_x_matrix),
-        sby_generated_rows = 0L,
-        sby_skipped = TRUE
-      )
-    )))
-  }
-  # ADASYN exige ao menos duas observacoes na classe minoritaria para que
-  # exista uma vizinhanca minoritaria valida na interpolacao sintetica.
-  # A API tabular ja rejeita esse caso via sby_validate_sampling_inputs;
-  # aqui replicamos a validacao para fechar a brecha quando o chamador usa
-  # diretamente a API matricial.
-  if(sby_class_info_input$sby_minority_count < 2L){
-    sby_adanear_abort("'sby_y_vector' precisa de ao menos 2 observacoes na classe minoritaria para ADASYN")
-  }
-
-  sby_validate_seed(sby_seed = sby_seed)
-  sby_knn_over_k <- sby_validate_positive_integer_scalar(sby_knn_over_k, "sby_knn_over_k")
-  sby_knn_algorithm <- match.arg(sby_knn_algorithm)
-  sby_knn_engine <- match.arg(sby_knn_engine)
-  sby_knn_distance_metric <- match.arg(sby_knn_distance_metric)
-  sby_knn_workers <- sby_validate_knn_workers(sby_knn_workers)
-  sby_knn_parallel_backend <- sby_validate_knn_parallel_backend(sby_knn_parallel_backend)
-  sby_hnsw_params <- sby_validate_hnsw_params(
-    sby_knn_hnsw_m = sby_knn_hnsw_m,
-    sby_knn_hnsw_ef = sby_knn_hnsw_ef
-  )
-  sby_knn_hnsw_m <- sby_hnsw_params$sby_knn_hnsw_m
-  sby_knn_hnsw_ef <- sby_hnsw_params$sby_knn_hnsw_ef
-  sby_knn_query_chunk_size <- sby_validate_knn_query_chunk_size(
-    sby_knn_query_chunk_size = sby_knn_query_chunk_size
-  )
-  sby_knn_engine <- sby_resolve_knn_engine(
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_workers = sby_knn_workers,
-    sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_row_count = collapse::fnrow(sby_x_matrix),
-    sby_predictor_column_count = collapse::fncol(sby_x_matrix)
-  )
-  sby_knn_algorithm <- sby_resolve_knn_algorithm(sby_knn_algorithm, collapse::fncol(sby_x_matrix), sby_knn_engine)
-
-  sby_output_rows <- collapse::fnrow(sby_x_matrix) + sby_synthetic_count
-  if(is.finite(sby_max_output_rows) && sby_output_rows > sby_max_output_rows){
-    sby_adanear_abort("'sby_max_output_rows' seria excedido pelo ADASYN")
-  }
-  if(isTRUE(sby_memory_guard)){
-    sby_check_dense_memory_budget(sby_output_rows, collapse::fncol(sby_x_matrix), 2L, sby_max_dense_gb, "sby_adasyn_matrix")
-  }
-
-  if(isTRUE(sby_input_already_scaled)){
-    if(is.null(sby_scaling_info)){
-      sby_adanear_abort("'sby_scaling_info' e obrigatorio quando 'sby_input_already_scaled = TRUE'")
-    }
-    sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
-    sby_x_scaled <- sby_x_matrix
-  }else{
-    if(is.null(sby_scaling_info)){
-      sby_scaling_info <- sby_compute_z_score_params(sby_x_matrix, sby_engine = sby_knn_engine)
-    }else{
-      sby_validate_scaling_info(sby_scaling_info, collapse::fncol(sby_x_matrix))
-    }
-    sby_x_scaled <- sby_apply_z_score_scaling_matrix(sby_x_matrix, sby_scaling_info, sby_engine = sby_knn_engine)
-  }
-
-  sby_adasyn_result <- sby_with_seed(sby_seed, {
-    sby_generate_adasyn_samples(
-      sby_x_scaled = sby_x_scaled,
-      sby_target_factor = sby_y_vector,
-      sby_synthetic_count = sby_synthetic_count,
-      sby_knn_over_k = sby_knn_over_k,
-      sby_knn_algorithm = sby_knn_algorithm,
-      sby_knn_engine = sby_knn_engine,
-      sby_knn_distance_metric = sby_knn_distance_metric,
-      sby_knn_workers = sby_knn_workers,
-      sby_knn_parallel_backend = sby_knn_parallel_backend,
-      sby_knn_hnsw_m = sby_knn_hnsw_m,
-      sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-      sby_knn_query_chunk_size = sby_knn_query_chunk_size
-    )
-  })
-  colnames(sby_adasyn_result$x) <- colnames(sby_x_matrix)
-
-  if(isTRUE(sby_return_original_scale)){
-    sby_x_out <- sby_revert_z_score_scaling_matrix(sby_adasyn_result$x, sby_scaling_info, sby_engine = sby_knn_engine)
-    sby_output_scale <- "original"
-  }else{
-    sby_x_out <- sby_adasyn_result$x
-    sby_output_scale <- "z_score"
-  }
-  sby_y_out <- as.factor(sby_adasyn_result$y)
-  sby_assert_minority_not_reduced(
-    sby_input_target = sby_y_vector,
-    sby_output_target = sby_y_out,
-    sby_context = "sby_adasyn_matrix()",
-    sby_minority_label = sby_class_info_input$sby_minority_label,
-    sby_input_count = sby_class_info_input$sby_minority_count
-  )
-  sby_class_info_output <- sby_binary_class_counts_fast(sby_y_out)
-
-  sby_diagnostics <- list(
-    sby_method = "adasyn",
-    sby_input_rows = collapse::fnrow(sby_x_matrix),
-    sby_output_rows = collapse::fnrow(sby_x_out),
-    sby_generated_rows = sby_synthetic_count,
-    sby_output_scale = sby_output_scale,
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_algorithm = sby_knn_algorithm,
-    sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_knn_workers = sby_knn_workers,
-    sby_knn_parallel_backend = sby_knn_parallel_backend,
-    sby_knn_parallel_runtime = sby_resolve_knn_parallel_runtime(sby_knn_parallel_backend),
-    sby_knn_query_chunk_size = sby_knn_query_chunk_size,
-    sby_minority_label = sby_class_info_input$sby_minority_label,
-    sby_majority_label = sby_class_info_input$sby_majority_label
-  )
-
-  sby_result <- list(
-    sby_x_matrix = sby_x_out,
-    sby_y_vector = sby_y_out,
-    sby_class_ratio_input = sby_class_info_input$sby_class_ratio,
-    sby_class_ratio_output = sby_class_info_output$sby_class_ratio,
-    sby_input_class_distribution = sby_class_info_input$sby_class_counts,
-    sby_output_class_distribution = sby_class_info_output$sby_class_counts,
-    sby_diagnostics = sby_diagnostics
-  )
-
-  if(isTRUE(sby_audit_light)){
-    sby_result$sby_diagnostics$sby_audit_level <- sby_audit_level
-  }
-  if(isTRUE(sby_audit_full) || isTRUE(sby_return_scaled)){
-    sby_result$sby_scaling_info <- sby_scaling_info
-  }
-  if(isTRUE(sby_return_scaled)){
-    sby_result$sby_balanced_scaled <- list(x = sby_adasyn_result$x, y = sby_y_out)
-  }
-
-  sby_synthetic_rows <- seq.int(
-    from = collapse::fnrow(sby_x_matrix) + 1L,
-    length.out = sby_synthetic_count
-  )
-  return(sby_set_synthetic_rows(sby_result, sby_synthetic_rows))
+  sby_max_dense_gb = Inf,
+  sby_config_max_threads = -1L,
+  sby_adasyn_beta = NULL,
+  sby_adasyn_d_th = 1,
+  sby_adasyn_zero_difficulty = c("error", "uniform")
+) {
+  parameters <- mget(names(formals(sys.function())), envir=environment())
+  sby_dispatch("adasyn", parameters, "sby_adasyn_matrix", !missing(sby_adasyn_ratio))
 }

@@ -1,241 +1,64 @@
-#' Aplicar subamostragem NearMiss-1 em dados binários
-#'
-#' @title Subamostragem NearMiss-1 para classificação binária
-#' @name sby_nearmiss
-#' @concept desbalanceamento de classes
-#' @concept NearMiss
-#' @concept subamostragem informada por vizinhos
-#'
-#' @section Fluxo operacional da função externa:
-#' O processo executado pode ser representado como:
-#' \deqn{\text{dados} \rightarrow \text{seleção por fórmula} \rightarrow Z=(X-\mu)/\sigma \rightarrow d_k(m,S_{min}) \rightarrow \operatorname{rank}(m) \rightarrow \text{retenção majoritária}.}
-#' A função valida os dados, padroniza os preditores, calcula distâncias entre
-#' observações majoritárias e a classe minoritária e retém as observações
-#' majoritárias mais próximas da fronteira definida por NearMiss-1.
-#'
-#' @section Modelo matemático NearMiss-1:
-#' Para cada observação majoritária \eqn{x_m \in S_{maj}}, sejam
-#' \eqn{N_k^{min}(x_m)} os \eqn{k} vizinhos mais próximos pertencentes à classe
-#' minoritária. O escore de retenção é a distância média:
-#' \deqn{D_m = \frac{1}{k}\sum_{x_j \in N_k^{min}(x_m)} d(x_m,x_j).}
-#' A regra NearMiss-1 ordena os majoritários por \eqn{D_m} crescente e retém
-#' \deqn{M^*=\min\{n_{maj},\lfloor n_{min}\rho_{under}\rfloor\}}
-#' observações, em que \eqn{\rho_{under}} é `sby_nearmiss_ratio`. Portanto, o
-#' método preserva exemplos majoritários adjacentes à minoria, favorecendo uma
-#' amostra balanceada concentrada na região de separação entre classes.
-#'
-#' @section Exemplo visual do cálculo:
-#' \preformatted{
-#' maioria m_j -> k vizinhos minoritários -> média D_j -> ordenação crescente
-#'                                                               |
-#'                                                               v
-#'                                                  primeiros M* majoritários
-#' }
-#'
-#' @note NearMiss-1 pode aumentar a dificuldade aparente do problema por reter
-#' observações majoritárias próximas da minoria. Essa característica é desejável
-#' para treino discriminativo, mas deve ser avaliada por validação externa.
-#'
-#' @seealso [sby_adasyn()], [sby_adanear()], [sby_nearmiss_matrix()], [sby_nearmiss_index()]
-#'
-#' @examples
-#' dados <- data.frame(y = factor(c(rep("min", 8), rep("maj", 24))),
-#'                     x1 = c(rnorm(8, 0), rnorm(24, 1)),
-#'                     x2 = c(rnorm(8, 0), rnorm(24, 1)))
-#' set.seed(1)
-#' sby_nearmiss(y ~ x1 + x2, dados, sby_nearmiss_ratio = 1, sby_seed = 7)
+#' NearMiss resampling
 #'
 #' @description
-#' `sby_nearmiss()` executa subamostragem da classe majoritária pelo critério
-#' NearMiss-1, retendo observações majoritárias que apresentam menor distância
-#' média aos vizinhos da classe minoritária. A função é indicada para reduzir
-#' predominância majoritária preservando exemplos próximos à fronteira de decisão.
+#' Apply NearMiss through the common exact Intel oneAPI engine.
 #'
-#' @usage
-#' sby_nearmiss(
-#'   sby_formula,
-#'   sby_data,
-#'   sby_nearmiss_ratio = 1,
-#'   sby_knn_under_k = 5L,
-#'   sby_seed = sample.int(10L^5L, 1L),
-#'   sby_audit = FALSE,
-#'   sby_precomputed_scaling = NULL,
-#'   sby_input_already_scaled = FALSE,
-#'   sby_restore_types = TRUE,
-#'   sby_type_info = NULL,
-#'   sby_knn_algorithm = c(
-#'     "auto", "kd_tree", "cover_tree", "brute"
-#'   ),
-#'   sby_knn_engine = c(
-#'     "auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"
-#'   ),
-#'   sby_knn_distance_metric = c(
-#'     "euclidean", "ip", "cosine"
-#'   ),
-#'   sby_knn_workers = 1L,
-#'   sby_knn_parallel_backend = c("parallel", "RcppParallel"),
-#'   sby_knn_hnsw_m = 16L,
-#'   sby_knn_hnsw_ef = 200L
-#' )
+#' @param sby_formula Formula selecting the outcome and existing numeric predictor columns.
 #'
-#' @param sby_formula Fórmula no formato `alvo ~ preditores` usada para identificar uma única coluna de desfecho binário e as colunas preditoras numéricas em `sby_data`. O lado direito deve referenciar apenas colunas ja existentes; transformacoes, interacoes e offsets precisam ser materializados antes da chamada. Não possui valor padrão; use `alvo ~ .` para selecionar todos os demais campos como preditores.
+#' @param sby_data Data frame containing the outcome and plain numeric predictors.
 #'
-#' @param sby_data Data frame, tibble ou matriz com a coluna de desfecho e as variáveis preditoras numéricas referenciadas em `sby_formula`. Não possui valor padrão. Esses dados definem o espaço no qual as observações majoritárias serão ranqueadas por proximidade à classe minoritária.
+#' @param sby_nearmiss_ratio Nonnegative majority retention relative to the expanded minority: min(n_maj, floor((n_min + G) * ratio)). Zero disables NearMiss. A positive ratio rounding to zero produces an informative error. If the target retains the entire majority, neighbor scoring is skipped.
 #'
-#' @param sby_nearmiss_ratio Valor numérico escalar maior que zero que define a quantidade de registros majoritários retidos em relação ao tamanho da classe rara. O alvo é `floor(n_minoria * sby_nearmiss_ratio)`, limitado à maioria disponível. O padrão `1` retém até a mesma quantidade da classe rara; `0.5` retém até metade; `2` retém até duas vezes.
+#' @param sby_knn_under_k Positive integer NearMiss score neighbor count; equivalent to sby_nearmiss_k in HPC interfaces.
 #'
-#' @param sby_knn_under_k Número inteiro positivo de vizinhos minoritários usados para calcular a distância média do critério NearMiss-1. O padrão é `5L`. Valores maiores reduzem variância do ranqueamento; valores menores focalizam a fronteira local e podem selecionar exemplos muito próximos de ruído minoritário.
+#' @param sby_seed Integer seed from 0 to .Machine$integer.max; default sample.int(10e7, 1). ADASYN uses a scoped Mersenne-Twister/Inversion/Rejection RNG and restores RNGkind and .Random.seed, including after errors. Identical input, seed, parameters and numerical environment reproduce the result. Evaluating the default sample.int consumes the caller RNG; supply a seed explicitly to avoid this. NearMiss itself is deterministic and does not draw random numbers.
 #'
-#' @param sby_seed Valor numérico inteiro utilizado para inicializar o gerador de números pseudoaleatórios. O padrão é `sample.int(10L^5L, 1L)`, gerando uma semente inteira aleatória quando o usuário não informa valor. Informe uma semente fixa para tornar reprodutíveis desempates, amostragens complementares e a ordem final das observações preservadas.
+#' @param sby_audit FALSE retains the always-present sbyaudit and sby attributes. TRUE also attaches the detailed audit. HPC interfaces always return a tibble; classic tabular interfaces return a list with sby_balanced_data when audited; matrix interfaces return lists. For recipes, the step bake method returns data with attributes; final recipes::bake(recipe) may drop them. The last audit remains in `prepared_recipe$steps[[i]]$audit_log$last`.
 #'
-#' @param sby_audit Indicador lógico escalar que controla o retorno de metadados de auditoria. O padrão é `FALSE`, retornando apenas o tibble final. Quando `TRUE`, a função retorna lista com índices retidos, distribuições de classe, parâmetros resolvidos e informações de escala.
+#' @param sby_precomputed_scaling Alias for sby_scaling_info; used only when sby_scaling_info is NULL.
 #'
-#' @param sby_precomputed_scaling Lista opcional com parâmetros de centralização e escala previamente calculados. O padrão é `NULL`, fazendo com que a função estime a padronização a partir de `sby_data`. Fornecer essa lista permite reutilizar uma escala externa ou herdada de etapa anterior, evitando inconsistência geométrica em pipelines encadeados.
+#' @param sby_input_already_scaled TRUE reconstructs original-scale values using supplied scaling information before processing. Such reconstructed originals cannot be guaranteed bit-identical to originals not supplied to the function.
 #'
-#' @param sby_input_already_scaled Indicador lógico escalar que informa se `sby_data` já está em escala Z-score compatível com `sby_precomputed_scaling`. O padrão é `FALSE`. Quando `TRUE`, a função evita reaplicar padronização e interpreta as coordenadas de entrada como prontas para busca KNN.
+#' @param sby_restore_types Must be TRUE. Binary synthetics use threshold >= 0.5; integer domains use round() with ties to even; every synthetic predictor is clamped to its original minimum and maximum. Original rows are copied without rounding.
 #'
-#' @param sby_restore_types Indicador lógico escalar que define se tipos numéricos originais devem ser restaurados no retorno final. O padrão é `TRUE`. Essa escolha preserva compatibilidade com o esquema de dados de entrada; desativá-la reduz pós-processamento e mantém valores no formato numérico resultante das operações matriciais.
+#' @param sby_type_info External type metadata is rejected. Supply original input values so domains are inferred from the data.
 #'
-#' @param sby_type_info Lista opcional com metadados dos tipos numéricos originais dos preditores. O padrão é `NULL`, fazendo a função inferir os tipos quando necessário. Fornecer esse objeto é útil em pipelines encadeados, pois garante que a restauração de tipos use exatamente o mesmo diagnóstico da etapa anterior.
+#' @param sby_fixed_minority_label Optional observed label defining the preserved class in classic NearMiss interfaces.
 #'
-#' @param sby_fixed_minority_label Rótulo interno opcional usado por `sby_adanear()` para preservar a classe minoritária original após o ADASYN. O padrão `NULL` mantém o comportamento autônomo de inferir os papéis pelas contagens atuais.
+#' @param sby_fixed_majority_label Optional observed label identifying the other class. Must agree with the preserved-class choice.
 #'
-#' @param sby_fixed_majority_label Rótulo interno opcional usado por `sby_adanear()` para preservar a classe majoritária original após o ADASYN. O padrão `NULL` mantém o comportamento autônomo de inferir os papéis pelas contagens atuais.
+#' @param sby_knn_algorithm Compatibility selector: only auto or brute. Every route uses the common exact neighbor engine; alternative trees are not implemented.
 #'
-#' @param sby_knn_algorithm String escalar que escolhe a estratégia de busca KNN: `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. Use `"auto"` para deixar o pacote escolher uma opção compatível com o engine e a dimensionalidade; informe uma alternativa explícita quando quiser controlar o compromisso entre exatidão, velocidade de execução, consumo de memória e suporte a métricas. Consulte os detalhes para recomendações por algoritmo.
+#' @param sby_knn_engine Compatibility selector: only auto or native, both using Intel oneAPI. Approximate or external engines are rejected.
 #'
-#' @param sby_knn_engine String escalar que escolhe a biblioteca usada para executar a busca KNN: `"auto"`, `"native"`, `"FNN"`, `"RcppHNSW"`, `"KernelKnn"` ou `"bigKNN"`. Na maioria dos casos, mantenha `"auto"`; informe explicitamente apenas quando precisar de uma implementação específica, engine nativa exata, compatibilidade `FNN` ou busca aproximada HNSW por `RcppHNSW`. Consulte os detalhes para saber quando o engine precisa ser declarado.
+#' @param sby_knn_distance_metric Only euclidean is supported by this scientific contract. Other metrics are rejected.
 #'
-#' @param sby_knn_distance_metric String escalar que define a geometria da vizinhança: `"euclidean"`, `"cosine"` ou `"ip"`. A escolha muda o significado de proximidade e também restringe engines e algoritmos disponíveis; `"euclidean"` é a opção mais geral, `"cosine"` privilegia direção angular e `"ip"` usa produto interno via `RcppHNSW`. Consulte os detalhes para recomendações.
+#' @param sby_knn_workers Classic-interface thread ceiling when sby_config_max_threads = -1L; default 1L. Supply -1L or a positive integer. Validated even when an explicit sby_config_max_threads takes precedence. HPC uses its own sby_config_max_threads.
 #'
-#' @param sby_knn_parallel_backend Backend de paralelismo KNN. Use `"parallel"` para o particionamento por blocos com o pacote base `parallel` ou `"RcppParallel"` para acionar threads nativos no kernel bruto exato (`sby_knn_engine = "native"` ou compatibilidade `"FNN"` + `"brute"`).
+#' @param sby_knn_parallel_backend Validated legacy selector: parallel or RcppParallel. Both map to Intel OpenMP/oneMKL, without fork or TBB.
 #'
-#' @param sby_knn_workers Número inteiro positivo de workers usados nas consultas KNN. O padrão é `1L`. Mais workers podem reduzir latência em bases grandes, mas aumentam consumo de CPU e podem exigir engines compatíveis com execução paralela.
+#' @param sby_knn_hnsw_m Legacy compatibility parameter. Only its default 16L is accepted; HNSW is not executed.
 #'
-#' @param sby_knn_hnsw_m Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a conectividade máxima do grafo (`M`): valores maiores aumentam a chance de recuperar vizinhos melhores e tornam o índice mais robusto, mas consomem mais memória e tempo de construção. O padrão `16L` costuma ser um bom equilíbrio; aumente em bases grandes, ruidosas ou de alta dimensionalidade quando recall for mais importante que memória.
+#' @param sby_knn_hnsw_ef Legacy compatibility parameter. Only its default 200L is accepted; HNSW is not executed.
 #'
-#' @param sby_knn_query_chunk_size Número inteiro positivo que define quantas linhas de consulta KNN são processadas por bloco. O padrão é `1000L`. Valores maiores reduzem overhead de chamadas e podem favorecer kernels BLAS/MKL em matrizes densas, enquanto valores menores reduzem pico de memória em bases muito grandes.
+#' @param sby_knn_query_chunk_size Positive integer requested query tile size, capped at 128 to bound the distance buffer. Does not change neighbor geometry.
 #'
-#' @param sby_knn_hnsw_ef Número inteiro positivo usado apenas quando o engine efetivo é `"RcppHNSW"`. Controla a largura da lista dinâmica de candidatos (`ef`) durante construção/consulta: valores maiores aproximam a busca do resultado exato e estabilizam ADASYN/NearMiss, mas deixam as consultas mais lentas. O padrão `200L` prioriza qualidade; reduza para velocidade ou aumente quando a vizinhança aproximada precisar de mais fidelidade.
+#' @param sby_config_max_threads Positive integer per-call thread ceiling, or -1L for detection. Capped by physical cores, CPU affinity, container quota and the hard OpenMP thread limit. Both Intel OpenMP and oneMKL receive this resolved ceiling. Local controls are restored on success or error. BLAS runs outside OpenMP regions; small BLAS calls may use fewer threads. HPC interfaces use this parameter directly. No AVX-512 requirement.
 #'
-#' @details
-#' A função utiliza uma arquitetura KNN configurável sobre preditores numéricos
-#' padronizados por Z-score. Três escolhas trabalham em conjunto:
-#' `sby_knn_algorithm` define a estrutura/estratégia de busca,
-#' `sby_knn_engine` define a implementação computacional e
-#' `sby_knn_distance_metric` define a noção de proximidade.
+#' @param nearmiss_model Integer 1L, 2L or 3L; default 3L. NearMiss-1 retains majority rows with the SMALLEST mean distance to their K NEAREST rare rows. NearMiss-2 retains rows with the SMALLEST mean distance to their K FARTHEST rare rows. NearMiss-3 first takes the union of the M nearest majority rows of EACH rare row, then retains candidates with the LARGEST mean distance to their K nearest rare rows. M = sby_nearmiss_m and K = sby_nearmiss_k (or sby_knn_under_k) are independent. Continuous synthetic rare rows participate in the combined pipeline before domain restoration. Candidate shortage retains all candidates and warns; it does not fill from non-candidates. Ties use increasing original row index. Other values produce an informative error. The model is validated even when NearMiss is inactive.
 #'
-#' Em geral, não: para o uso cotidiano, mantenha `sby_knn_engine = "auto"` e
-#' `sby_knn_algorithm = "auto"`. Nesse modo, com métrica euclidiana, o pacote
-#' prefere a engine `native` exata quando as rotinas nativas estão carregadas e
-#' usa `FNN` como fallback exato. Busca aproximada por `RcppHNSW` só é escolhida
-#' automaticamente quando a opção `sbyadanear.sby_knn_allow_approx = TRUE` está
-#' ativa ou quando o engine é escolhido explicitamente.
+#' @param sby_nearmiss_m Positive integer preselection count M for NearMiss-3; default 3L, capped at majority size. Does not alter K. Validated for every model, but used in neighbor selection only for model 3 when NearMiss executes.
 #'
-#' ## Engines disponíveis
+#' @inherit sby_adanear_hpc details references
 #'
-#' | Engine | Melhor para | Vantagens | Limitações e cuidados |
-#' |---|---|---|---|
-#' | `"native"` | Busca exata euclidiana densa por kernel C/C++ interno. | Retorna índices 1-based e distâncias euclidianas reais; honra controle explícito de self-neighbor nas rotas internas. | Somente `"euclidean"`; só combina com `"auto"` ou `"brute"`. |
-#' | `"FNN"` | Bases pequenas a médias, distância euclidiana e busca exata. | Usa `FNN::get.knnx()`; a rota `"brute"` pode acionar o kernel nativo de compatibilidade quando disponível. | Aceita apenas `"euclidean"` neste pacote; só combina com `"auto"`, `"kd_tree"`, `"cover_tree"` ou `"brute"`. |
-#' | `"RcppHNSW"` | Bases grandes, alta dimensionalidade, métricas `"cosine"`/`"ip"` e consultas em que velocidade é mais importante que exatidão perfeita. | Implementa HNSW de alto desempenho, usa `sby_knn_workers`, costuma escalar melhor que busca exata e suporta `"euclidean"`, `"cosine"` e `"ip"`. | A busca é aproximada; exige calibrar `sby_knn_hnsw_m` e `sby_knn_hnsw_ef`; consome memória para o grafo; resultados podem diferir de uma busca exata quando `ef` é baixo. |
-#' | `"KernelKnn"` | Comparação exata euclidiana via OpenMP externo. | Permite benchmark de `KernelKnn::knn.index.dist()` dentro do contrato comum `nn.index`/`nn.dist`. | Somente `"euclidean"` nesta integração; usa OpenMP e pode competir com MKL, TBB ou `parallel` se todos forem multithread. |
-#' | `"bigKNN"` | Bases que se beneficiam de `bigmemory::big.matrix` e busca exata por blocos. | Usa `bigKNN::knn_bigmatrix()` e permite avaliar streaming por blocos em bases grandes. | Somente `"euclidean"` nesta integração; converte a referência densa para `big.matrix`; requer benchmark de memória. |
-#'
-#' ## Algoritmos disponíveis
-#'
-#' | Algoritmo | Engine compatível | Tipo | Quando usar | Evite quando |
-#' |---|---|---|---|---|
-#' | `"kd_tree"` | `FNN` | Exato | Dados euclidianos com poucas ou médias dimensões; tende a ser eficiente quando as partições espaciais ainda discriminam bem os vizinhos. | Alta dimensionalidade, muitas variáveis ruidosas ou métrica não euclidiana. |
-#' | `"cover_tree"` | `FNN` | Exato | Alternativa exata para dados euclidianos quando a estrutura intrínseca pode favorecer árvore de cobertura. | Quando testes rápidos mostram desempenho inferior a `"kd_tree"`/`"brute"`; não serve para cosseno ou produto interno. |
-#' | `"brute"` | `FNN`, `KernelKnn`, `bigKNN` | Exato | Alta dimensionalidade moderada, auditorias ou cenários em que simplicidade e previsibilidade importam mais que indexação. | Bases muito grandes sem blocos ou sem controle de threads. |
-#'
-#' ## Desempenho, memória e matrizes esparsas
-#'
-#' A velocidade deve ser interpretada como um atributo de qualidade da
-#' configuração KNN, junto com fidelidade da vizinhança, consumo de memória e
-#' compatibilidade de métrica. Em termos práticos:
-#'
-#' | Escolha | Velocidade esperada | Memória | Por que isso acontece |
-#' |---|---|---|---|
-#' | Paralelismo (`sby_knn_workers > 1L`) | Pode reduzir tempo de consulta em matrizes grandes. | Aumenta uso simultâneo de CPU e pode elevar pressão de memória. | O trabalho é dividido entre workers em `FNN` por blocos de consulta exatos e em `RcppHNSW` pelos threads nativos. |
-#'
-#' Na rota exata `FNN` com `sby_knn_algorithm = "brute"`, quando os
-#' kernels nativos estão disponíveis, o pacote usa produtos matriciais BLAS para
-#' calcular top-k sem materializar uma matriz completa de distâncias. As chamadas
-#' internas retornam apenas índices ou apenas distâncias quando a etapa precisa
-#' de um único componente, reduzindo alocações em ADASYN e NearMiss.
-#'
-#' As rotinas atuais operam sobre `matrix` numérica densa após seleção de
-#' preditores e padronização. Matrizes esparsas do pacote `Matrix` são rejeitadas
-#' antes de densificação implícita para evitar estouro de memória. Portanto, em
-#' dados muito esparsos, materialize conscientemente uma matriz densa somente se
-#' houver memória suficiente, reduza dimensionalidade/seleção de variáveis antes
-#' do balanceamento, ou use outro pré-processamento que produza preditores densos.
-#' Em matrizes densas muito largas, prefira testar uma busca aproximada ou uma
-#' busca exaustiva paralelizável, pois árvores exatas tendem a perder vantagem.
-#'
-#' ## Métricas de distância
-#'
-#' | Métrica | Interpretação | Compatibilidade | Recomendação |
-#' |---|---|---|---|
-#' | `"cosine"` | Distância angular; compara a orientação dos vetores e reduz a influência da norma após normalização L2. | `RcppHNSW`; não é aceita por `FNN`. | Use quando o padrão relativo entre variáveis importa mais que o tamanho absoluto, como composições, assinaturas de perfil e vetores de alta dimensionalidade já materializados como matriz densa. |
-#' | `"ip"` | Produto interno convertido em distância; após normalização L2, fica próximo de uma comparação por similaridade angular. | Somente `RcppHNSW` neste pacote. | Use quando o modelo conceitual é similaridade por produto interno ou quando você precisa alinhar a busca a embeddings/vetores normalizados; requer busca aproximada. |
-#'
-#' Os argumentos `sby_knn_hnsw_m` e `sby_knn_hnsw_ef` só afetam a rota
-#' `sby_knn_engine = "RcppHNSW"`. O parâmetro `sby_knn_hnsw_m`
-#' representa a conectividade máxima do grafo: valores maiores criam mais arestas,
-#' melhoram o recall e tornam a busca mais robusta, mas aumentam memória e tempo
-#' de construção. O padrão `16L` é conservador; valores como 24 ou 32 podem ser
-#' úteis em bases grandes, ruidosas ou de alta dimensionalidade. `sby_knn_hnsw_ef`
-#' representa quantos candidatos são explorados dinamicamente na busca: deve ser
-#' pelo menos tão grande quanto o número de vizinhos solicitado e, internamente, é
-#' limitado ao número de linhas da base de referência. O padrão `200L` favorece
-#' qualidade; reduza para acelerar quando pequenas perdas de recall forem
-#' aceitáveis, ou aumente quando NearMiss/ADASYN ficarem sensíveis a vizinhos
-#' aproximados subótimos.
-#'
-#' ## Recomendações práticas
-#'
-#' - Comece com `sby_knn_engine = "auto"`, `sby_knn_algorithm = "auto"` e
-#'   `sby_knn_distance_metric = "euclidean"`.
-#' - Para auditoria, bases pequenas ou necessidade de vizinhos exatos, prefira `sby_knn_engine = "FNN"` com `sby_knn_algorithm = "kd_tree"` ou `"brute"`.
-#' - Para bases grandes, embeddings, `"ip"` ou alta dimensionalidade aproximada, use
-#'   `sby_knn_engine = "RcppHNSW"` e ajuste `sby_knn_hnsw_m`/`sby_knn_hnsw_ef`.
-#' - Para benchmark exato euclidiano com OpenMP, teste `sby_knn_engine = "KernelKnn"`.
-#' - Para benchmark exato euclidiano com `bigmemory`, teste `sby_knn_engine = "bigKNN"`.
-#' - Em ADASYN, vizinhos aproximados podem mudar quais regiões recebem amostras
-#'   sintéticas; em NearMiss, podem mudar quais exemplos majoritários são retidos.
-#'   Aumente `sby_knn_hnsw_ef` quando essa estabilidade for importante.
-#'
-#' @references
-#' He, H., Bai, Y., Garcia, E. A., & Li, S. (2008). ADASYN: Adaptive synthetic
-#' sampling approach for imbalanced learning. In *2008 IEEE International Joint
-#' Conference on Neural Networks* (pp. 1322-1328). IEEE. doi:10.1109/IJCNN.2008.4633969.
-#'
-#' Mani, I., & Zhang, I. (2003). kNN approach to unbalanced data distributions:
-#' a case study involving information extraction. In *Proceedings of the ICML
-#' 2003 Workshop on Learning from Imbalanced Data Sets*.
-#'
-#' Brito, J. B. G., Bucco, G. B., Heldt, R., Becker, J. L., Silveira, C. S.,
-#' Luce, F. B., & Anzanello, M. J. (2024). A framework to improve churn
-#' prediction performance in retail banking. *Financial Innovation*, 10, 17.
-#' doi:10.1186/s40854-023-00558-3.
-#'
-#' Malkov, Y. A., & Yashunin, D. A. (2018). Efficient and robust approximate
-#' nearest neighbor search using Hierarchical Navigable Small World graphs.
-#' *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4),
-#' 824-836.
-#'
-#' @return Tibble balanceado quando `sby_audit = FALSE`; lista de auditoria com dados balanceados, índices, diagnósticos e escala quando `sby_audit = TRUE`.
-#'
+#' @return A tibble, or a list with sby_balanced_data and sby_scaling_info when sby_audit = TRUE or sby_return_scaled = TRUE. sbyaudit and sby are always attached; audit follows sby_audit. See Details.
 #' @export
 sby_nearmiss <- function(
   sby_formula,
   sby_data,
   sby_nearmiss_ratio = 1,
   sby_knn_under_k = 5L,
-  sby_seed = sample.int(10L^5L, 1L),
+  sby_seed = sample.int(10e7, 1),
   sby_audit = FALSE,
   sby_precomputed_scaling = NULL,
   sby_input_already_scaled = FALSE,
@@ -243,109 +66,18 @@ sby_nearmiss <- function(
   sby_type_info = NULL,
   sby_fixed_minority_label = NULL,
   sby_fixed_majority_label = NULL,
-  sby_knn_algorithm = c("auto", "kd_tree", "cover_tree", "brute"),
-  sby_knn_engine = c("auto", "native", "FNN", "RcppHNSW", "KernelKnn", "bigKNN"),
-  sby_knn_distance_metric = c("euclidean", "ip", "cosine"),
+  sby_knn_algorithm = "auto",
+  sby_knn_engine = "auto",
+  sby_knn_distance_metric = "euclidean",
   sby_knn_workers = 1L,
-  sby_knn_parallel_backend = c("parallel", "RcppParallel"),
+  sby_knn_parallel_backend = "parallel",
   sby_knn_hnsw_m = 16L,
   sby_knn_hnsw_ef = 200L,
-  sby_knn_query_chunk_size = 1000L
-){
-  sby_adanear_check_user_interrupt()
-
-  # Valida a taxa antes de extrair ou converter qualquer matriz preditora
-  if(!(is.numeric(sby_nearmiss_ratio) && length(sby_nearmiss_ratio) == 1L &&
-       !is.na(sby_nearmiss_ratio) && is.finite(sby_nearmiss_ratio)) ||
-     sby_nearmiss_ratio < 0){
-    stop("'sby_nearmiss_ratio' nao pode ser negativo ou invalido", call. = FALSE)
-  }
-
-  # Preserva integralmente o data frame quando a etapa esta desativada
-  if(sby_nearmiss_ratio == 0){
-    return(sby_data)
-  }
-
-  sby_formula_data <- sby_extract_formula_data(sby_formula = sby_formula, sby_data = sby_data)
-  sby_predictor_data <- sby_formula_data$sby_predictor_data
-  sby_original_predictor_data <- sby_predictor_data
-  sby_target_vector <- sby_formula_data$sby_target_vector
-
-  sby_audit <- sby_validate_logical_scalar(sby_audit, "sby_audit")
-  sby_input_already_scaled <- sby_validate_logical_scalar(sby_input_already_scaled, "sby_input_already_scaled")
-  sby_restore_types <- sby_validate_logical_scalar(sby_restore_types, "sby_restore_types")
-
-  # Atalho HPC: a rota "native" delega ao motor consolidado quando disponivel.
-  # So e tomado em entrada fresca, sem escala previa e sem rotulos fixos, para
-  # nao alterar os fluxos especializados. As rotinas originais seguem acessiveis.
-  sby_knn_engine_resolved <- match.arg(sby_knn_engine)
-  sby_knn_distance_metric_resolved <- match.arg(sby_knn_distance_metric)
-  if(!isTRUE(sby_input_already_scaled) &&
-     is.null(sby_precomputed_scaling) &&
-     is.null(sby_fixed_minority_label) &&
-     is.null(sby_fixed_majority_label) &&
-     sby_should_route_native_to_hpc(
-       sby_knn_engine = sby_knn_engine_resolved,
-       sby_knn_distance_metric = sby_knn_distance_metric_resolved,
-       sby_audit = sby_audit,
-       sby_restore_types = sby_restore_types,
-       sby_return_scaled = FALSE
-     )){
-    return(sby_nearmiss_hpc(
-      .data = sby_data,
-      formula = sby_formula,
-      sby_nearmiss_k = sby_knn_under_k,
-      sby_nearmiss_ratio = sby_nearmiss_ratio
-    ))
-  }
-
-  sby_validate_sampling_inputs(sby_predictor_data, sby_target_vector, sby_seed)
-  sby_x_matrix <- sby_adanear_as_numeric_matrix(sby_predictor_data)
-  colnames(sby_x_matrix) <- sby_adanear_get_column_names(sby_predictor_data)
-  sby_target_factor <- as.factor(sby_target_vector)
-  if(is.null(sby_type_info)){
-    sby_type_info <- sby_infer_numeric_column_types(sby_predictor_data)
-  }
-
-  sby_matrix_result <- sby_nearmiss_matrix(
-    sby_x_matrix = sby_x_matrix,
-    sby_y_vector = sby_target_factor,
-    sby_nearmiss_ratio = sby_nearmiss_ratio,
-    sby_knn_under_k = sby_knn_under_k,
-    sby_seed = sby_seed,
-    sby_audit = sby_audit,
-    sby_return_index = TRUE,
-    sby_return_scaled = sby_audit,
-    sby_return_original_scale = FALSE,
-    sby_scaling_info = sby_precomputed_scaling,
-    sby_input_already_scaled = sby_input_already_scaled,
-    sby_fixed_minority_label = sby_fixed_minority_label,
-    sby_fixed_majority_label = sby_fixed_majority_label,
-    sby_knn_algorithm = sby_knn_algorithm,
-    sby_knn_engine = sby_knn_engine,
-    sby_knn_distance_metric = sby_knn_distance_metric,
-    sby_knn_workers = sby_knn_workers,
-    sby_knn_parallel_backend = sby_knn_parallel_backend,
-    sby_knn_hnsw_m = sby_knn_hnsw_m,
-    sby_knn_hnsw_ef = sby_knn_hnsw_ef,
-    sby_knn_query_chunk_size = sby_knn_query_chunk_size
-  )
-
-  sby_final_predictors <- sby_original_predictor_data[sby_matrix_result$sby_retained_index, , drop = FALSE]
-  sby_balanced_data <- sby_build_balanced_tibble(sby_final_predictors, sby_matrix_result$sby_y_vector)
-
-  if(isTRUE(sby_audit)){
-    return(list(
-      sby_balanced_data = sby_balanced_data,
-      sby_type_info = sby_type_info,
-      sby_scaling_info = sby_matrix_result$sby_scaling_info,
-      sby_diagnostics = sby_matrix_result$sby_diagnostics,
-      sby_balanced_scaled = sby_matrix_result$sby_balanced_scaled,
-      sby_retained_index = sby_matrix_result$sby_retained_index
-    ))
-  }
-  return(sby_balanced_data)
+  sby_knn_query_chunk_size = 1000L,
+  sby_config_max_threads = -1L,
+  nearmiss_model = 3L,
+  sby_nearmiss_m = 3L
+) {
+  parameters <- mget(names(formals(sys.function())), envir=environment())
+  sby_dispatch("nearmiss", parameters, "sby_nearmiss", FALSE)
 }
-####
-## Fim
-#

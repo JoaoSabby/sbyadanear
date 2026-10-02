@@ -1,0 +1,7 @@
+.git
+.validation
+ci-results
+*.Rcheck
+*.tar.gz
+audit
+docs
