@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMD Matrix Multiplication Visualization</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #d4d4d4;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            color: #4ec9b0;
+            text-shadow: 0 0 10px rgba(78, 201, 176, 0.3);
+        }
+
+        h2,
+        h3 {
+            color: #569cd6;
+        }
+
+        .main-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .top-controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            background: rgba(37, 37, 38, 0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .view-selector {
+            display: flex;
+            gap: 10px;
+            background: rgba(37, 37, 38, 0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .matrix-section {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .matrix-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(37, 37, 38, 0.6);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #3e3e3e;
+        }
+
+        .matrix {
+            display: grid;
+            gap: 2px;
+            background: #333;
+            padding: 5px;
+            border-radius: 6px;
+        }
+
+        .cell {
+            width: 32px;
+            height: 32px;
+            background: #252526;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #888;
+            transition: all 0.2s ease;
+            border: 1px solid #3e3e3e;
+            border-radius: 3px;
+        }
+
+        .cell.highlight-a {
+            background: linear-gradient(135deg, #ce9178, #d4a574);
+            color: #000;
+            font-weight: bold;
+            transform: scale(1.15);
+            z-index: 10;
+            box-shadow: 0 0 10px rgba(206, 145, 120, 0.6);
+        }
+
+        .cell.highlight-b {
+            background: linear-gradient(135deg, #4ec9b0, #6edcd4);
+            color: #000;
+            font-weight: bold;
+            transform: scale(1.15);
+            z-index: 10;
+            box-shadow: 0 0 10px rgba(78, 201, 176, 0.6);
+        }
+
+        .cell.highlight-c {
+            background: linear-gradient(135deg, #dcdcaa, #e8e8be);
+            color: #000;
+            font-weight: bold;
+            transform: scale(1.15);
+            z-index: 10;
+            box-shadow: 0 0 10px rgba(220, 220, 170, 0.6);
+        }
+
+        .cell.tile-highlight {
+            border: 2px solid #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        /* Memory Layout Styles */
+        .memory-section {
+            background: rgba(37, 37, 38, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #3e3e3e;
+            margin-top: 20px;
+        }
+
+        .memory-view {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .memory-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .memory-label {
+            width: 80px;
+            font-weight: bold;
+            color: #9cdcfe;
+            font-size: 14px;
+        }
+
+        .memory-bar {
+            display: flex;
+            gap: 1px;
+            background: #1e1e1e;
+            padding: 4px;
+            border-radius: 6px;
+            overflow-x: auto;
+            max-width: 800px;
+        }
+
+        .mem-cell {
+            min-width: 24px;
+            height: 24px;
+            background: #2d2d2d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            color: #666;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+
+        .mem-cell.active {
+            background: #4ec9b0;
+            color: #000;
+            font-weight: bold;
+        }
+
+        .mem-cell.cache-l1 {
+            border-bottom: 2px solid #ff6b6b;
+        }
+
+        .mem-cell.cache-l2 {
+            border-bottom: 2px solid #feca57;
+        }
+
+        .mem-cell.accessing {
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        .address-info {
+            font-family: monospace;
+            font-size: 11px;
+            color: #6a9955;
+            margin-top: 5px;
+        }
+
+        /* Cache Visualization */
+        .cache-section {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .cache-block {
+            background: rgba(30, 30, 30, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .cache-title {
+            color: #ff6b6b;
+            font-size: 12px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .cache-lines {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            max-width: 200px;
+        }
+
+        .cache-line {
+            width: 18px;
+            height: 18px;
+            background: #333;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 7px;
+            transition: all 0.2s;
+        }
+
+        .cache-line.hot {
+            background: #ff6b6b;
+            color: #000;
+        }
+
+        .cache-line.warm {
+            background: #feca57;
+            color: #000;
+        }
+
+        .cache-line.cold {
+            background: #333;
+            color: #666;
+        }
+
+        /* Registers and Controls */
+        .registers {
+            background: rgba(37, 37, 38, 0.8);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #3e3e3e;
+            min-width: 400px;
+        }
+
+        .reg-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .reg-name {
+            width: 60px;
+            font-weight: bold;
+            color: #9cdcfe;
+            font-size: 12px;
+        }
+
+        .reg-value {
+            flex: 1;
+            background: #1e1e1e;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 10px;
+            border: 1px solid #333;
+            color: #ccc;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .reg-value.changed {
+            animation: flash 0.5s;
+        }
+
+        @keyframes flash {
+            0% {
+                background-color: #4ec9b0;
+                color: #000;
+            }
+
+            100% {
+                background-color: #1e1e1e;
+                color: #ccc;
+            }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(37, 37, 38, 0.8);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #3e3e3e;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #0e639c, #1177bb);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(14, 99, 156, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(14, 99, 156, 0.5);
+        }
+
+        button.mode-btn {
+            background: #333;
+            opacity: 0.7;
+        }
+
+        button.mode-btn.active {
+            background: linear-gradient(135deg, #4ec9b0, #6edcd4);
+            color: #000;
+            opacity: 1;
+        }
+
+        .status {
+            font-family: 'Consolas', monospace;
+            color: #dcdcaa;
+            font-size: 13px;
+            min-width: 250px;
+            text-align: center;
+        }
+
+        .code-block {
+            background: rgba(30, 30, 30, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            white-space: pre;
+            border-left: 3px solid #569cd6;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+
+        .line {
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+
+        .line.active {
+            background: linear-gradient(90deg, rgba(38, 79, 120, 0.8), transparent);
+            color: #fff;
+        }
+
+        .comment {
+            color: #6a9955;
+        }
+
+        .instr {
+            color: #569cd6;
+        }
+
+        .reg {
+            color: #9cdcfe;
+        }
+
+        .explanation {
+            background: rgba(37, 37, 38, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            line-height: 1.6;
+            border: 1px solid #3e3e3e;
+        }
+
+        .perf-stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stat-box {
+            background: rgba(30, 30, 30, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4ec9b0;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <h1>🔬 SIMD Matrix Multiplication Visualizer</h1>
+
+        <div class="top-controls">
+            <div class="mode-selector">
+                <span style="color:#888; margin-right:10px;">SIMD Mode:</span>
+                <button id="btn-mode-avx2" class="mode-btn active" onclick="setMode('AVX2')">AVX2 (256-bit)</button>
+                <button id="btn-mode-avx512" class="mode-btn" onclick="setMode('AVX512')">AVX-512 (512-bit)</button>
+            </div>
+            <div class="view-selector">
+                <span style="color:#888; margin-right:10px;">View:</span>
+                <button id="btn-view-algo" class="mode-btn active" onclick="setView('algorithm')">Algorithm</button>
+                <button id="btn-view-memory" class="mode-btn" onclick="setView('memory')">Memory Layout</button>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="reset()">⟲ Reset</button>
+            <button onclick="nextStep()">Next Step ▶</button>
+            <button onclick="toggleAuto()" id="btn-auto">▶ Auto Play</button>
+            <div class="status" id="status-text">Ready to start...</div>
+        </div>
+
+        <!-- Algorithm View -->
+        <div id="algo-view">
+            <div class="container" style="margin-top:20px;">
+                <div class="matrix-section">
+                    <div class="matrix-container">
+                        <h3>Matrix A (4×4)</h3>
+                        <div id="matrix-a" class="matrix"></div>
+                    </div>
+                    <div class="matrix-container">
+                        <h3>Matrix B (4×N)</h3>
+                        <div id="matrix-b" class="matrix"></div>
+                    </div>
+                    <div class="matrix-container">
+                        <h3>Matrix C (4×N)</h3>
+                        <div id="matrix-c" class="matrix"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="container" style="margin-top:20px;">
+                <div class="code-block" id="code-view"></div>
+                <div class="registers">
+                    <h3 id="reg-title">AVX2 Registers (YMM)</h3>
+                    <div class="reg-row">
+                        <div class="reg-name" id="reg-name-0">ymm0</div>
+                        <div class="reg-value" id="reg-acc">[0.0, ...]</div>
+                        <span style="color:#888; font-size:11px; margin-left:5px;">(Acc)</span>
+                    </div>
+                    <div class="reg-row">
+                        <div class="reg-name" id="reg-name-1">ymm1</div>
+                        <div class="reg-value" id="reg-broad">[0.0, ...]</div>
+                        <span style="color:#888; font-size:11px; margin-left:5px;">(Broadcast)</span>
+                    </div>
+                    <div class="reg-row">
+                        <div class="reg-name" id="reg-name-2">ymm2</div>
+                        <div class="reg-value" id="reg-vec">[0.0, ...]</div>
+                        <span style="color:#888; font-size:11px; margin-left:5px;">(B Vector)</span>
+                    </div>
+                    <div style="margin-top:15px; border-top:1px solid #444; padding-top:10px;">
+                        <div class="reg-row">
+                            <div class="reg-name">i (row)</div>
+                            <div class="reg-value" id="reg-i">0</div>
+                        </div>
+                        <div class="reg-row">
+                            <div class="reg-name">k (inner)</div>
+                            <div class="reg-value" id="reg-k">0</div>
+                        </div>
+                        <div class="reg-row">
+                            <div class="reg-name">j (col)</div>
+                            <div class="reg-value" id="reg-j">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory Layout View -->
+        <div id="memory-view" class="hidden">
+            <div class="memory-section">
+                <h3>📦 Memory Layout (Row-Major Order)</h3>
+                <p style="color:#888; font-size:12px;">
+                    Each matrix is stored as a contiguous block of floats (4 bytes each).
+                    Highlighted cells show current memory access pattern.
+                </p>
+
+                <div class="memory-view">
+                    <div class="memory-row">
+                        <div class="memory-label">Matrix A</div>
+                        <div class="memory-bar" id="mem-a"></div>
+                    </div>
+                    <div class="address-info" id="addr-a">Base: 0x1000 | Stride: 16 bytes/row</div>
+
+                    <div class="memory-row" style="margin-top:15px;">
+                        <div class="memory-label">Matrix B</div>
+                        <div class="memory-bar" id="mem-b"></div>
+                    </div>
+                    <div class="address-info" id="addr-b">Base: 0x2000 | Stride: 32 bytes/row</div>
+
+                    <div class="memory-row" style="margin-top:15px;">
+                        <div class="memory-label">Matrix C</div>
+                        <div class="memory-bar" id="mem-c"></div>
+                    </div>
+                    <div class="address-info" id="addr-c">Base: 0x3000 | Stride: 32 bytes/row</div>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#ce9178;"></div>
+                        <span>Reading A</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#4ec9b0;"></div>
+                        <span>Reading B</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#dcdcaa;"></div>
+                        <span>Writing C</span>
+                    </div>
+                </div>
+
+                <div class="cache-section">
+                    <div class="cache-block">
+                        <div class="cache-title">L1 Cache (Simulated)</div>
+                        <div class="cache-lines" id="cache-l1"></div>
+                    </div>
+                    <div class="cache-block">
+                        <div class="cache-title">L2 Cache (Simulated)</div>
+                        <div class="cache-lines" id="cache-l2"></div>
+                    </div>
+                </div>
+
+                <div class="perf-stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="stat-fma">0</div>
+                        <div class="stat-label">FMA Operations</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="stat-loads">0</div>
+                        <div class="stat-label">Memory Loads</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="stat-stores">0</div>
+                        <div class="stat-label">Memory Stores</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="stat-cache-hits">0%</div>
+                        <div class="stat-label">Cache Hit Rate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="explanation">
+            <h3>📖 How Register-Blocked Tiling Works</h3>
+            <div id="expl-text">
+                <p>This visualization demonstrates the <strong>register-blocked tiling</strong> strategy used in our
+                    optimized AVX2/AVX-512 implementation.</p>
+                <p><strong>Key Optimization:</strong> Instead of loading/storing C for every k-iteration, we keep 4 YMM
+                    accumulators in registers across the entire k-loop. This eliminates memory traffic and maximizes FMA
+                    throughput.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let MODE = 'AVX2';
+        let VIEW = 'algorithm';
+        let M = 4, N = 8, K = 4;
+        let LANES = 8;
+
+        // State
+        let A = [], B = [], C = [];
+        let i = 0, j = 0, k = 0;
+        let step = 0;
+        let autoInterval = null;
+
+        // Performance counters
+        let fmaCount = 0, loadCount = 0, storeCount = 0;
+        let cacheHits = 0, cacheAccesses = 0;
+        let cacheL1 = new Set();
+        let cacheL2 = new Set();
+
+        // Registers
+        let r_acc = [];
+        let r_broad = [];
+        let r_vec = [];
+
+        const CODE_AVX2 = [
+            { id: 'line-0', html: '<span class="comment">; Register-Blocked Tile Loop</span>' },
+            { id: 'line-1', html: '<span class="instr">vxorps</span> <span class="reg">ymm0-3</span>, ... <span class="comment">; Zero 4 accumulators</span>' },
+            { id: 'line-2', html: '<span class="comment">; --- K Loop (inner) ---</span>' },
+            { id: 'line-3', html: '<span class="instr">vbroadcastss</span> <span class="reg">ymm4</span>, [A+k] <span class="comment">; Broadcast A[i][k]</span>' },
+            { id: 'line-4', html: '<span class="instr">vfmadd231ps</span> <span class="reg">ymm0</span>, <span class="reg">ymm4</span>, [B+k*N+0]' },
+            { id: 'line-5', html: '<span class="instr">vfmadd231ps</span> <span class="reg">ymm1</span>, <span class="reg">ymm4</span>, [B+k*N+32]' },
+            { id: 'line-6', html: '<span class="instr">vfmadd231ps</span> <span class="reg">ymm2</span>, <span class="reg">ymm4</span>, [B+k*N+64]' },
+            { id: 'line-7', html: '<span class="instr">vfmadd231ps</span> <span class="reg">ymm3</span>, <span class="reg">ymm4</span>, [B+k*N+96]' },
+            { id: 'line-8', html: '<span class="instr">add</span> k, 1; <span class="instr">jnz</span> .k_loop' },
+            { id: 'line-9', html: '<span class="comment">; --- Store tile to C ---</span>' },
+            { id: 'line-10', html: '<span class="instr">vmovups</span> [C], <span class="reg">ymm0-3</span> <span class="comment">; Store 32 floats</span>' },
+        ];
+
+        const CODE_AVX512 = [
+            { id: 'line-0', html: '<span class="comment">; AVX-512 Register-Blocked Loop</span>' },
+            { id: 'line-1', html: '<span class="instr">vxorps</span> <span class="reg">zmm0-3</span>, ... <span class="comment">; Zero 4 accumulators (64 floats)</span>' },
+            { id: 'line-2', html: '<span class="comment">; --- K Loop (inner) ---</span>' },
+            { id: 'line-3', html: '<span class="instr">vbroadcastss</span> <span class="reg">zmm4</span>, [A+k] <span class="comment">; Broadcast A[i][k]</span>' },
+            { id: 'line-4', html: '<span class="instr">vfmadd231ps</span> <span class="reg">zmm0</span>, <span class="reg">zmm4</span>, [B+k*N+0]' },
+            { id: 'line-5', html: '<span class="instr">vfmadd231ps</span> <span class="reg">zmm1</span>, <span class="reg">zmm4</span>, [B+k*N+64]' },
+            { id: 'line-6', html: '<span class="instr">vfmadd231ps</span> <span class="reg">zmm2</span>, <span class="reg">zmm4</span>, [B+k*N+128]' },
+            { id: 'line-7', html: '<span class="instr">vfmadd231ps</span> <span class="reg">zmm3</span>, <span class="reg">zmm4</span>, [B+k*N+192]' },
+            { id: 'line-8', html: '<span class="instr">add</span> k, 1; <span class="instr">jnz</span> .k_loop' },
+            { id: 'line-9', html: '<span class="comment">; --- Store tile to C ---</span>' },
+            { id: 'line-10', html: '<span class="instr">vmovups</span> [C], <span class="reg">zmm0-3</span> <span class="comment">; Store 64 floats</span>' },
+        ];
+
+        function setMode(mode) {
+            MODE = mode;
+            if (MODE === 'AVX2') {
+                M = 4; N = 8; K = 4;
+                LANES = 8;
+                document.getElementById('btn-mode-avx2').classList.add('active');
+                document.getElementById('btn-mode-avx512').classList.remove('active');
+                document.getElementById('reg-title').textContent = 'AVX2 Registers (YMM - 256 bit)';
+                document.getElementById('reg-name-0').textContent = 'ymm0-3';
+                document.getElementById('reg-name-1').textContent = 'ymm4';
+                document.getElementById('reg-name-2').textContent = 'B vec';
+            } else {
+                M = 4; N = 16; K = 4;
+                LANES = 16;
+                document.getElementById('btn-mode-avx2').classList.remove('active');
+                document.getElementById('btn-mode-avx512').classList.add('active');
+                document.getElementById('reg-title').textContent = 'AVX-512 Registers (ZMM - 512 bit)';
+                document.getElementById('reg-name-0').textContent = 'zmm0-3';
+                document.getElementById('reg-name-1').textContent = 'zmm4';
+                document.getElementById('reg-name-2').textContent = 'B vec';
+            }
+            init();
+        }
+
+        function setView(view) {
+            VIEW = view;
+            document.getElementById('btn-view-algo').classList.toggle('active', view === 'algorithm');
+            document.getElementById('btn-view-memory').classList.toggle('active', view === 'memory');
+            document.getElementById('algo-view').classList.toggle('hidden', view !== 'algorithm');
+            document.getElementById('memory-view').classList.toggle('hidden', view !== 'memory');
+        }
+
+        function init() {
+            // Render code
+            const codeEl = document.getElementById('code-view');
+            codeEl.innerHTML = '';
+            const lines = MODE === 'AVX2' ? CODE_AVX2 : CODE_AVX512;
+            lines.forEach(l => {
+                const d = document.createElement('div');
+                d.className = 'line';
+                d.id = l.id;
+                d.innerHTML = l.html;
+                codeEl.appendChild(d);
+            });
+
+            // Initialize matrices
+            const matA = document.getElementById('matrix-a');
+            const matB = document.getElementById('matrix-b');
+            const matC = document.getElementById('matrix-c');
+
+            matA.style.gridTemplateColumns = `repeat(${K}, 1fr)`;
+            matB.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+            matC.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+
+            matA.innerHTML = '';
+            matB.innerHTML = '';
+            matC.innerHTML = '';
+
+            A = []; B = []; C = [];
+            r_acc = new Array(LANES).fill(0);
+            r_broad = new Array(LANES).fill(0);
+            r_vec = new Array(LANES).fill(0);
+
+            for (let r = 0; r < M; r++) {
+                for (let c = 0; c < K; c++) {
+                    const val = Math.floor(Math.random() * 5);
+                    A.push(val);
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `a-${r}-${c}`;
+                    cell.textContent = val;
+                    matA.appendChild(cell);
+                }
+            }
+
+            for (let r = 0; r < K; r++) {
+                for (let c = 0; c < N; c++) {
+                    const val = Math.floor(Math.random() * 5);
+                    B.push(val);
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `b-${r}-${c}`;
+                    cell.textContent = val;
+                    matB.appendChild(cell);
+                }
+            }
+
+            for (let r = 0; r < M; r++) {
+                for (let c = 0; c < N; c++) {
+                    C.push(0);
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `c-${r}-${c}`;
+                    cell.textContent = 0;
+                    matC.appendChild(cell);
+                }
+            }
+
+            // Initialize memory view
+            initMemoryView();
+            reset();
+        }
+
+        function initMemoryView() {
+            const memA = document.getElementById('mem-a');
+            const memB = document.getElementById('mem-b');
+            const memC = document.getElementById('mem-c');
+
+            memA.innerHTML = '';
+            memB.innerHTML = '';
+            memC.innerHTML = '';
+
+            // Create memory cells for A
+            for (let idx = 0; idx < M * K; idx++) {
+                const cell = document.createElement('div');
+                cell.className = 'mem-cell';
+                cell.id = `mema-${idx}`;
+                cell.textContent = A[idx] || Math.floor(idx / K) + ',' + (idx % K);
+                cell.title = `A[${Math.floor(idx / K)}][${idx % K}] @ 0x${(0x1000 + idx * 4).toString(16)}`;
+                memA.appendChild(cell);
+            }
+
+            // Create memory cells for B
+            for (let idx = 0; idx < K * N; idx++) {
+                const cell = document.createElement('div');
+                cell.className = 'mem-cell';
+                cell.id = `memb-${idx}`;
+                cell.textContent = B[idx] || '';
+                cell.title = `B[${Math.floor(idx / N)}][${idx % N}] @ 0x${(0x2000 + idx * 4).toString(16)}`;
+                memB.appendChild(cell);
+            }
+
+            // Create memory cells for C
+            for (let idx = 0; idx < M * N; idx++) {
+                const cell = document.createElement('div');
+                cell.className = 'mem-cell';
+                cell.id = `memc-${idx}`;
+                cell.textContent = '0';
+                cell.title = `C[${Math.floor(idx / N)}][${idx % N}] @ 0x${(0x3000 + idx * 4).toString(16)}`;
+                memC.appendChild(cell);
+            }
+
+            // Initialize cache view
+            const cacheL1El = document.getElementById('cache-l1');
+            const cacheL2El = document.getElementById('cache-l2');
+            cacheL1El.innerHTML = '';
+            cacheL2El.innerHTML = '';
+
+            for (let i = 0; i < 32; i++) {
+                let c1 = document.createElement('div');
+                c1.className = 'cache-line cold';
+                c1.id = `c1-${i}`;
+                cacheL1El.appendChild(c1);
+
+                let c2 = document.createElement('div');
+                c2.className = 'cache-line cold';
+                c2.id = `c2-${i}`;
+                cacheL2El.appendChild(c2);
+            }
+        }
+
+        function reset() {
+            i = 0; j = 0; k = 0;
+            step = 0;
+            C.fill(0);
+            r_acc.fill(0); r_broad.fill(0); r_vec.fill(0);
+            fmaCount = 0; loadCount = 0; storeCount = 0;
+            cacheHits = 0; cacheAccesses = 0;
+            cacheL1.clear(); cacheL2.clear();
+            updateUI();
+            highlightLine(-1);
+            document.getElementById('status-text').textContent = "Ready. Click Next Step to begin.";
+            clearHighlights();
+            updateStats();
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.cell').forEach(c => {
+                c.classList.remove('highlight-a', 'highlight-b', 'highlight-c', 'tile-highlight');
+            });
+            document.querySelectorAll('.mem-cell').forEach(c => {
+                c.classList.remove('active', 'accessing');
+                c.style.background = '';
+            });
+        }
+
+        function highlightLine(idx) {
+            document.querySelectorAll('.line').forEach(l => l.classList.remove('active'));
+            if (idx >= 0) {
+                const el = document.getElementById(`line-${idx}`);
+                if (el) el.classList.add('active');
+            }
+        }
+
+        function updateRegs() {
+            const format = (arr) => `[${arr.slice(0, Math.min(8, arr.length)).map(x => x.toFixed(0)).join(', ')}${arr.length > 8 ? ', ...' : ''}]`;
+            const set = (id, val) => {
+                const el = document.getElementById(id);
+                if (el && el.textContent !== val) {
+                    el.textContent = val;
+                    el.classList.remove('changed');
+                    void el.offsetWidth;
+                    el.classList.add('changed');
+                }
+            };
+
+            set('reg-acc', format(r_acc));
+            set('reg-broad', format(r_broad));
+            set('reg-vec', format(r_vec));
+            set('reg-i', i);
+            set('reg-k', k);
+            set('reg-j', j);
+        }
+
+        function updateStats() {
+            document.getElementById('stat-fma').textContent = fmaCount;
+            document.getElementById('stat-loads').textContent = loadCount;
+            document.getElementById('stat-stores').textContent = storeCount;
+            const hitRate = cacheAccesses > 0 ? Math.round((cacheHits / cacheAccesses) * 100) : 0;
+            document.getElementById('stat-cache-hits').textContent = hitRate + '%';
+        }
+
+        function highlightMemory(matrix, indices, color) {
+            indices.forEach(idx => {
+                const el = document.getElementById(`mem${matrix}-${idx}`);
+                if (el) {
+                    el.style.background = color;
+                    el.classList.add('active');
+                }
+            });
+        }
+
+        function simulateCacheAccess(addr) {
+            cacheAccesses++;
+            const cacheLine = Math.floor(addr / 64);
+            if (cacheL1.has(cacheLine)) {
+                cacheHits++;
+            } else {
+                cacheL1.add(cacheLine);
+                cacheL2.add(cacheLine);
+                // Update visual
+                const idx = cacheLine % 32;
+                const el = document.getElementById(`c1-${idx}`);
+                if (el) el.className = 'cache-line hot';
+            }
+        }
+
+        function updateUI() {
+            updateRegs();
+            updateStats();
+
+            // Update C grid
+            for (let r = 0; r < M; r++) {
+                for (let c = 0; c < N; c++) {
+                    const idx = r * N + c;
+                    const cell = document.getElementById(`c-${r}-${c}`);
+                    if (cell) cell.textContent = C[idx].toFixed(0);
+
+                    const memCell = document.getElementById(`memc-${idx}`);
+                    if (memCell) memCell.textContent = C[idx].toFixed(0);
+                }
+            }
+        }
+
+        function nextStep() {
+            clearHighlights();
+
+            switch (step) {
+                case 0: // Init accumulators
+                    highlightLine(1);
+                    r_acc.fill(0);
+                    document.getElementById('status-text').textContent = `Zeroing 4 YMM/ZMM accumulators for row ${i}`;
+                    step = 1;
+                    k = 0;
+                    break;
+
+                case 1: // Broadcast A
+                    highlightLine(3);
+                    const valA = A[i * K + k];
+                    r_broad.fill(valA);
+                    loadCount++;
+                    simulateCacheAccess(0x1000 + (i * K + k) * 4);
+                    document.getElementById('status-text').textContent = `Broadcast A[${i}][${k}] = ${valA} to all ${LANES} lanes`;
+                    document.getElementById(`a-${i}-${k}`).classList.add('highlight-a');
+                    highlightMemory('a', [i * K + k], '#ce9178');
+                    step = 2;
+                    break;
+
+                case 2: // FMA operations
+                    highlightLine(4);
+                    // Load B row and do FMA for all columns in tile
+                    for (let lane = 0; lane < LANES; lane++) {
+                        const bIdx = k * N + j + lane;
+                        r_vec[lane] = B[bIdx];
+                        r_acc[lane] += r_broad[lane] * r_vec[lane];
+                        document.getElementById(`b-${k}-${j + lane}`).classList.add('highlight-b');
+                        simulateCacheAccess(0x2000 + bIdx * 4);
+                    }
+                    loadCount++;
+                    fmaCount += LANES;
+                    highlightMemory('b', Array.from({ length: LANES }, (_, l) => k * N + j + l), '#4ec9b0');
+                    document.getElementById('status-text').textContent = `FMA: C[${i}][${j}:${j + LANES}] += A[${i}][${k}] × B[${k}][${j}:${j + LANES}]`;
+                    step = 3;
+                    break;
+
+                case 3: // Check k loop
+                    highlightLine(8);
+                    k++;
+                    if (k < K) {
+                        step = 1;
+                        document.getElementById('status-text').textContent = `K-loop: k=${k}, continuing...`;
+                    } else {
+                        step = 4;
+                        document.getElementById('status-text').textContent = `K-loop complete. Storing tile...`;
+                    }
+                    break;
+
+                case 4: // Store tile
+                    highlightLine(10);
+                    for (let lane = 0; lane < LANES; lane++) {
+                        C[i * N + j + lane] = r_acc[lane];
+                        document.getElementById(`c-${i}-${j + lane}`).classList.add('highlight-c');
+                        simulateCacheAccess(0x3000 + (i * N + j + lane) * 4);
+                    }
+                    storeCount++;
+                    highlightMemory('c', Array.from({ length: LANES }, (_, l) => i * N + j + l), '#dcdcaa');
+                    document.getElementById('status-text').textContent = `Stored C[${i}][${j}:${j + LANES}] to memory`;
+                    step = 5;
+                    break;
+
+                case 5: // Next row
+                    i++;
+                    if (i < M) {
+                        step = 0;
+                        k = 0;
+                        r_acc.fill(0);
+                        document.getElementById('status-text').textContent = `Moving to row ${i}`;
+                    } else {
+                        document.getElementById('status-text').textContent = "✅ Matrix multiplication complete!";
+                        step = 6;
+                    }
+                    break;
+
+                case 6:
+                    reset();
+                    break;
+            }
+            updateUI();
+        }
+
+        function toggleAuto() {
+            if (autoInterval) {
+                clearInterval(autoInterval);
+                autoInterval = null;
+                document.getElementById('btn-auto').textContent = "▶ Auto Play";
+            } else {
+                autoInterval = setInterval(nextStep, 800);
+                document.getElementById('btn-auto').textContent = "⏸ Pause";
+            }
+        }
+
+        // Initialize
+        setMode('AVX2');
+    </script>
+</body>
+
+</html>
