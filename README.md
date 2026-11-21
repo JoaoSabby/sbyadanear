@@ -164,6 +164,54 @@ when their squared values overflow or underflow double storage. No full
 all-pairs distance matrix is constructed, although exact search still has
 quadratic time complexity in the compared row counts.
 
+## Interactive AVX-512 and oneMKL visualizer
+
+An offline interactive visualizer of the double-precision (`fp64`) execution
+pipeline is bundled at `inst/extdata/sbyadanear_avx512.html`. It illustrates
+the R column-major to C++ row-major bridge, cached row norms in `long double`,
+oneMKL Fortran BLAS `DGEMM` with 512-bit AVX-512 `ZMM` registers (8 `double`
+lanes = 64 bytes), the `64 * DBL_EPSILON` cancellation guard, bounded
+`O(threads * K)` Max-Heap KNN selection, ADASYN largest-remainder quotas,
+NearMiss-1/2/3 ranking and non-nested `ThreadScope` scheduling.
+
+The HTML file has no external dependencies, runs completely offline and
+auto-detects `pt_*` locales as `pt_BR` (defaulting to `en_US`), with a manual
+`EN | PT` toggle.
+
+Open it locally from R after installing the package:
+
+```r
+utils::browseURL(
+  system.file("extdata", "sbyadanear_avx512.html", package = "sbyadanear")
+)
+```
+
+GitHub sanitizes `<iframe>` and `<script>` tags in `README.md`, so the widget
+cannot execute inline on the repository landing page. For live browser hosting
+without installing the package, copy the file to `docs/` and enable GitHub
+Pages. To embed it responsively in Quarto Markdown or Bookdown, place
+`sbyadanear_avx512.html` alongside the source document and include:
+
+```html
+<iframe
+  id="sby-avx512-frame"
+  src="sbyadanear_avx512.html"
+  style="width: 100%; min-height: 760px; border: 1px solid #3e3e3e; border-radius: 10px;"
+  loading="lazy"
+  scrolling="no">
+</iframe>
+<script>
+  window.addEventListener('message', function(event){
+    if(event.data && event.data.type === 'sby-avx512-resize'){
+      const frame = document.getElementById('sby-avx512-frame');
+      if(frame && typeof event.data.height === 'number'){
+        frame.style.height = (event.data.height + 12) + 'px';
+      }
+    }
+  });
+</script>
+```
+
 ## Compatibility in 0.4.0
 
 All tabular, matrix, index-selector and recipes interfaces delegate to the
@@ -200,3 +248,4 @@ resampling new data while prep still resamples training data.
 - [NearMiss operational definitions](https://imbalanced-learn.org/stable/under_sampling.html#near-miss).
 - [Intel OpenMP libraries](https://www.intel.com/content/www/us/en/docs/dpcpp-cpp-compiler/developer-guide-reference/2025-2/use-the-openmp-libraries.html).
 - [Intel oneMKL linkage](https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-0/selecting-libraries-to-link-with.html).
+  
