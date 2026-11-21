@@ -212,23 +212,7 @@ Pages. To embed it responsively in Quarto Markdown or Bookdown, place
 </script>
 ```
 
-<iframe
-  id="sby-avx512-frame"
-  src="docs/sbyadanear_avx512.html"
-  style="width: 100%; min-height: 760px; border: 1px solid #3e3e3e; border-radius: 10px;"
-  loading="lazy"
-  scrolling="no">
-</iframe>
-<script>
-  window.addEventListener('message', function(event){
-    if(event.data && event.data.type === 'sby-avx512-resize'){
-      const frame = document.getElementById('sby-avx512-frame');
-      if(frame && typeof event.data.height === 'number'){
-        frame.style.height = (event.data.height + 12) + 'px';
-      }
-    }
-  });
-</script>
+[Abrir Simulador Interativo AVX-512 e oneMKL](https://joaosabby.github.io/sbyadanear/docs/sbyadanear_avx512.html)
 
 ## Compatibility in 0.4.0
 
