@@ -166,6 +166,8 @@ quadratic time complexity in the compared row counts.
 
 ## Interactive AVX-512 and oneMKL visualizer
 
+[![Interactive AVX-512 & oneMKL Visualizer](https://img.shields.io/badge/AVX--512%20%26%20oneMKL-Interactive%20Visualizer-0e639c?style=for-the-badge&logo=intel&logoColor=white)](https://joaosabby.github.io/sbyadanear/docs/sbyadanear_avx512.html)
+
 An offline interactive visualizer of the double-precision (`fp64`) execution
 pipeline is bundled at `inst/extdata/sbyadanear_avx512.html`. It illustrates
 the R column-major to C++ row-major bridge, cached row norms in `long double`,
@@ -211,8 +213,6 @@ Pages. To embed it responsively in Quarto Markdown or Bookdown, place
   });
 </script>
 ```
-
-[![Interactive AVX-512 & oneMKL Visualizer](https://img.shields.io/badge/AVX--512%20%26%20oneMKL-Interactive%20Visualizer-0e639c?style=for-the-badge&logo=intel&logoColor=white)](https://joaosabby.github.io/sbyadanear/docs/sbyadanear_avx512.html)
 
 ## Compatibility in 0.4.0
 
