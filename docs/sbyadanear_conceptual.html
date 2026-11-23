@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  Visualizador conceitual e didatico offline do fluxo teorico do pacote sbyadanear.
+  Ilustra o desbalanceamento inicial entre classes, a geracao sintetica adaptativa
+  na fronteira via ADASYN, a subamostragem seletiva via NearMiss ate o limite da
+  classe rara expandida, a tabela de dados sincronizada e a chamada em R.
+  Projetado para execucao local sem internet e incorporacao responsiva via iframe.
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sbyadanear - Conceptual Resampling Flow (ADASYN + NearMiss)</title>
+    <script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=WEXAGCYshSRSpKVRgi7IPwgbUUQHAtlBviSW9iBe1U0X9BAnB9aXdmPMG0PoKcNNkbN4HLitk5mx1wy0gjCPbbe8LxEpYJa0GF-X8Y4VessUCY36iFpl6MbbmWvgw6Ja8N-qZOxNYQx93T4DlQHYRki95DY3EQ1_48aWKJLLxNBESCj9wHxPajn6mBco7n0K57whMNl8P3trZBj4mlKFPAqbjImKn_jeGySTTJ8odrGllxxY1xHj7osdvPIi12X99gI7t5sz-PH-5YoxZT6L32WvHxa5566ckfbveBHmTL094mC_3DZJmyFblQgmUeq3Pf692bL7YhbVu5x9jCZBlA" charset="UTF-8"></script><link rel="stylesheet" crossorigin="anonymous" href="https://gc.kis.v2.scr.kaspersky-labs.com/E3E8934C-235A-4B0E-825A-35A08381A191/abn/main.css?attr=aHR0cHM6Ly9jb250cmlidXRpb24udXNlcmNvbnRlbnQuZ29vZ2xlLmNvbS9kb3dubG9hZD9jPUNneGlZWEprWDNOMGIzSmhaMlVTVUJJTmNtVnpjRzl1YzJWZlpHRjBZUm9fQ2pCallUQmpZVE5qWm1GalpEZ3hOakl6TURBd05qWXdaall5TWprM1ltRXdOVEE0T0RRNU1UbG1ZMkV4TkRsak5tUVNDeElIRUtPYnI0TzFEaGdCJmZpbGVuYW1lPXNieWFkYW5lYXJfY29uY2VwdHVhbC5odG1sJm9waT0xMDMxMzUwNTA"/><style>
+        /* Reset estrutural seguro para renderizacao offline e iframe */
+        * {
+            box-sizing: border-box;
+        }
+
+        /* Estilo escuro harmonizado com a identidade visual do pacote sbyadanear */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #d4d4d4;
+            margin: 0;
+            padding: 16px;
+            min-height: 100%;
+            overflow-x: hidden;
+        }
+
+        /* Conteiner principal com largura controlada para Bookdown e Quarto */
+        .main-container {
+            max-width: 1220px;
+            margin: 0 auto;
+        }
+
+        /* Cabecalho superior com titulo e seletor discreto de idioma */
+        .header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* Grupo de titulo e subtitulo conceitual */
+        .title-group {
+            flex: 1;
+            min-width: 240px;
+        }
+
+        /* Titulo principal em destaque ciano */
+        h1 {
+            margin: 0;
+            font-size: clamp(18px, 2.4vw, 24px);
+            color: #4ec9b0;
+            text-shadow: 0 0 10px rgba(78, 201, 176, 0.25);
+        }
+
+        /* Subtitulo descritivo da proposta didatica */
+        .subtitle-text {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #9cdcfe;
+        }
+
+        /* Subtitulos dos paineis internos */
+        h2, h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #569cd6;
+        }
+
+        /* Alternador discreto de idioma no canto superior direito */
+        .lang-switch {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(30, 30, 30, 0.72);
+            border: 1px solid #3e3e3e;
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+            opacity: 0.85;
+            transition: opacity 0.2s ease;
+        }
+
+        /* Realce leve ao interagir com o seletor de idioma */
+        .lang-switch:hover {
+            opacity: 1;
+        }
+
+        /* Botoes individuais de idioma */
+        .lang-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            background: transparent;
+            color: #8c8c8c;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: none;
+        }
+
+        /* Estado de hover neutro para botao discreto */
+        .lang-btn:hover {
+            transform: none;
+            box-shadow: none;
+            color: #d4d4d4;
+        }
+
+        /* Estado ativo do idioma selecionado */
+        .lang-btn.active {
+            background: rgba(78, 201, 176, 0.22);
+            color: #4ec9b0;
+        }
+
+        /* Barra de navegacao por etapas teoricas e controles de reproducao */
+        .nav-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: rgba(37, 37, 38, 0.86);
+            border: 1px solid #3e3e3e;
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+        }
+
+        /* Lista de passos clicaveis da narrativa teorica */
+        .step-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        /* Botao de cada passo teorico */
+        .step-pill {
+            padding: 6px 11px;
+            font-size: 11.5px;
+            font-weight: 600;
+            border-radius: 16px;
+            background: #252528;
+            color: #a6a6a6;
+            border: 1px solid #3e3e3e;
+            cursor: pointer;
+            box-shadow: none;
+            transition: all 0.18s ease;
+        }
+
+        /* Passo teorico ativo */
+        .step-pill.active {
+            background: linear-gradient(135deg, #4ec9b0, #6edcd4);
+            color: #000000;
+            border-color: #4ec9b0;
+        }
+
+        /* Grupo de botoes Play, Anterior e Proximo */
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        /* Estilo base dos botoes de controle */
+        button {
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #0e639c, #1177bb);
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.18s ease;
+            box-shadow: 0 2px 6px rgba(14, 99, 156, 0.28);
+        }
+
+        /* Efeito de elevacao ao passar o cursor */
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(14, 99, 156, 0.45);
+        }
+
+        /* Botao desabilitado nos extremos da navegacao */
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Cartao explicativo do grande bloco teorico atual */
+        .story-card {
+            background: rgba(37, 37, 38, 0.86);
+            border: 1px solid #3e3e3e;
+            border-left: 4px solid #4ec9b0;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            display: grid;
+            grid-template-columns: minmax(260px, 1.5fr) minmax(240px, 1fr);
+            gap: 14px;
+            align-items: center;
+        }
+
+        /* Titulo destacado do bloco teorico atual */
+        .story-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #dcdcaa;
+            margin-bottom: 5px;
+        }
+
+        /* Texto didatico sem jargao matematico pesado */
+        .story-desc {
+            font-size: 13px;
+            line-height: 1.55;
+            color: #d8d8d8;
+            margin: 0;
+        }
+
+        /* Painel visual de proporcao entre classes (barras horizontais) */
+        .balance-box {
+            background: rgba(22, 22, 26, 0.85);
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        /* Cabecalho do medidor de equilibrio */
+        .balance-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #9cdcfe;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        /* Barra empilhada mostrando a composicao das classes */
+        .stacked-bar {
+            height: 20px;
+            width: 100%;
+            background: #252528;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            border: 1px solid #3e3e3e;
+        }
+
+        /* Segmento da classe majoritaria retida */
+        .seg-maj {
+            background: #4ec9b0;
+            height: 100%;
+            transition: width 0.45s ease;
+        }
+
+        /* Segmento da classe rara original */
+        .seg-rare {
+            background: #ce9178;
+            height: 100%;
+            transition: width 0.45s ease;
+        }
+
+        /* Segmento dos registros sinteticos gerados pelo ADASYN */
+        .seg-syn {
+            background: #feca57;
+            height: 100%;
+            transition: width 0.45s ease;
+        }
+
+        /* Resumo numerico abaixo da barra de composicao */
+        .balance-stats {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 7px;
+            font-size: 11px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            flex-wrap: wrap;
+        }
+
+        /* Grade principal em paralelo: espaco geometrico 2D e tabela de registros */
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: minmax(320px, 1.15fr) minmax(300px, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: stretch;
+        }
+
+        /* Cartao visual do plano cartesiano 2D e da tabela sincronizada */
+        .panel-card {
+            background: rgba(37, 37, 38, 0.82);
+            border: 1px solid #3e3e3e;
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Cabecalho interno de painel */
+        .panel-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* Etiqueta de status do painel */
+        .badge-tag {
+            font-size: 10.5px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: #1e1e1e;
+            border: 1px solid #3a3a3a;
+            color: #9cdcfe;
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+
+        /* Conteiner do grafico vetorial SVG interativo */
+        .svg-wrap {
+            background: #18181c;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 6px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* SVG responsivo ocupando a largura do cartao */
+        svg#space-svg {
+            width: 100%;
+            height: auto;
+            max-height: 360px;
+            display: block;
+        }
+
+        /* Legenda visual do grafico 2D */
+        .plot-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #cccccc;
+        }
+
+        /* Item individual da legenda */
+        .leg-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Marcador circular ou quadrado da legenda */
+        .leg-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        /* Marcador de losango para pontos sinteticos */
+        .leg-diamond {
+            width: 10px;
+            height: 10px;
+            background: #feca57;
+            transform: rotate(45deg);
+            display: inline-block;
+        }
+
+        /* Area de rolagem controlada para a tabela de dados sincronizada */
+        .table-wrap {
+            background: #18181c;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 360px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Tabela representando a base de dados em cada passo */
+        table.data-grid {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11.5px;
+        }
+
+        /* Cabecalho fixo da tabela de dados */
+        table.data-grid th {
+            position: sticky;
+            top: 0;
+            background: #252529;
+            color: #9cdcfe;
+            padding: 7px 6px;
+            border-bottom: 1px solid #3e3e3e;
+            text-align: center;
+            z-index: 2;
+        }
+
+        /* Celulas da tabela de dados */
+        table.data-grid td {
+            padding: 6px 6px;
+            border-bottom: 1px solid #28282c;
+            text-align: center;
+            transition: all 0.25s ease;
+        }
+
+        /* Destaque da linha ao passar o mouse na tabela ou no grafico */
+        table.data-grid tr.hovered td {
+            background: rgba(86, 156, 214, 0.24) !important;
+        }
+
+        /* Estilo de linha da classe majoritaria ativa */
+        table.data-grid tr.row-maj td {
+            color: #b8ebe0;
+        }
+
+        /* Estilo de linha da classe rara original */
+        table.data-grid tr.row-rare td {
+            background: rgba(206, 145, 120, 0.14);
+            color: #f0beaa;
+        }
+
+        /* Estilo de linha sintetica recem-criada pelo ADASYN */
+        table.data-grid tr.row-syn td {
+            background: rgba(254, 202, 87, 0.18);
+            color: #ffe28a;
+            font-weight: 700;
+        }
+
+        /* Estilo de linha majoritaria candidata a remocao no NearMiss */
+        table.data-grid tr.row-prune td {
+            background: rgba(255, 107, 107, 0.14);
+            color: #ff9999;
+            text-decoration: line-through;
+        }
+
+        /* Pilula de status na ultima coluna da tabela */
+        .status-pill {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        /* Variacoes de cor das pilulas de status */
+        .pill-maj { background: rgba(78, 201, 176, 0.2); color: #4ec9b0; }
+        .pill-rare { background: rgba(206, 145, 120, 0.25); color: #ce9178; }
+        .pill-syn { background: rgba(254, 202, 87, 0.25); color: #feca57; }
+        .pill-prune { background: rgba(255, 107, 107, 0.25); color: #ff6b6b; }
+
+        /* Bloco inferior conectando a teoria a chamada em R (sby_adanear_hpc) */
+        .code-footer {
+            background: rgba(24, 24, 28, 0.92);
+            border: 1px solid #3e3e3e;
+            border-left: 4px solid #569cd6;
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        /* Cabecalho do bloco de codigo R */
+        .code-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* Codigo R formatado com destaque de parametros ativos */
+        pre.r-snippet {
+            margin: 0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: #d4d4d4;
+            overflow-x: auto;
+        }
+
+        /* Realce de linha de codigo correspondente ao passo teorico atual */
+        .code-hi {
+            background: rgba(78, 201, 176, 0.18);
+            border-left: 2px solid #4ec9b0;
+            padding: 1px 6px;
+            border-radius: 3px;
+            display: inline-block;
+            width: 100%;
+        }
+
+        /* Cores de sintaxe R */
+        .r-fn { color: #dcdcaa; font-weight: 700; }
+        .r-arg { color: #9cdcfe; }
+        .r-val { color: #ce9178; }
+        .r-com { color: #6a9955; }
+
+        /* Ajustes responsivos para telas menores e colunas estreitas de Bookdown */
+        @media (max-width: 880px) {
+            .story-card,
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container" id="app-root">
+        <!-- Cabecalho principal com seletor discreto de idioma -->
+        <div class="header-bar">
+            <div class="title-group">
+                <h1 id="ui-title">sbyadanear: Conceptual Resampling Flow</h1>
+                <div class="subtitle-text" id="ui-subtitle">
+                    Visual guide: Imbalanced Data -&gt; ADASYN Boundary Reinforcement -&gt; NearMiss Pruning -&gt; Balanced Dataset
+                </div>
+            </div>
+            <div class="lang-switch" role="group" aria-label="Language selector">
+                <button id="btn-lang-en" class="lang-btn" onclick="setLanguage('en_US')" title="English (US)">EN</button>
+                <button id="btn-lang-pt" class="lang-btn" onclick="setLanguage('pt_BR')" title="Portugues (Brasil)">PT</button>
+            </div>
+        </div>
+
+        <!-- Barra de passos teoricos e controles de navegacao -->
+        <div class="nav-bar">
+            <div class="step-pills" id="step-pills"></div>
+            <div class="controls">
+                <button id="btn-prev" onclick="prevStep()">&lt; Prev</button>
+                <button id="btn-play" onclick="togglePlay()">Play</button>
+                <button id="btn-next" onclick="nextStep()">Next &gt;</button>
+            </div>
+        </div>
+
+        <!-- Cartao narrativo do passo atual e medidor visual de proporcao entre classes -->
+        <div class="story-card">
+            <div>
+                <div class="story-title" id="story-title"></div>
+                <p class="story-desc" id="story-desc"></p>
+            </div>
+            <div class="balance-box">
+                <div class="balance-head">
+                    <span id="lbl-balance-title">Class Distribution</span>
+                    <span id="lbl-balance-ratio"></span>
+                </div>
+                <div class="stacked-bar">
+                    <div class="seg-maj" id="bar-maj" style="width: 75%;"></div>
+                    <div class="seg-rare" id="bar-rare" style="width: 25%;"></div>
+                    <div class="seg-syn" id="bar-syn" style="width: 0%;"></div>
+                </div>
+                <div class="balance-stats">
+                    <span style="color:#4ec9b0;" id="stat-maj">Majority: 9</span>
+                    <span style="color:#ce9178;" id="stat-rare">Rare (orig): 3</span>
+                    <span style="color:#feca57;" id="stat-syn">Synthetic: 0</span>
+                    <span style="color:#ffffff; font-weight:700;" id="stat-total">Total: 12</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Area principal dividida em espaco geometrico 2D e tabela sincronizada -->
+        <div class="workspace-grid">
+            <div class="panel-card">
+                <div class="panel-head">
+                    <h3 id="lbl-plot-title">2D Feature Space (Boundary &amp; Neighborhoods)</h3>
+                    <span class="badge-tag" id="lbl-plot-tag">n_maj = 9 | n_rare = 3</span>
+                </div>
+                <div class="svg-wrap">
+                    <svg id="space-svg" viewBox="0 0 460 330" role="img" aria-label="2D Class Distribution Plot"></svg>
+                </div>
+                <div class="plot-legend" id="plot-legend"></div>
+            </div>
+
+            <div class="panel-card">
+                <div class="panel-head">
+                    <h3 id="lbl-table-title">Synchronized Dataset Table</h3>
+                    <span class="badge-tag" id="lbl-table-tag">12 rows</span>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-grid">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th id="th-x1">Feature 1</th>
+                                <th id="th-x2">Feature 2</th>
+                                <th id="th-cls">Class</th>
+                                <th id="th-st">Origin / Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bloco inferior mostrando a chamada pratica em R via sby_adanear_hpc -->
+        <div class="code-footer">
+            <div class="code-head">
+                <h3 style="margin:0;" id="lbl-code-title">R Interface: Executing the Hybrid Pipeline with sby_adanear_hpc()</h3>
+                <span class="badge-tag">R -&gt; sbyadanear::sby_adanear_hpc()</span>
+            </div>
+            <pre class="r-snippet" id="r-code-box"></pre>
+        </div>
+    </div>
+
+    <script>
+        /* Base didatica inicial com 9 registros majoritarios e 3 registros raros
+ * (desbalanceamento 3:1) */
+        const BASE_RECORDS = [
+            { id: 'M01', x1: 1.4, x2: 7.8, cls: 'maj', far: true },
+            { id: 'M02', x1: 1.9, x2: 8.5, cls: 'maj', far: true },
+            { id: 'M03', x1: 2.3, x2: 6.9, cls: 'maj', far: true },
+            { id: 'M04', x1: 2.8, x2: 8.1, cls: 'maj', far: true },
+            { id: 'M05', x1: 3.4, x2: 7.2, cls: 'maj', far: true },
+            { id: 'M06', x1: 4.1, x2: 6.1, cls: 'maj', far: false },
+            { id: 'M07', x1: 4.8, x2: 5.5, cls: 'maj', far: false },
+            { id: 'M08', x1: 5.5, x2: 4.9, cls: 'maj', far: false },
+            { id: 'M09', x1: 6.2, x2: 5.8, cls: 'maj', far: false },
+            { id: 'R01', x1: 5.2, x2: 4.1, cls: 'rare', far: false },
+            { id: 'R02', x1: 6.4, x2: 4.4, cls: 'rare', far: false },
+            { id: 'R03', x1: 7.4, x2: 2.5, cls: 'rare', far: false }
+        ];
+
+        /* Registros sinteticos gerados pelo ADASYN focados nos pontos raros proximos a
+ * fronteira (R01 e R02) */
+        const SYNTHETIC_RECORDS = [
+            { id: 'S01', x1: 5.65, x2: 4.22, cls: 'syn', parentA: 'R01', parentB: 'R02' },
+            { id: 'S02', x1: 6.05, x2: 4.31, cls: 'syn', parentA: 'R02', parentB: 'R01' },
+            { id: 'S03', x1: 6.75, x2: 3.74, cls: 'syn', parentA: 'R02', parentB: 'R03' }
+        ];
+
+        /* Estado da navegacao, idioma e realce cruzado entre grafico e tabela */
+        let currentLang = 'en_US';
+        let currentStep = 0;
+        let hoveredId = null;
+        let playTimer = null;
+
+        /* Definicao das cinco etapas teoricas da demonstracao */
+        const TOTAL_STEPS = 5;
+
+        /* Dicionario bilingue completo (en_US e pt_BR) */
+        const I18N = {
+            en_US: {
+                title: 'sbyadanear: Conceptual Resampling Flow',
+                subtitle: 'Visual guide: Imbalanced Data -> ADASYN Boundary Reinforcement -> NearMiss Pruning -> Balanced Dataset',
+                btnPrev: '< Prev',
+                btnPlay: 'Play',
+                btnPause: 'Pause',
+                btnNext: 'Next >',
+                lblBalanceTitle: 'Class Distribution',
+                lblPlotTitle: '2D Feature Space (Boundary & Neighborhoods)',
+                lblTableTitle: 'Synchronized Dataset Table',
+                lblCodeTitle: 'R Interface: Executing the Hybrid Pipeline with sby_adanear_hpc()',
+                thX1: 'Feature 1',
+                thX2: 'Feature 2',
+                thCls: 'Class',
+                thSt: 'Origin / Status',
+                clsMaj: 'Majority (0)',
+                clsRare: 'Rare (1)',
+                stOrigMaj: 'Original (Maj)',
+                stOrigRare: 'Original (Rare)',
+                stSyn: 'Synthetic (ADASYN)',
+                stPrune: 'Far / Redundant (Remove)',
+                stRetained: 'Retained (Near Boundary)',
+                statMaj: 'Majority',
+                statRare: 'Rare (orig)',
+                statSyn: 'Synthetic',
+                statTotal: 'Total',
+                rowsSuffix: 'rows',
+                zoneMaj: 'Majority Region',
+                zoneRare: 'Rare Class Region',
+                zoneBoundary: 'Decision Boundary Zone',
+                stepPills: [
+                    '1. Imbalanced Data',
+                    '2. Boundary Difficulty',
+                    '3. ADASYN Synthesis',
+                    '4. NearMiss Pruning',
+                    '5. Balanced Output'
+                ],
+                steps: [
+                    {
+                        title: 'Step 1: The Imbalanced Dataset Problem (9 Majority vs. 3 Rare)',
+                        desc: 'In real-world classification (fraud, churn, rare events), the majority class dominates the dataset (75% vs. 25%). Standard models tend to ignore the rare class because predicting the majority already yields high overall accuracy.',
+                        codeHighlight: 1
+                    },
+                    {
+                        title: 'Step 2: Identifying Difficult Rare Records Near the Border',
+                        desc: 'Before generating data, ADASYN inspects the neighborhood of each rare point. R01 and R02 sit right next to majority records (high learning difficulty), whereas R03 is safely inside the rare cluster. More synthetic support will be allocated near R01 and R02.',
+                        codeHighlight: 3
+                    },
+                    {
+                        title: 'Step 3: ADASYN Reinforces the Rare Class Frontier (+3 Synthetics)',
+                        desc: 'ADASYN interpolates new synthetic rare records (S01, S02, S03) along segments connecting difficult rare neighbors. The rare class expands from 3 to 6 records, shifting and reinforcing the decision boundary without duplicating exact rows.',
+                        codeHighlight: 4
+                    },
+                    {
+                        title: 'Step 4: NearMiss Identifies Redundant Majority Records Far From the Border',
+                        desc: 'To achieve exact class balance without overfitting, NearMiss sets the target majority limit equal to the expanded rare count (3 original + 3 synthetic = 6). The 3 majority rows farthest from the rare frontier (M01, M02, M04) are marked for removal.',
+                        codeHighlight: 5
+                    },
+                    {
+                        title: 'Step 5: Final Balanced Dataset Ready for Modeling (6 Majority vs. 6 Rare)',
+                        desc: 'Redundant majority records are dropped while all original rare records, informative boundary majority records, and synthetic rare records are preserved in a clean 1:1 dataset (12 rows total) ready for training.',
+                        codeHighlight: 7
+                    }
+                ],
+                legend: [
+                    { type: 'dot', color: '#4ec9b0', text: 'Majority (Original)' },
+                    { type: 'dot', color: '#ce9178', text: 'Rare (Original)' },
+                    { type: 'diamond', color: '#feca57', text: 'Synthetic Rare (ADASYN)' },
+                    { type: 'dot', color: '#ff6b6b', text: 'Marked for Removal (NearMiss)' }
+                ]
+            },
+            pt_BR: {
+                title: 'sbyadanear: Fluxo Conceitual de Reamostragem',
+                subtitle: 'Guia visual: Base Desbalanceada -> Reforco de Fronteira ADASYN -> Poda NearMiss -> Base Equilibrada',
+                btnPrev: '< Anterior',
+                btnPlay: 'Play',
+                btnPause: 'Pausar',
+                btnNext: 'Proximo >',
+                lblBalanceTitle: 'Distribuicao das Classes',
+                lblPlotTitle: 'Espaco Bidimensional (Fronteira e Vizinhanca)',
+                lblTableTitle: 'Tabela de Dados Sincronizada',
+                lblCodeTitle: 'Interface em R: Executando o Fluxo Hibrido com sby_adanear_hpc()',
+                thX1: 'Preditor 1',
+                thX2: 'Preditor 2',
+                thCls: 'Classe',
+                thSt: 'Origem / Status',
+                clsMaj: 'Majoritaria (0)',
+                clsRare: 'Rara (1)',
+                stOrigMaj: 'Original (Maj)',
+                stOrigRare: 'Original (Rara)',
+                stSyn: 'Sintetico (ADASYN)',
+                stPrune: 'Distante / Redundante (Remover)',
+                stRetained: 'Retido (Proximo a Fronteira)',
+                statMaj: 'Majoritaria',
+                statRare: 'Rara (orig)',
+                statSyn: 'Sinteticos',
+                statTotal: 'Total',
+                rowsSuffix: 'linhas',
+                zoneMaj: 'Regiao Majoritaria',
+                zoneRare: 'Regiao da Classe Rara',
+                zoneBoundary: 'Zona de Fronteira',
+                stepPills: [
+                    '1. Base Desbalanceada',
+                    '2. Dificuldade na Fronteira',
+                    '3. Sintese ADASYN',
+                    '4. Poda NearMiss',
+                    '5. Base Equilibrada'
+                ],
+                steps: [
+                    {
+                        title: 'Passo 1: O Problema da Base Desbalanceada (9 Majoritarios vs. 3 Raros)',
+                        desc: 'Em problemas reais (fraude, churn, eventos raros), a classe majoritaria domina a tabela (75% contra 25%). Algoritmos tradicionais tendem a ignorar a classe rara porque prever apenas a classe dominante ja produz alta acuracia aparente.',
+                        codeHighlight: 1
+                    },
+                    {
+                        title: 'Passo 2: Identificacao dos Registros Raros Proximos a Fronteira',
+                        desc: 'Antes de criar dados, o ADASYN avalia a vizinhanca de cada ponto raro. R01 e R02 estao cercados por registros majoritarios (alta dificuldade de aprendizado), enquanto R03 esta isolado no nucleo raro. O reforco sera concentrado perto de R01 e R02.',
+                        codeHighlight: 3
+                    },
+                    {
+                        title: 'Passo 3: ADASYN Reforca a Fronteira da Classe Rara (+3 Sinteticos)',
+                        desc: 'O ADASYN gera novos registros sinteticos (S01, S02, S03) interpolando segmentos entre vizinhos raros dificeis. A classe rara passa de 3 para 6 registros, fortalecendo a fronteira de decisao sem simplesmente duplicar linhas existentes.',
+                        codeHighlight: 4
+                    },
+                    {
+                        title: 'Passo 4: NearMiss Detecta Registros Majoritarios Redundantes Longe da Fronteira',
+                        desc: 'Para equilibrar a base sem excesso de dados redundantes, o NearMiss define o teto da classe majoritaria igual ao total da classe rara expandida (3 originais + 3 sinteticos = 6). Os 3 registros majoritarios mais distantes da fronteira (M01, M02, M04) sao marcados para remocao.',
+                        codeHighlight: 5
+                    },
+                    {
+                        title: 'Passo 5: Base Final Equilibrada Pronta para Modelagem (6 Majoritarios vs. 6 Raros)',
+                        desc: 'Os registros majoritarios redundantes sao descartados, preservando todos os registros raros originais, os majoritarios informativos junto a fronteira e os sinteticos gerados, entregando uma tabela equilibrada 1:1 (12 linhas).',
+                        codeHighlight: 7
+                    }
+                ],
+                legend: [
+                    { type: 'dot', color: '#4ec9b0', text: 'Majoritaria (Original)' },
+                    { type: 'dot', color: '#ce9178', text: 'Rara (Original)' },
+                    { type: 'diamond', color: '#feca57', text: 'Rara Sintetica (ADASYN)' },
+                    { type: 'dot', color: '#ff6b6b', text: 'Marcado para Remocao (NearMiss)' }
+                ]
+            }
+        };
+
+        /* Detecta idioma do navegador mapeando qualquer variante pt_* ou pt-* para pt_BR */
+        function detectInitialLanguage(){
+            const candidates = (navigator.languages && navigator.languages.length > 0)
+                ? navigator.languages
+                : [navigator.language || navigator.userLanguage || 'en_US'];
+            const primary = String(candidates[0] || 'en_US').trim();
+            return /^pt($|[-_])/i.test(primary) ? 'pt_BR' : 'en_US';
+        }
+
+        /* Converte coordenadas matematicas (0..9) para pixels no SVG (460 x 330) */
+        function toSvgX(x1){
+            return 48 + (x1 / 9.0) * 380;
+        }
+
+        /* Converte coordenada vertical (0..10) para pixels invertidos no SVG */
+        function toSvgY(x2){
+            return 295 - (x2 / 10.0) * 260;
+        }
+
+        /* Retorna a lista ativa de registros visiveis na etapa atual */
+        function getVisibleRecords(step){
+            const list = [];
+            /* Indices majoritarios removidos pelo NearMiss na etapa final */
+            const prunedIds = new Set(['M01', 'M02', 'M04']);
+            for(let i = 0; i < BASE_RECORDS.length; i++){
+                const rec = BASE_RECORDS[i];
+                if(step === 4 && prunedIds.has(rec.id)){
+                    continue;
+                }
+                let state = (rec.cls === 'maj') ? 'maj' : 'rare';
+                if(step === 3 && prunedIds.has(rec.id)){
+                    state = 'prune';
+                }
+                list.push({
+                    id: rec.id,
+                    x1: rec.x1,
+                    x2: rec.x2,
+                    cls: rec.cls,
+                    state: state
+                });
+            }
+            /* Inclui registros sinteticos do ADASYN a partir do passo 2 (indice 2) */
+            if(step >= 2){
+                for(let j = 0; j < SYNTHETIC_RECORDS.length; j++){
+                    const syn = SYNTHETIC_RECORDS[j];
+                    list.push({
+                        id: syn.id,
+                        x1: syn.x1,
+                        x2: syn.x2,
+                        cls: 'rare',
+                        state: 'syn',
+                        parentA: syn.parentA,
+                        parentB: syn.parentB
+                    });
+                }
+            }
+            return list;
+        }
+
+        /* Renderiza o grafico vetorial 2D com zonas, segmentos de interpolacao e pontos */
+        function renderSvgPlot(records){
+            const t = I18N[currentLang];
+            const svg = document.getElementById('space-svg');
+            const parts = [];
+
+            /* Fundo sombreado das regioes de classe e faixa de fronteira */
+            parts.push('<rect x="42" y="22" width="392" height="278" rx="6" fill="#141418" stroke="#2f2f35" />');
+            parts.push('<polygon points="42,22 315,22 140,300 42,300" fill="rgba(78, 201, 176, 0.06)" />');
+            parts.push('<polygon points="315,22 434,22 434,300 140,300" fill="rgba(206, 145, 120, 0.07)" />');
+
+            /* Rotulos discretos das regioes no plano */
+            parts.push('<text x="54" y="40" fill="#4ec9b0" opacity="0.65" font-size="11" font-weight="bold">' + t.zoneMaj + '</text>');
+            parts.push('<text x="310" y="288" fill="#ce9178" opacity="0.7" font-size="11" font-weight="bold">' + t.zoneRare + '</text>');
+
+            /* Linha de fronteira de decisao que se desloca apos o reforco do ADASYN */
+            if(currentStep < 2){
+                parts.push('<line x1="295" y1="26" x2="175" y2="296" stroke="#666666" stroke-width="1.8" stroke-dasharray="6,5" />');
+                parts.push('<text x="235" y="160" fill="#888888" font-size="10" transform="rotate(-64 235 160)">' + t.zoneBoundary + '</text>');
+            }else{
+                parts.push('<line x1="270" y1="26" x2="145" y2="296" stroke="#feca57" stroke-width="2.2" stroke-dasharray="6,4" />');
+                parts.push('<text x="206" y="162" fill="#feca57" font-size="10" font-weight="bold" transform="rotate(-64 206 162)">' + t.zoneBoundary + '</text>');
+            }
+
+            /* Eixos cartesianos simples */
+            parts.push('<line x1="42" y1="300" x2="434" y2="300" stroke="#444444" stroke-width="1.2" />');
+            parts.push('<line x1="42" y1="22" x2="42" y2="300" stroke="#444444" stroke-width="1.2" />');
+            parts.push('<text x="238" y="320" fill="#9cdcfe" font-size="11" text-anchor="middle">' + t.thX1 + '</text>');
+            parts.push('<text x="16" y="162" fill="#9cdcfe" font-size="11" text-anchor="middle" transform="rotate(-90 16 162)">' + t.thX2 + '</text>');
+
+            /* No Passo 2 (indice 1): desenha raios de vizinhanca ao redor dos pontos raros
+ * dificeis */
+            if(currentStep === 1){
+                const r1x = toSvgX(5.2), r1y = toSvgY(4.1);
+                const r2x = toSvgX(6.4), r2y = toSvgY(4.4);
+                parts.push('<circle cx="' + r1x + '" cy="' + r1y + '" r="46" fill="rgba(254, 202, 87, 0.08)" stroke="#feca57" stroke-width="1.4" stroke-dasharray="4,3" />');
+                parts.push('<circle cx="' + r2x + '" cy="' + r2y + '" r="46" fill="rgba(254, 202, 87, 0.08)" stroke="#feca57" stroke-width="1.4" stroke-dasharray="4,3" />');
+            }
+
+            /* A partir do Passo 3 (indice 2): desenha segmentos de interpolacao linear entre
+ * pais raros */
+            if(currentStep >= 2){
+                const pMap = {};
+                for(let i = 0; i < BASE_RECORDS.length; i++){
+                    pMap[BASE_RECORDS[i].id] = BASE_RECORDS[i];
+                }
+                for(let j = 0; j < SYNTHETIC_RECORDS.length; j++){
+                    const syn = SYNTHETIC_RECORDS[j];
+                    const pa = pMap[syn.parentA];
+                    const pb = pMap[syn.parentB];
+                    if(pa && pb){
+                        parts.push('<line x1="' + toSvgX(pa.x1) + '" y1="' + toSvgY(pa.x2)
+                            + '" x2="' + toSvgX(pb.x1) + '" y2="' + toSvgY(pb.x2)
+                            + '" stroke="#feca57" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.75" />');
+                    }
+                }
+            }
+
+            /* No Passo 4 (indice 3): desenha linhas tracejadas indicando distancia longa dos
+ * pontos descartados */
+            if(currentStep === 3){
+                const farIds = ['M01', 'M02', 'M04'];
+                const targetX = toSvgX(5.2), targetY = toSvgY(4.1);
+                for(let i = 0; i < BASE_RECORDS.length; i++){
+                    const rec = BASE_RECORDS[i];
+                    if(farIds.indexOf(rec.id) !== -1){
+                        parts.push('<line x1="' + toSvgX(rec.x1) + '" y1="' + toSvgY(rec.x2)
+                            + '" x2="' + targetX + '" y2="' + targetY
+                            + '" stroke="#ff6b6b" stroke-width="1.1" stroke-dasharray="2,4" opacity="0.6" />');
+                    }
+                }
+            }
+
+            /* Desenha cada observacao como circulo ou losango interativo */
+            for(let i = 0; i < records.length; i++){
+                const r = records[i];
+                const cx = toSvgX(r.x1);
+                const cy = toSvgY(r.x2);
+                const isHov = (hoveredId === r.id);
+                const strokeCol = isHov ? '#ffffff' : '#111115';
+                const strokeW = isHov ? 2.4 : 1.3;
+
+                if(r.state === 'syn'){
+                    /* Losango dourado representando registro sintetico gerado pelo ADASYN */
+                    const sz = isHov ? 9 : 7.5;
+                    const pts = cx + ',' + (cy - sz) + ' ' + (cx + sz) + ',' + cy + ' ' + cx + ',' + (cy + sz) + ' ' + (cx - sz) + ',' + cy;
+                    parts.push('<polygon points="' + pts + '" fill="#feca57" stroke="' + strokeCol + '" stroke-width="' + strokeW
+                        + '" style="cursor:pointer;" onmouseenter="setHover(\'' + r.id + '\')" onmouseleave="setHover(null)" />');
+                }else{
+                    let fillCol = '#4ec9b0';
+                    if(r.state === 'rare'){ fillCol = '#ce9178'; }
+                    if(r.state === 'prune'){ fillCol = '#ff6b6b'; }
+                    const rad = isHov ? 8.5 : 6.8;
+                    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + rad + '" fill="' + fillCol + '" stroke="' + strokeCol + '" stroke-width="' + strokeW
+                        + '" style="cursor:pointer;" onmouseenter="setHover(\'' + r.id + '\')" onmouseleave="setHover(null)" />');
+                    if(r.state === 'prune'){
+                        /* Cruz sobre os registros marcados para remocao pelo NearMiss */
+                        parts.push('<line x1="' + (cx - 9) + '" y1="' + (cy - 9) + '" x2="' + (cx + 9) + '" y2="' + (cy + 9) + '" stroke="#ff6b6b" stroke-width="2" />');
+                        parts.push('<line x1="' + (cx + 9) + '" y1="' + (cy - 9) + '" x2="' + (cx - 9) + '" y2="' + (cy + 9) + '" stroke="#ff6b6b" stroke-width="2" />');
+                    }
+                }
+
+                /* Etiqueta de identificacao ao lado do ponto */
+                const lblCol = (r.state === 'syn') ? '#feca57' : ((r.state === 'prune') ? '#ff9999' : '#cccccc');
+                parts.push('<text x="' + (cx + 9) + '" y="' + (cy + 3) + '" fill="' + lblCol + '" font-size="10" font-family="Consolas, monospace">' + r.id + '</text>');
+            }
+
+            svg.innerHTML = parts.join('');
+        }
+
+        /* Renderiza a tabela de dados sincronizada com a etapa atual */
+        function renderDataTable(records){
+            const t = I18N[currentLang];
+            const tbody = document.getElementById('table-body');
+            const rowsHtml = [];
+
+            for(let i = 0; i < records.length; i++){
+                const r = records[i];
+                let rowCls = 'row-maj';
+                let clsLabel = t.clsMaj;
+                let pillCls = 'pill-maj';
+                let statusText = (currentStep >= 4) ? t.stRetained : t.stOrigMaj;
+
+                if(r.state === 'rare'){
+                    rowCls = 'row-rare';
+                    clsLabel = t.clsRare;
+                    pillCls = 'pill-rare';
+                    statusText = t.stOrigRare;
+                }else if(r.state === 'syn'){
+                    rowCls = 'row-syn';
+                    clsLabel = t.clsRare;
+                    pillCls = 'pill-syn';
+                    statusText = t.stSyn;
+                }else if(r.state === 'prune'){
+                    rowCls = 'row-prune';
+                    clsLabel = t.clsMaj;
+                    pillCls = 'pill-prune';
+                    statusText = t.stPrune;
+                }
+
+                if(hoveredId === r.id){
+                    rowCls += ' hovered';
+                }
+
+                rowsHtml.push(
+                    '<tr class="' + rowCls + '" onmouseenter="setHover(\'' + r.id + '\')" onmouseleave="setHover(null)">'
+                    + '<td><strong>' + r.id + '</strong></td>'
+                    + '<td>' + r.x1.toFixed(2) + '</td>'
+                    + '<td>' + r.x2.toFixed(2) + '</td>'
+                    + '<td>' + clsLabel + '</td>'
+                    + '<td><span class="status-pill ' + pillCls + '">' + statusText + '</span></td>'
+                    + '</tr>'
+                );
+            }
+
+            tbody.innerHTML = rowsHtml.join('');
+            document.getElementById('lbl-table-tag').textContent = records.length + ' ' + t.rowsSuffix;
+        }
+
+        /* Renderiza o trecho de codigo R destacando a linha ligada ao passo teorico */
+        function renderRCode(highlightLineIdx){
+            const isPt = (currentLang === 'pt_BR');
+            const lines = [
+                '<span class="r-com">' + (isPt ? '# Chamada em R delegando ao motor de alto desempenho sbyadanear' : '# R call delegating to the sbyadanear high-performance engine') + '</span>',
+                'balanced_df &lt;- <span class="r-fn">sby_adanear_hpc</span>(',
+                '  <span class="r-arg">.data</span> = imbalanced_df, <span class="r-arg">formula</span> = outcome ~ .,',
+                '  <span class="r-arg">sby_adasyn_k</span> = <span class="r-val">3L</span>,        <span class="r-com">' + (isPt ? '# Avalia dificuldade na vizinhanca rara' : '# Evaluates difficulty in rare neighborhood') + '</span>',
+                '  <span class="r-arg">sby_adasyn_ratio</span> = <span class="r-val">1.0</span>,   <span class="r-com">' + (isPt ? '# Reforca classe rara (3 -> 6 registros)' : '# Reinforces rare class (3 -> 6 records)') + '</span>',
+                '  <span class="r-arg">sby_nearmiss_ratio</span> = <span class="r-val">1.0</span>, <span class="r-com">' + (isPt ? '# Limita majoritaria ao teto da rara (6)' : '# Caps majority to expanded rare count (6)') + '</span>',
+                '  <span class="r-arg">nearmiss_model</span> = <span class="r-val">3L</span>',
+                ') <span class="r-com">' + (isPt ? '# Saida final equilibrada 1:1 (6 majoritarios + 6 raros)' : '# Final balanced 1:1 output (6 majority + 6 rare)') + '</span>'
+            ];
+
+            const rendered = lines.map(function(ln, idx){
+                if(idx === highlightLineIdx){
+                    return '<span class="code-hi">' + ln + '</span>';
+                }
+                return ln;
+            }).join('\n');
+
+            document.getElementById('r-code-box').innerHTML = rendered;
+        }
+
+        /* Atualiza todos os componentes visuais para refletir o passo e idioma ativos */
+        function renderAll(){
+            const t = I18N[currentLang];
+            const stepData = t.steps[currentStep];
+            const records = getVisibleRecords(currentStep);
+
+            document.documentElement.lang = (currentLang === 'pt_BR') ? 'pt-BR' : 'en';
+            document.getElementById('btn-lang-en').classList.toggle('active', currentLang === 'en_US');
+            document.getElementById('btn-lang-pt').classList.toggle('active', currentLang === 'pt_BR');
+            document.getElementById('ui-title').textContent = t.title;
+            document.getElementById('ui-subtitle').textContent = t.subtitle;
+            document.getElementById('btn-prev').textContent = t.btnPrev;
+            document.getElementById('btn-next').textContent = t.btnNext;
+            document.getElementById('btn-play').textContent = playTimer ? t.btnPause : t.btnPlay;
+            document.getElementById('btn-prev').disabled = (currentStep === 0);
+            document.getElementById('btn-next').disabled = (currentStep === TOTAL_STEPS - 1);
+
+            /* Atualiza pilulas de navegacao dos passos */
+            const pillsEl = document.getElementById('step-pills');
+            pillsEl.innerHTML = '';
+            for(let s = 0; s < TOTAL_STEPS; s++){
+                const b = document.createElement('button');
+                b.className = 'step-pill' + (s === currentStep ? ' active' : '');
+                b.textContent = t.stepPills[s];
+                b.onclick = function(){ goToStep(s); };
+                pillsEl.appendChild(b);
+            }
+
+            /* Atualiza narrativa e barra de proporcao entre classes */
+            document.getElementById('story-title').textContent = stepData.title;
+            document.getElementById('story-desc').textContent = stepData.desc;
+            document.getElementById('lbl-balance-title').textContent = t.lblBalanceTitle;
+            document.getElementById('lbl-plot-title').textContent = t.lblPlotTitle;
+            document.getElementById('lbl-table-title').textContent = t.lblTableTitle;
+            document.getElementById('lbl-code-title').textContent = t.lblCodeTitle;
+            document.getElementById('th-x1').textContent = t.thX1;
+            document.getElementById('th-x2').textContent = t.thX2;
+            document.getElementById('th-cls').textContent = t.thCls;
+            document.getElementById('th-st').textContent = t.thSt;
+
+            /* Contagem instantanea por grupo para atualizar barra empilhada */
+            let cntMaj = 0;
+            let cntRare = 0;
+            let cntSyn = 0;
+            for(let i = 0; i < records.length; i++){
+                if(records[i].state === 'syn'){
+                    cntSyn++;
+                }else if(records[i].state === 'rare'){
+                    cntRare++;
+                }else{
+                    cntMaj++;
+                }
+            }
+            const totalRows = cntMaj + cntRare + cntSyn;
+            const totalRareGroup = cntRare + cntSyn;
+
+            document.getElementById('bar-maj').style.width = ((cntMaj / totalRows) * 100).toFixed(1) + '%';
+            document.getElementById('bar-rare').style.width = ((cntRare / totalRows) * 100).toFixed(1) + '%';
+            document.getElementById('bar-syn').style.width = ((cntSyn / totalRows) * 100).toFixed(1) + '%';
+
+            document.getElementById('stat-maj').textContent = t.statMaj + ': ' + cntMaj;
+            document.getElementById('stat-rare').textContent = t.statRare + ': ' + cntRare;
+            document.getElementById('stat-syn').textContent = t.statSyn + ': ' + cntSyn;
+            document.getElementById('stat-total').textContent = t.statTotal + ': ' + totalRows;
+            document.getElementById('lbl-balance-ratio').textContent = cntMaj + ' : ' + totalRareGroup;
+            document.getElementById('lbl-plot-tag').textContent = 'n_maj = ' + cntMaj + ' | n_rare = ' + totalRareGroup;
+
+            /* Legenda do grafico 2D */
+            const legEl = document.getElementById('plot-legend');
+            legEl.innerHTML = t.legend.map(function(item){
+                const icon = (item.type === 'diamond')
+                    ? '<span class="leg-diamond"></span>'
+                    : '<span class="leg-dot" style="background:' + item.color + ';"></span>';
+                return '<span class="leg-item">' + icon + '<span>' + item.text + '</span></span>';
+            }).join('');
+
+            renderSvgPlot(records);
+            renderDataTable(records);
+            renderRCode(stepData.codeHighlight);
+            notifyHostHeight();
+        }
+
+        /* Destaca simultaneamente o ponto no grafico 2D e a linha na tabela */
+        function setHover(recId){
+            hoveredId = recId;
+            const records = getVisibleRecords(currentStep);
+            renderSvgPlot(records);
+            renderDataTable(records);
+        }
+
+        /* Troca idioma preservando o passo atual */
+        function setLanguage(lang){
+            currentLang = (lang === 'pt_BR') ? 'pt_BR' : 'en_US';
+            renderAll();
+        }
+
+        /* Navega diretamente para um passo especifico */
+        function goToStep(stepIdx){
+            stopPlay();
+            currentStep = stepIdx;
+            renderAll();
+        }
+
+        /* Avanca para o proximo passo teorico */
+        function nextStep(){
+            if(currentStep < TOTAL_STEPS - 1){
+                currentStep++;
+                renderAll();
+            }else{
+                stopPlay();
+            }
+        }
+
+        /* Retorna ao passo anterior */
+        function prevStep(){
+            stopPlay();
+            if(currentStep > 0){
+                currentStep--;
+                renderAll();
+            }
+        }
+
+        /* Interrompe a reproducao automatica */
+        function stopPlay(){
+            if(playTimer){
+                clearInterval(playTimer);
+                playTimer = null;
+                document.getElementById('btn-play').textContent = I18N[currentLang].btnPlay;
+            }
+        }
+
+        /* Inicia ou pausa a reproducao automatica dos passos teoricos */
+        function togglePlay(){
+            if(playTimer){
+                stopPlay();
+            }else{
+                if(currentStep >= TOTAL_STEPS - 1){
+                    currentStep = 0;
+                    renderAll();
+                }
+                playTimer = setInterval(function(){
+                    if(currentStep < TOTAL_STEPS - 1){
+                        currentStep++;
+                        renderAll();
+                    }else{
+                        stopPlay();
+                    }
+                }, 2200);
+                document.getElementById('btn-play').textContent = I18N[currentLang].btnPause;
+            }
+        }
+
+        /* Envia altura dinamica para o iframe hospedeiro em Quarto ou Bookdown */
+        function notifyHostHeight(){
+            try{
+                if(window.parent && window.parent !== window){
+                    const h = Math.ceil(document.documentElement.scrollHeight);
+                    window.parent.postMessage({ type: 'sby-conceptual-resize', height: h }, '*');
+                }
+            }catch(err){
+                /* Ignora restricoes de origem em contexto isolado */
+            }
+        }
+
+        /* Observa redimensionamentos da janela para ajustar altura responsivamente */
+        function initResponsiveBridge(){
+            if(typeof ResizeObserver !== 'undefined'){
+                const ro = new ResizeObserver(function(){
+                    notifyHostHeight();
+                });
+                ro.observe(document.body);
+            }
+            window.addEventListener('resize', notifyHostHeight);
+            window.addEventListener('load', notifyHostHeight);
+        }
+
+        /* Inicializa a pagina interativa */
+        function bootConceptualApp(){
+            currentLang = detectInitialLanguage();
+            renderAll();
+            initResponsiveBridge();
+        }
+
+        bootConceptualApp();
+    </script>
+</body>
+</html>
